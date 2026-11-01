@@ -1,0 +1,723 @@
+//! Main window: menu, toolbar, categories, download list and status bar.
+
+use super::*;
+use crate::icons::{self, Icon};
+use crate::widgets::{cat_row, mini_bar, tool_button, toolbar_sep};
+use eframe::egui::{RichText, Sense};
+use egui_extras::{Column, TableBuilder};
+
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.frame += 1;
+        let ctx = ui.ctx().clone();
+        self.tick();
+        self.handle_screenshot(&ctx);
+        self.shortcuts(&ctx);
+
+        self.menu_bar(ui);
+        self.toolbar(ui);
+        self.status_bar(ui);
+        if self.show_categories {
+            self.categories_panel(ui);
+        }
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::WHITE)).show(ui, |ui| self.table(ui));
+
+        self.add_window(&ctx);
+        self.batch_window(&ctx);
+        self.grabber_window(&ctx);
+        self.refresh_window(&ctx);
+        self.queues_window(&ctx);
+        self.progress_windows(&ctx);
+        self.complete_windows(&ctx);
+        self.options_window(&ctx);
+        self.scheduler_window(&ctx);
+        self.delete_window(&ctx);
+        self.properties_window(&ctx);
+        self.browser_window(&ctx);
+        self.about_window(&ctx);
+        self.toast_area(&ctx);
+        self.drop_files(&ctx);
+    }
+}
+
+impl App {
+    fn handle_screenshot(&mut self, ctx: &egui::Context) {
+        let Some(shot) = &mut self.shot else { return };
+        ctx.request_repaint();
+        if shot.saved.load(Ordering::SeqCst) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+        if self.frame >= 120 && !shot.requested {
+            shot.requested = true;
+            let (path, saved, c2) = (shot.path.clone(), shot.saved.clone(), ctx.clone());
+            ctx.request_screenshot(move |img| {
+                let [w, h] = img.size;
+                let mut bytes = Vec::with_capacity(w * h * 4);
+                for px in &img.pixels {
+                    let [r, g, b, _] = px.to_array();
+                    bytes.extend_from_slice(&[r, g, b, 255]);
+                }
+                if let Some(dir) = path.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                match image::RgbaImage::from_raw(w as u32, h as u32, bytes) {
+                    Some(im) => {
+                        if let Err(e) = im.save(&path) {
+                            eprintln!("could not save screenshot: {e}");
+                        }
+                    }
+                    None => eprintln!("screenshot had an unexpected size"),
+                }
+                saved.store(true, Ordering::SeqCst);
+                c2.request_repaint();
+            });
+        }
+    }
+
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        if ctx.egui_wants_keyboard_input() {
+            return;
+        }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::G)) {
+            self.open_grabber();
+        }
+        let (new, del, all, batch) = ctx.input(|i| {
+            (
+                i.modifiers.command && i.key_pressed(egui::Key::N),
+                i.key_pressed(egui::Key::Delete),
+                i.modifiers.command && i.key_pressed(egui::Key::A),
+                i.modifiers.command && i.key_pressed(egui::Key::B),
+            )
+        });
+        if new {
+            self.open_add_dialog(None);
+        }
+        if batch {
+            self.open_batch();
+        }
+        if del {
+            self.ask_delete(self.selected_ids());
+        }
+        if all {
+            let ids: Vec<u64> = self.visible_rows().into_iter().map(|r| self.items[r].id).collect();
+            self.selected.extend(ids);
+        }
+    }
+
+    /// Link lists, shortcuts or saved web pages dropped onto the window.
+    fn drop_files(&mut self, ctx: &egui::Context) {
+        let (hovering, dropped) = ctx.input(|i| (!i.raw.hovered_files.is_empty(), i.raw.dropped_files.clone()));
+        if hovering {
+            egui::Area::new(egui::Id::unique("drop_hint")).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).interactable(false).show(ctx, |ui| {
+                egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(33, 118, 214, 230)).corner_radius(10).inner_margin(egui::Margin::same(24)).show(ui, |ui| {
+                    ui.label(RichText::new("Drop to download the links inside").color(Color32::WHITE).size(18.0));
+                });
+            });
+        }
+        let paths: Vec<PathBuf> = dropped.iter().map(|f| f.path().to_path_buf()).filter(|p| !p.as_os_str().is_empty()).collect();
+        if !paths.is_empty() {
+            self.files_dropped(paths);
+        }
+    }
+
+    pub(super) fn open_scheduler(&mut self, queue: &str) {
+        if let Some(q) = self.settings.queues.iter().find(|q| q.name == queue) {
+            self.scheduler = Some((q.name.clone(), q.schedule.clone()));
+        }
+    }
+
+    pub(super) fn open_batch(&mut self) {
+        self.batch = Some(BatchDialog {
+            queue: self.current_queue(),
+            folder: self.settings.folder.display().to_string(),
+            from: 1,
+            to: 10,
+            width: 1,
+            pattern: "https://example.com/photos/img*.jpg".into(),
+            ..Default::default()
+        });
+    }
+
+    fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::top("menu").show(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("Tasks", |ui| {
+                    if ui.button("Add new download…  (Ctrl+N)").clicked() {
+                        self.open_add_dialog(None);
+                    }
+                    if ui.button("Add batch download…  (Ctrl+B)").clicked() {
+                        self.open_batch();
+                    }
+                    if ui.button("Grab links from a web page…  (Ctrl+G)").clicked() {
+                        self.open_grabber();
+                    }
+                    ui.separator();
+                    if ui.button("Import links from a text file…").clicked() {
+                        self.import_links();
+                    }
+                    if ui.add_enabled(!self.items.is_empty(), egui::Button::new("Export all links to a text file…")).clicked() {
+                        self.export_links();
+                    }
+                    ui.separator();
+                    if ui.button("Exit").clicked() {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+                ui.menu_button("File", |ui| {
+                    let sel = self.selected_ids();
+                    let one = if sel.len() == 1 { self.items.iter().find(|i| i.id == sel[0]) } else { None };
+                    let one_done = one.is_some_and(|i| i.status() == Status::Complete);
+                    if ui.add_enabled(one_done, egui::Button::new("Open file")).clicked() {
+                        if let Some(i) = one {
+                            open_path(&i.path());
+                        }
+                    }
+                    if ui.add_enabled(one.is_some(), egui::Button::new("Open folder")).clicked() {
+                        if let Some(i) = one {
+                            open_path(&i.folder);
+                        }
+                    }
+                    if ui.add_enabled(one.is_some(), egui::Button::new("Properties")).clicked() {
+                        self.properties = one.map(|i| i.id);
+                    }
+                    ui.separator();
+                    if ui.add_enabled(!sel.is_empty(), egui::Button::new("Delete…")).clicked() {
+                        self.ask_delete(sel.clone());
+                    }
+                });
+                ui.menu_button("Downloads", |ui| {
+                    if ui.button("Resume").clicked() {
+                        for id in self.selected_ids() {
+                            self.start_item(id);
+                        }
+                    }
+                    if ui.button("Stop").clicked() {
+                        for id in self.selected_ids() {
+                            self.stop_item(id);
+                        }
+                    }
+                    if ui.button("Stop all").clicked() {
+                        self.stop_all();
+                    }
+                    if ui.button("Delete all completed").clicked() {
+                        self.delete_completed();
+                    }
+                    ui.separator();
+                    let names: Vec<String> = self.settings.queues.iter().map(|q| q.name.clone()).collect();
+                    ui.menu_button("Start queue", |ui| {
+                        for q in &names {
+                            if ui.add_enabled(!self.running.contains(q), egui::Button::new(q)).clicked() {
+                                self.start_queue(q);
+                            }
+                        }
+                    });
+                    ui.menu_button("Stop queue", |ui| {
+                        for q in &names {
+                            if ui.add_enabled(self.running.contains(q), egui::Button::new(q)).clicked() {
+                                self.stop_queue(q);
+                            }
+                        }
+                    });
+                    if ui.button("Scheduler…").clicked() {
+                        let q = self.current_queue();
+                        self.open_scheduler(&q);
+                    }
+                    if ui.button("Manage queues…").clicked() {
+                        self.queues_open = true;
+                    }
+                    ui.separator();
+                    if ui.checkbox(&mut self.settings.limit_on, format!("Speed limiter ({} KB/s)", self.settings.limit_kbps)).changed() {
+                        self.apply_settings();
+                        self.dirty = true;
+                    }
+                    if ui.checkbox(&mut self.settings.watch_clipboard, "Watch the clipboard for links").changed() {
+                        self.apply_settings();
+                        self.dirty = true;
+                    }
+                    ui.separator();
+                    if ui.button("Options…").clicked() {
+                        self.options = Some(self.settings.clone());
+                    }
+                });
+                ui.menu_button("View", |ui| {
+                    ui.checkbox(&mut self.show_categories, "Show categories");
+                    if ui.button("Clear sorting").clicked() {
+                        self.sort = None;
+                    }
+                });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("Browser integration…").clicked() {
+                        self.browser_open = true;
+                    }
+                    if ui.button("About").clicked() {
+                        self.about_open = true;
+                    }
+                });
+            });
+        });
+    }
+
+    fn toolbar(&mut self, ui: &mut egui::Ui) {
+        let sel = self.selected_ids();
+        let sel_has = |f: &dyn Fn(Status) -> bool| sel.iter().any(|id| self.items.iter().any(|i| i.id == *id && f(i.status())));
+        let can_resume = sel_has(&|s| matches!(s, Status::Paused | Status::Error | Status::Queued));
+        let can_stop = sel_has(&|s| s.is_active() || s == Status::Queued);
+        let any_active = self.items.iter().any(|i| i.status().is_active());
+        let any_done = self.items.iter().any(|i| i.status() == Status::Complete);
+        let cq0 = self.current_queue();
+        let any_queued = self.items.iter().any(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(cq0.as_str()));
+
+        egui::Panel::top("toolbar")
+            .frame(
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(250, 251, 253))
+                    .inner_margin(egui::Margin::symmetric(8, 6))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(214, 218, 224))),
+            )
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 1.0;
+                    if tool_button(ui, Icon::AddUrl, "Add URL", true, "Add a new download (Ctrl+N)") {
+                        self.open_add_dialog(None);
+                    }
+                    if tool_button(ui, Icon::Batch, "Batch", true, "Add many links at once (Ctrl+B)") {
+                        self.open_batch();
+                    }
+                    toolbar_sep(ui);
+                    if tool_button(ui, Icon::Resume, "Resume", can_resume, "Start or resume the selected downloads") {
+                        for id in &sel {
+                            self.start_item(*id);
+                        }
+                    }
+                    if tool_button(ui, Icon::Stop, "Stop", can_stop, "Pause the selected downloads") {
+                        for id in &sel {
+                            self.stop_item(*id);
+                        }
+                    }
+                    if tool_button(ui, Icon::StopAll, "Stop All", any_active, "Pause every running download") {
+                        self.stop_all();
+                    }
+                    toolbar_sep(ui);
+                    if tool_button(ui, Icon::Delete, "Delete", !sel.is_empty(), "Remove the selected downloads") {
+                        self.ask_delete(sel.clone());
+                    }
+                    if tool_button(ui, Icon::DeleteDone, "Clear Done", any_done, "Remove all completed downloads from the list") {
+                        self.delete_completed();
+                    }
+                    toolbar_sep(ui);
+                    if tool_button(ui, Icon::Options, "Options", true, "Folder, connections, speed limit, proxy, browser") {
+                        self.options = Some(self.settings.clone());
+                    }
+                    let cq = self.current_queue();
+                    if tool_button(ui, Icon::Scheduler, "Scheduler", true, &format!("Start and stop \"{cq}\" at set times")) {
+                        self.open_scheduler(&cq);
+                    }
+                    toolbar_sep(ui);
+                    let cq_running = self.running.contains(&cq);
+                    if tool_button(ui, Icon::StartQueue, "Start Queue", any_queued && !cq_running, &format!("Start \"{cq}\" (pick another queue on the left)")) {
+                        self.start_queue(&cq);
+                    }
+                    if tool_button(ui, Icon::StopQueue, "Stop Queue", cq_running, &format!("Stop \"{cq}\"")) {
+                        self.stop_queue(&cq);
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if !self.search.is_empty() && ui.small_button("✕").on_hover_text("Clear search").clicked() {
+                            self.search.clear();
+                        }
+                        ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("🔍 Search downloads").desired_width(170.0));
+                    });
+                });
+            });
+    }
+
+    fn status_bar(&mut self, ui: &mut egui::Ui) {
+        let active = self.items.iter().filter(|i| i.status().is_active()).count();
+        let speed: f64 = self.items.iter().filter(|i| i.status().is_active()).map(|i| i.speed()).sum();
+        let queued = self.items.iter().filter(|i| i.status() == Status::Queued).count();
+        let scheduled: Option<(String, String)> = self.settings.queues.iter().find(|q| q.schedule.start_on).map(|q| (q.name.clone(), q.schedule.start_time.clone()));
+        let running: Vec<String> = self.running.iter().cloned().collect();
+        egui::Panel::bottom("status")
+            .frame(egui::Frame::NONE.fill(Color32::from_rgb(232, 235, 239)).inner_margin(egui::Margin::symmetric(10, 4)))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} downloads", self.items.len()));
+                    ui.separator();
+                    ui.label(format!("{active} active"));
+                    ui.separator();
+                    ui.label(format!("{queued} queued"));
+                    if !running.is_empty() {
+                        ui.separator();
+                        ui.colored_label(Color32::from_rgb(46, 140, 70), format!("Running: {}", running.join(", ")));
+                    }
+                    if let Some((q, t)) = &scheduled {
+                        ui.separator();
+                        ui.colored_label(Color32::from_rgb(33, 100, 190), format!("⏰ {q} starts at {t}"));
+                    }
+                    if self.settings.limit_on {
+                        ui.separator();
+                        ui.colored_label(Color32::from_rgb(190, 110, 20), format!("Speed limit {} KB/s", self.settings.limit_kbps));
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let s = if speed > 0.0 { human_speed(speed) } else { "0 B/s".into() };
+                        ui.label(RichText::new(format!("↓ {s}")).strong());
+                        ui.separator();
+                        if !self.demo {
+                            let (txt, col) = match &self.listener {
+                                Ok(()) => ("Browser: connected", Color32::from_rgb(46, 140, 70)),
+                                Err(_) if !self.settings.browser_listen => ("Browser: off", Color32::from_gray(120)),
+                                Err(_) => ("Browser: unavailable", Color32::from_rgb(190, 60, 40)),
+                            };
+                            if ui.add(egui::Label::new(RichText::new(txt).color(col)).sense(Sense::click())).on_hover_text("Browser integration…").clicked() {
+                                self.browser_open = true;
+                            }
+                        } else {
+                            ui.colored_label(Color32::from_rgb(46, 140, 70), "Browser: connected");
+                        }
+                        if self.settings.watch_clipboard {
+                            ui.separator();
+                            ui.label(RichText::new("Clipboard: watching").color(Color32::from_gray(100)));
+                        }
+                    });
+                });
+            });
+    }
+
+    fn categories_panel(&mut self, ui: &mut egui::Ui) {
+        let count = |f: &dyn Fn(&Item) -> bool| self.items.iter().filter(|i| f(i)).count();
+        let all = self.items.len();
+        let cats: Vec<(String, usize)> = self.settings.categories.iter().map(|c| (c.name.clone(), count(&|i: &Item| i.category == c.name))).collect();
+        let unfinished = count(&|i: &Item| i.status() != Status::Complete);
+        let finished = count(&|i: &Item| i.status() == Status::Complete);
+        let queues: Vec<(String, usize)> = self
+            .settings
+            .queues
+            .iter()
+            .map(|q| (q.name.clone(), count(&|i: &Item| i.queue.as_deref() == Some(q.name.as_str()) && i.status() != Status::Complete)))
+            .collect();
+
+        egui::Panel::left("categories")
+            .resizable(true)
+            .default_size(190.0)
+            .frame(
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(244, 246, 249))
+                    .inner_margin(egui::Margin::symmetric(6, 8))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(214, 218, 224))),
+            )
+            .show(ui, |ui| {
+                ui.label(RichText::new("Categories").strong().color(Color32::from_rgb(70, 78, 90)));
+                ui.add_space(4.0);
+                let mut new_filter = None;
+                if cat_row(ui, "All Downloads", all, 0.0, Color32::from_rgb(33, 118, 214), self.filter == Filter::All).clicked() {
+                    new_filter = Some(Filter::All);
+                }
+                for (c, n) in &cats {
+                    let r = cat_row(ui, c, *n, 16.0, icons::category_color(c), self.filter == Filter::Category(c.clone()));
+                    if r.clicked() {
+                        new_filter = Some(Filter::Category(c.clone()));
+                    }
+                    r.context_menu(|ui| {
+                        if ui.button("Edit categories…").clicked() {
+                            self.options = Some(self.settings.clone());
+                        }
+                    });
+                }
+                ui.add_space(4.0);
+                if cat_row(ui, "Unfinished", unfinished, 0.0, Color32::from_rgb(232, 145, 38), self.filter == Filter::Unfinished).clicked() {
+                    new_filter = Some(Filter::Unfinished);
+                }
+                if cat_row(ui, "Finished", finished, 0.0, Color32::from_rgb(46, 164, 79), self.filter == Filter::Finished).clicked() {
+                    new_filter = Some(Filter::Finished);
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Queues").strong().color(Color32::from_rgb(70, 78, 90)));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("+").on_hover_text("Manage queues").clicked() {
+                            self.queues_open = true;
+                        }
+                    });
+                });
+                for (q, n) in &queues {
+                    let on = self.running.contains(q);
+                    let col = if on { Color32::from_rgb(46, 164, 79) } else { Color32::from_rgb(110, 118, 128) };
+                    let label = if on { format!("{q}  ▶") } else { q.clone() };
+                    let r = cat_row(ui, &label, *n, 0.0, col, self.filter == Filter::Queue(q.clone()));
+                    if r.clicked() {
+                        new_filter = Some(Filter::Queue(q.clone()));
+                    }
+                    r.context_menu(|ui| {
+                        if ui.add_enabled(!on, egui::Button::new("Start")).clicked() {
+                            self.start_queue(q);
+                        }
+                        if ui.add_enabled(on, egui::Button::new("Stop")).clicked() {
+                            self.stop_queue(q);
+                        }
+                        if ui.button("Scheduler…").clicked() {
+                            self.open_scheduler(q);
+                        }
+                        if ui.button("Manage queues…").clicked() {
+                            self.queues_open = true;
+                        }
+                    });
+                }
+                if let Some(f) = new_filter {
+                    self.filter = f;
+                }
+            });
+    }
+
+    fn table(&mut self, ui: &mut egui::Ui) {
+        let rows = self.visible_rows();
+        if rows.is_empty() {
+            ui.centered_and_justified(|ui| {
+                let msg = if self.items.is_empty() {
+                    "No downloads yet.\nClick \"Add URL\" (or press Ctrl+N) and paste a link,\nor copy a download link and it will be picked up automatically."
+                } else if !self.search.trim().is_empty() {
+                    "No downloads match your search."
+                } else {
+                    "Nothing in this category."
+                };
+                ui.label(RichText::new(msg).color(Color32::from_gray(130)).size(15.0));
+            });
+            return;
+        }
+        let mut clicked: Option<(u64, egui::Modifiers)> = None;
+        let mut double: Option<u64> = None;
+        let mut action: Option<(u64, String)> = None;
+        let queue_names: Vec<String> = self.settings.queues.iter().map(|q| q.name.clone()).collect();
+        let mut sort_click: Option<SortCol> = None;
+        let modifiers = ui.input(|i| i.modifiers);
+        let sort = self.sort;
+
+        TableBuilder::new(ui)
+            .striped(true)
+            .resizable(true)
+            .sense(Sense::click())
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .column(Column::initial(300.0).at_least(120.0).clip(true))
+            .column(Column::initial(80.0).at_least(50.0))
+            .column(Column::initial(120.0).at_least(60.0))
+            .column(Column::initial(95.0).at_least(50.0))
+            .column(Column::initial(95.0).at_least(50.0))
+            .column(Column::initial(125.0).at_least(60.0))
+            .column(Column::remainder().at_least(80.0).clip(true))
+            .header(24.0, |mut h| {
+                let cols = [
+                    ("File Name", SortCol::Name),
+                    ("Size", SortCol::Size),
+                    ("Status", SortCol::Status),
+                    ("Time left", SortCol::TimeLeft),
+                    ("Transfer rate", SortCol::Speed),
+                    ("Last Try Date", SortCol::LastTry),
+                    ("Description", SortCol::Description),
+                ];
+                for (t, c) in cols {
+                    h.col(|ui| {
+                        let arrow = match sort {
+                            Some((sc, true)) if sc == c => " ▲",
+                            Some((sc, false)) if sc == c => " ▼",
+                            _ => "",
+                        };
+                        let r = ui.add(egui::Label::new(RichText::new(format!("{t}{arrow}")).strong().color(Color32::from_rgb(60, 66, 76))).sense(Sense::click()));
+                        if r.on_hover_text("Click to sort").clicked() {
+                            sort_click = Some(c);
+                        }
+                    });
+                }
+            })
+            .body(|body| {
+                body.rows(24.0, rows.len(), |mut row| {
+                    let item = &self.items[rows[row.index()]];
+                    row.set_selected(self.selected.contains(&item.id));
+                    let st = item.status();
+                    row.col(|ui| {
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
+                        icons::file_badge(ui.painter(), r, &item.category);
+                        ui.label(&item.name);
+                    });
+                    row.col(|ui| {
+                        let t = item.total();
+                        ui.label(if t > 0 { human_size(t) } else { String::new() });
+                    });
+                    row.col(|ui| {
+                        if st == Status::Downloading || (st == Status::Paused && item.total() > 0) {
+                            let col = if st == Status::Paused { Color32::from_rgb(232, 168, 60) } else { Color32::from_rgb(46, 164, 79) };
+                            mini_bar(ui, item.progress(), col, &item.status_text());
+                        } else {
+                            let col = match st {
+                                Status::Complete => Color32::from_rgb(40, 130, 60),
+                                Status::Error => Color32::from_rgb(200, 50, 40),
+                                Status::Queued => Color32::from_rgb(110, 118, 128),
+                                _ => Color32::from_rgb(60, 66, 76),
+                            };
+                            ui.colored_label(col, item.status_text());
+                        }
+                    });
+                    row.col(|ui| {
+                        ui.label(item.time_left());
+                    });
+                    row.col(|ui| {
+                        ui.label(if st == Status::Downloading { human_speed(item.speed()) } else { String::new() });
+                    });
+                    row.col(|ui| {
+                        ui.label(&item.last_try);
+                    });
+                    row.col(|ui| {
+                        let d = if st == Status::Error {
+                            item.live.error.lock().unwrap().clone().unwrap_or_default()
+                        } else if let Some(c) = &item.check {
+                            c.clone()
+                        } else {
+                            item.description.clone()
+                        };
+                        ui.label(RichText::new(d).color(Color32::from_gray(110)));
+                    });
+                    let resp = row.response();
+                    let id = item.id;
+                    if resp.clicked() {
+                        clicked = Some((id, modifiers));
+                    }
+                    if resp.double_clicked() {
+                        double = Some(id);
+                    }
+                    if resp.secondary_clicked() && !self.selected.contains(&id) {
+                        clicked = Some((id, egui::Modifiers::NONE));
+                    }
+                    resp.context_menu(|ui| row_menu(ui, id, st, &queue_names, &mut action));
+                });
+            });
+
+        if let Some(c) = sort_click {
+            self.sort = match self.sort {
+                Some((sc, true)) if sc == c => Some((c, false)),
+                Some((sc, false)) if sc == c => None,
+                _ => Some((c, true)),
+            };
+        }
+        if let Some((id, m)) = clicked {
+            if m.command {
+                if !self.selected.remove(&id) {
+                    self.selected.insert(id);
+                }
+            } else if m.shift && !self.selected.is_empty() {
+                let pos = |x: u64| rows.iter().position(|&r| self.items[r].id == x);
+                let anchor = self.selected.iter().filter_map(|&s| pos(s)).min().unwrap_or(0);
+                if let Some(p) = pos(id) {
+                    let (a, b) = if anchor <= p { (anchor, p) } else { (p, anchor) };
+                    self.selected = rows[a..=b].iter().map(|&r| self.items[r].id).collect();
+                }
+            } else {
+                self.selected.clear();
+                self.selected.insert(id);
+            }
+        }
+        if let Some(id) = double {
+            if self.items.iter().any(|i| i.id == id && i.status() == Status::Complete) {
+                self.properties = Some(id);
+            } else {
+                self.progress_open.insert(id);
+            }
+        }
+        if let Some((id, a)) = action {
+            self.row_action(ui.ctx(), id, &a);
+        }
+    }
+
+    fn row_action(&mut self, ctx: &egui::Context, id: u64, a: &str) {
+        let Some(item) = self.items.iter().find(|i| i.id == id) else { return };
+        let (path, folder, url) = (item.path(), item.folder.clone(), item.url.clone());
+        match a {
+            "open" => open_path(&path),
+            "folder" => open_path(&folder),
+            "resume" => self.start_item(id),
+            "stop" => self.stop_item(id),
+            "redownload" => self.redownload(id),
+            "refresh" => self.refresh = Some(RefreshDialog { id, url: url.clone(), error: None }),
+            q if q.starts_with("queue:") => self.move_to_queue(id, &q["queue:".len()..]),
+            "unqueue" => {
+                if let Some(i) = self.items.iter_mut().find(|i| i.id == id) {
+                    i.queue = None;
+                    if i.status() == Status::Queued {
+                        *i.live.status.lock().unwrap() = Status::Paused;
+                    }
+                    self.dirty = true;
+                }
+            }
+            "up" => self.move_item(id, -1),
+            "down" => self.move_item(id, 1),
+            "progress" => {
+                self.progress_open.insert(id);
+            }
+            "verify" => {
+                self.properties = Some(id);
+                self.verify(id);
+            }
+            "copy" => {
+                ctx.copy_text(url);
+                self.toast("Address copied");
+            }
+            "props" => self.properties = Some(id),
+            "remove" => self.ask_delete(vec![id]),
+            _ => {}
+        }
+    }
+
+    fn toast_area(&mut self, ctx: &egui::Context) {
+        let Some((msg, _)) = &self.toast else { return };
+        egui::Area::new(egui::Id::unique("toast"))
+            .anchor(egui::Align2::RIGHT_BOTTOM, [-16.0, -40.0])
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::Frame::NONE
+                    .fill(Color32::from_rgb(40, 46, 56))
+                    .corner_radius(6)
+                    .inner_margin(egui::Margin::symmetric(14, 10))
+                    .show(ui, |ui| ui.label(RichText::new(msg).color(Color32::WHITE)));
+            });
+    }
+}
+
+fn row_menu(ui: &mut egui::Ui, id: u64, st: Status, queues: &[String], action: &mut Option<(u64, String)>) {
+    let done = st == Status::Complete;
+    let mut item = |ui: &mut egui::Ui, enabled: bool, label: &str, key: &str| {
+        if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+            *action = Some((id, key.to_string()));
+        }
+    };
+    item(ui, done, "Open", "open");
+    item(ui, true, "Open folder", "folder");
+    ui.separator();
+    item(ui, !done && !st.is_active(), "Resume", "resume");
+    item(ui, st.is_active() || st == Status::Queued, "Stop", "stop");
+    item(ui, !st.is_active(), "Redownload", "redownload");
+    item(ui, !done, "Refresh download address…", "refresh");
+    ui.add_enabled_ui(!done && !st.is_active(), |ui| {
+        ui.menu_button("Move to queue", |ui| {
+            for q in queues {
+                if ui.button(q).clicked() {
+                    *action = Some((id, format!("queue:{q}")));
+                }
+            }
+            ui.separator();
+            if ui.button("Take out of queues").clicked() {
+                *action = Some((id, "unqueue".into()));
+            }
+        });
+    });
+    let mut item = |ui: &mut egui::Ui, enabled: bool, label: &str, key: &str| {
+        if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+            *action = Some((id, key.to_string()));
+        }
+    };
+    item(ui, true, "Move up", "up");
+    item(ui, true, "Move down", "down");
+    ui.separator();
+    item(ui, true, "Show progress / speed limit", "progress");
+    item(ui, done, "Check SHA-256", "verify");
+    item(ui, true, "Copy address", "copy");
+    item(ui, true, "Properties", "props");
+    ui.separator();
+    item(ui, true, "Remove", "remove");
+}

@@ -1,0 +1,21 @@
+Swift Download Manager for Mac
+
+A Mac app can only be built on a Mac (or on GitHub's Mac computers), because it
+needs Apple's own tools. Everything for it is ready in the source code:
+
+Option A - on any Mac
+  1. Install Rust: open Terminal and paste
+       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  2. Install Apple's command line tools:   xcode-select --install
+  3. Unzip SwiftDownloadManager-1.2.0-source.zip, open Terminal in that folder and run:
+       bash packaging/macos/build-mac.sh
+  4. The installer appears as dist/SwiftDownloadManager-1.2.0-mac.dmg
+     (one app for both Apple Silicon and Intel Macs).
+
+Option B - let GitHub build all three (Mac, Windows, Linux) for free
+  1. Put the source folder on GitHub (a new repository).
+  2. Open the "Actions" tab, choose "Build installers", press "Run workflow".
+  3. When it finishes, download the .dmg from "Artifacts".
+
+First start on a Mac: right-click the app and choose "Open", because it is not
+signed with a paid Apple developer account.

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Swift Download Manager
+GenericName=Download Manager
+Comment=Fast downloads with pause and resume, queues and a scheduler
+Exec=swift-download-manager %U
+Icon=swift-download-manager
+Terminal=false
+Categories=Network;FileTransfer;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;
+StartupWMClass=swift-download-manager
+Keywords=download;manager;resume;queue;

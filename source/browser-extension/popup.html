@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; color: #222; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      h2 { font-size: 13px; margin: 12px 0 6px; }
+      #status { margin: 8px 0; padding: 6px 8px; border-radius: 4px; background: #eef1f4; }
+      #status.ok { background: #e3f4e6; color: #1f6b33; }
+      #status.bad { background: #fbe7e5; color: #9b2c22; }
+      label { display: flex; gap: 6px; align-items: center; }
+      .media { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-top: 1px solid #eee; }
+      .media span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .media small { color: #777; }
+      button { font: inherit; padding: 2px 8px; }
+      .muted { color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>Swift Download Manager</h1>
+    <div id="status">Checking…</div>
+    <label><input type="checkbox" id="catchAll" /> Send all browser downloads to the app</label>
+    <h2>Videos and sounds on this page</h2>
+    <div id="media" class="muted">Play the video on the page, then open this again.</div>
+    <p class="muted">You can also right-click any link and choose “Download with Swift Download Manager”.</p>
+    <script src="popup.js"></script>
+  </body>
+</html>

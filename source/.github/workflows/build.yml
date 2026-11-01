@@ -1,0 +1,64 @@
+# Builds the Linux .deb, the Windows zip and the Mac .dmg on GitHub's own
+# computers. Put this project on GitHub, open the "Actions" tab, pick
+# "Build installers" and press "Run workflow"; the files appear under "Artifacts".
+name: Build installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash packaging/linux/build-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: dist/*.deb
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - shell: pwsh
+        run: |
+          $v = (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          $out = "dist/SwiftDownloadManager-$v-windows-x64"
+          New-Item -ItemType Directory -Force "$out/browser-extension" | Out-Null
+          Copy-Item target/release/swift_download_manager.exe "$out/SwiftDownloadManager.exe"
+          Copy-Item browser-extension/* "$out/browser-extension/" -Recurse
+          Copy-Item README.md "$out/"
+          Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/*.zip
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash packaging/macos/build-mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: dist/*.dmg
+
+  browser-addon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 packaging/browser/build_extension.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-addon
+          path: |
+            dist/browser/*.zip
+            dist/browser/*.xpi
