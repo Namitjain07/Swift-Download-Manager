@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 
 use socket2::{Domain, Protocol, Socket, Type};
 use ureq::Error;
-use ureq::unversioned::resolver::DefaultResolver;
+use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
 use ureq::unversioned::transport::{
-    Buffers, ConnectProxyConnector, ConnectionDetails, Connector, Either, LazyBuffers, NextTimeout, RustlsConnector, ShutdownHandle, Transport,
+    Buffers, ConnectProxyConnector, ConnectionDetails, Connector, DefaultConnector, Either, LazyBuffers, NextTimeout, RustlsConnector, ShutdownHandle, Transport,
 };
 
 /// How long a network that failed is left alone before it is tried again.
@@ -413,12 +413,73 @@ impl Transport for BoundTransport {
     }
 }
 
-/// An HTTP client whose connections all leave through `route`.
-pub fn agent(config: ureq::config::Config, route: &Route) -> ureq::Agent {
-    // The same steps as ureq's own default (a proxy tunnel if one is set, a socket, then TLS), with the
-    // socket opened through the chosen network.
-    let connector = ().chain(ConnectProxyConnector::default()).chain(BoundTcp { route: route.clone() }).chain(RustlsConnector::default());
-    ureq::Agent::with_parts(config, connector, DefaultResolver::default())
+/// Whether an address is on a private network or this computer itself: somewhere a public download
+/// server has no business fetching from (the cloud "metadata" address 169.254.169.254, the office network,
+/// services that listen on localhost).
+pub fn is_private(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_multicast()
+                // 100.64.0.0/10: shared address space used by carriers and some clouds.
+                || (o[0] == 100 && (64..128).contains(&o[1]))
+        }
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_private(IpAddr::V4(v4));
+            }
+            let first = v6.segments()[0];
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                // fc00::/7 unique local and fe80::/10 link local.
+                || (first & 0xfe00) == 0xfc00
+                || (first & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+/// Looks names up like ureq does, then drops the private addresses. Doing it here (and not before the request)
+/// means it also covers redirects and cannot be raced by a name that changes its answer.
+#[derive(Debug)]
+struct Guarded {
+    inner: DefaultResolver,
+    block_private: bool,
+}
+
+impl Resolver for Guarded {
+    fn resolve(&self, uri: &ureq::http::Uri, config: &ureq::config::Config, timeout: NextTimeout) -> Result<ResolvedSocketAddrs, Error> {
+        let found = self.inner.resolve(uri, config, timeout)?;
+        if !self.block_private {
+            return Ok(found);
+        }
+        let mut allowed = self.inner.empty();
+        found.iter().filter(|a| !is_private(a.ip())).for_each(|a| allowed.push(*a));
+        if allowed.is_empty() {
+            return Err(Error::Io(io::Error::new(io::ErrorKind::PermissionDenied, "this server may not download from private or local addresses")));
+        }
+        Ok(allowed)
+    }
+}
+
+/// An HTTP client whose connections leave through `route` (when there is one) and that can be forbidden
+/// from reaching private addresses.
+pub fn agent(config: ureq::config::Config, route: Option<&Route>, block_private: bool) -> ureq::Agent {
+    let resolver = Guarded { inner: DefaultResolver::default(), block_private };
+    match route {
+        // The same steps as ureq's own default (a proxy tunnel if one is set, a socket, then TLS), with the
+        // socket opened through the chosen network.
+        Some(route) => {
+            let connector = ().chain(ConnectProxyConnector::default()).chain(BoundTcp { route: route.clone() }).chain(RustlsConnector::default());
+            ureq::Agent::with_parts(config, connector, resolver)
+        }
+        None => ureq::Agent::with_parts(config, DefaultConnector::default(), resolver),
+    }
 }
 
 #[cfg(test)]

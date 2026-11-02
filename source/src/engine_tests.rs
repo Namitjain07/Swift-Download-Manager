@@ -464,3 +464,26 @@ fn with_no_working_network_the_download_says_so() {
     assert!(srv.peers().is_empty(), "nothing may fall back to the normal connection");
     assert!(!out.exists());
 }
+
+#[test]
+fn a_server_can_refuse_to_fetch_from_private_addresses() {
+    let srv = server();
+    let out = dir("private").join("file.bin");
+    let live = fresh();
+    // The test server is on 127.0.0.1, which is exactly what a shared server must not be made to reach.
+    // With the usual retries: a refusal like this will not get better, so it must not wait and try again.
+    go(Job { block_private: true, ..job(srv.url("/range/file.bin"), out.clone()) }, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 5), Status::Error, "gave up straight away");
+    assert!(live.error.lock().unwrap().clone().unwrap_or_default().contains("private"), "{:?}", live.error.lock().unwrap());
+    assert!(srv.peers().is_empty(), "no connection may be made");
+    assert!(!out.exists());
+}
+
+#[test]
+fn private_addresses_are_fine_when_not_refused() {
+    let srv = server();
+    let out = dir("not-private").join("file.bin");
+    let live = fresh();
+    go(job(srv.url("/range/file.bin"), out.clone()), &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 30), Status::Complete);
+}

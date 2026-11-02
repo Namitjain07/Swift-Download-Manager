@@ -8,9 +8,11 @@ cd "$(dirname "$0")/../.."
 VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
 # A pre-release such as 1.5.0-beta.1 is written 1.5.0~beta.1 for dpkg, so it sorts before 1.5.0.
 VERSION=${VERSION/-/\~}
+# GitHub turns a tilde in a file name into a dot, so the file name keeps the dash.
+FILE_VERSION=${VERSION/\~/-}
 ARCH=$(dpkg --print-architecture 2>/dev/null || echo amd64)
 NAME=swift-download-manager
-PKG="dist/deb/${NAME}_${VERSION}_${ARCH}"
+PKG="dist/deb/${NAME}_${FILE_VERSION}_${ARCH}"
 
 cargo build --release
 
@@ -56,5 +58,5 @@ command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t 
 EOF
 chmod 755 "$PKG/DEBIAN/postinst"
 
-dpkg-deb --root-owner-group --build "$PKG" "dist/${NAME}_${VERSION}_${ARCH}.deb"
-echo "Made dist/${NAME}_${VERSION}_${ARCH}.deb"
+dpkg-deb --root-owner-group --build "$PKG" "dist/${NAME}_${FILE_VERSION}_${ARCH}.deb"
+echo "Made dist/${NAME}_${FILE_VERSION}_${ARCH}.deb"

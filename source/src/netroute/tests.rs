@@ -186,7 +186,7 @@ fn a_connection_leaves_from_the_chosen_address() {
     let (port, peers) = peer_recorder();
     for ip in ["127.0.0.2", "127.0.0.3"] {
         let r = Route { name: "lo".into(), addr: ip.parse().unwrap(), index: None };
-        let mut resp = agent(config(), &r).get(&format!("http://127.0.0.1:{port}/")).call().unwrap();
+        let mut resp = agent(config(), Some(&r), false).get(&format!("http://127.0.0.1:{port}/")).call().unwrap();
         assert_eq!(resp.body_mut().read_to_string().unwrap(), "ok");
     }
     let seen = peers.lock().unwrap().clone();
@@ -198,7 +198,7 @@ fn an_address_this_computer_does_not_have_fails_cleanly() {
     let (port, _) = peer_recorder();
     // 203.0.113.0/24 is reserved for documentation; no card owns it.
     let r = Route { name: "gone".into(), addr: "203.0.113.7".parse().unwrap(), index: None };
-    let err = agent(config(), &r).get(&format!("http://127.0.0.1:{port}/")).call().unwrap_err();
+    let err = agent(config(), Some(&r), false).get(&format!("http://127.0.0.1:{port}/")).call().unwrap_err();
     assert!(matches!(err, Error::Io(_)), "{err:?}");
 }
 
@@ -207,6 +207,21 @@ fn a_card_cannot_reach_a_server_of_the_other_kind() {
     let (port, _) = peer_recorder();
     let r = Route { name: "v6only".into(), addr: "2001:db8::5".parse().unwrap(), index: None };
     // The server's only address is IPv4, so there is nothing this card could connect to.
-    let err = agent(config(), &r).get(&format!("http://127.0.0.1:{port}/")).call().unwrap_err();
+    let err = agent(config(), Some(&r), false).get(&format!("http://127.0.0.1:{port}/")).call().unwrap_err();
     assert!(err.to_string().contains("no matching address"), "{err}");
+}
+
+// --- addresses a shared server must not fetch from -----------------------------------------------
+
+#[test]
+fn private_and_local_addresses_are_recognised() {
+    for ip in [
+        "127.0.0.1", "10.1.2.3", "172.16.0.9", "172.31.255.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "100.127.255.1", "0.0.0.0", "224.0.0.1", "255.255.255.255",
+        "::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "ff02::1",
+    ] {
+        assert!(is_private(ip.parse().unwrap()), "{ip} is private or local");
+    }
+    for ip in ["8.8.8.8", "1.1.1.1", "172.15.0.1", "172.32.0.1", "100.63.255.255", "100.128.0.1", "93.184.216.34", "2606:4700:4700::1111", "::ffff:8.8.8.8"] {
+        assert!(!is_private(ip.parse().unwrap()), "{ip} is public");
+    }
 }

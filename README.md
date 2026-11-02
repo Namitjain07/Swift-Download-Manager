@@ -39,6 +39,7 @@ sooner and a broken connection never means starting over.
 
 **A calm, native-feeling window**
 - **Responsive**: downloads are cards in a grid that gains columns as the window widens (or the classic table, one click away); the sidebar becomes an icon rail and then a drawer, and the toolbar collapses to icons and an overflow menu on narrow windows
+- **In a web browser and for a whole team** *(pre-release 1.6.0-beta.1)*: a page on a localhost address, and a Docker image that serves several people from one machine
 - **Several networks at once** *(pre-release 1.5.0-beta.1)*: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
 - Two designs, switchable under **View → Appearance** (or in **Options**): **Drishti** (the default), built from the Drishti design system with a dark-first palette, 36 px rounded controls, a sidebar rail and state chips that always carry a word, and the flat **iOS** look with capsule buttons and grouped cards. Both come in light and dark and follow your system
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in. The window stays idle when nothing moves
@@ -83,6 +84,84 @@ system tray:
 
 On Linux the icon needs a desktop that shows tray icons (KDE, Xfce, Cinnamon, MATE, or GNOME with the AppIndicator extension). Without one, the program still
 runs in the background; start it again to open the window.
+
+## Use it from a web browser
+
+*Pre-release (1.6.0-beta.1).*
+
+Open **Options → Web interface**, turn it on and press **Open**. The page lists your downloads as cards, and lets you add links, pause, resume,
+remove and download finished files. It follows your system's light or dark setting and works on a phone as well.
+
+<p align="center"><img src="docs/images/web-dark.png" alt="The web interface in dark mode" width="720"></p>
+
+- Only this computer can reach it (`127.0.0.1`, port 9615 unless you change it). The link carries a secret key, so treat it like a password; the browser
+  swaps it for a cookie and the key disappears from the address bar
+- It runs inside the window, or in the background when only the tray icon is left
+
+## Run it for your organisation
+
+*Pre-release (1.6.0-beta.1).*
+
+`swift_download_manager --server` runs as a download server with no window. People sign in to the web page with their own accounts, add links, and the **server**
+downloads them; they fetch the finished files through the same address. Each person sees only their own downloads and gets a folder of their own
+(`/data/downloads/<name>`); administrators see everybody's.
+
+<p align="center"><img src="docs/images/web-login.png" alt="The sign-in page" width="360"> <img src="docs/images/web-mobile.png" alt="The web interface on a phone" width="220"></p>
+
+### With Docker
+
+```sh
+docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
+  -e SDM_ADMIN_USER=admin -e SDM_ADMIN_PASSWORD='a long password' \
+  ghcr.io/namitjain07/swift-download-manager:beta
+```
+
+Open <http://localhost:8080/> and sign in. (`:beta` follows the newest pre-release; `:1.6.0-beta.1` pins one. Stable versions also get `:latest`.)
+Everything lives in the `/data` volume: settings, accounts, the download list and the files. The image is for 64-bit Intel/AMD machines for now.
+
+Add more people:
+
+```sh
+docker exec -i -e SDM_PASSWORD='their password' sdm swift-download-manager --add-user anna          # a normal user
+docker exec -i -e SDM_PASSWORD='their password' sdm swift-download-manager --add-user ben --admin   # an administrator
+docker exec sdm swift-download-manager --list-users
+docker exec sdm swift-download-manager --remove-user anna      # their downloads stay on disk
+```
+
+With docker compose:
+
+```yaml
+services:
+  sdm:
+    image: ghcr.io/namitjain07/swift-download-manager:beta
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    volumes: ["sdm-data:/data"]
+    environment:
+      SDM_ADMIN_USER: admin
+      SDM_ADMIN_PASSWORD: change-me-to-a-long-password
+volumes:
+  sdm-data:
+```
+
+### Without Docker
+
+```sh
+SDM_PASSWORD='a long password' swift_download_manager --server --add-user admin --admin --data /srv/sdm
+swift_download_manager --server --data /srv/sdm --downloads /srv/sdm/files --bind 0.0.0.0 --port 8080
+```
+
+Options (each also has an environment variable): `--bind` (`SDM_BIND`, default `0.0.0.0`), `--port` (`SDM_PORT`, `8080`), `--data` (`SDM_DATA`), `--downloads`
+(`SDM_DOWNLOADS`), `--secure-cookie` (`SDM_SECURE_COOKIE`), `--allow-private` (`SDM_ALLOW_PRIVATE`).
+
+### Before you put it on a network
+
+- **Use HTTPS.** The server speaks plain HTTP; put a reverse proxy in front of it (Caddy, nginx, Traefik) that adds TLS, and add `--secure-cookie`. For example, with Caddy:
+  `sdm.example.org { reverse_proxy localhost:8080 }`
+- **Private addresses are refused.** A download server can be tricked into fetching from the network behind it, so links to private or local addresses
+  (`10.x`, `192.168.x`, `localhost`, the cloud metadata address, ...) are refused, also after redirects. `--allow-private` switches that off for a trusted team
+- Passwords are stored as salted hashes; five wrong passwords from one address block it for five minutes; sessions last a week and end when you sign out
+- Accounts are managed from the command line; there is no page for it yet. It is a pre-release: please report what you find
 
 ## Download over several networks at once
 

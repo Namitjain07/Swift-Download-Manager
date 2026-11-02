@@ -164,6 +164,8 @@ pub struct Job {
     pub user_agent: String,
     /// Networks to download over at the same time (Wi-Fi, Ethernet, a phone ...). Empty: the normal way out.
     pub routes: Vec<Route>,
+    /// Refuse links that lead to private or local addresses (for a server that other people use).
+    pub block_private: bool,
 }
 
 pub fn temp_path(target: &Path) -> PathBuf {
@@ -184,10 +186,7 @@ fn agent(job: &Job, route: Option<&Route>) -> Result<ureq::Agent, String> {
         .timeout_recv_body(Some(Duration::from_secs(60)))
         .user_agent("SwiftDownloadManager/1.0")
         .build();
-    Ok(match route {
-        Some(route) => crate::netroute::agent(config, route),
-        None => config.into(),
-    })
+    Ok(if route.is_some() || job.block_private { crate::netroute::agent(config, route, job.block_private) } else { config.into() })
 }
 
 /// Why a request failed.
@@ -386,7 +385,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
             Err(e) => {
                 let e = e.msg;
                 // 4xx answers will not get better by retrying.
-                let permanent = e.starts_with("Server answered 4") && !e.contains("429");
+                let permanent = (e.starts_with("Server answered 4") && !e.contains("429")) || e.contains("may not download from private");
                 if live.stopped() || permanent || attempt >= job.retries {
                     return Err(e);
                 }

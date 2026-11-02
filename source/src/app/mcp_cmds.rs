@@ -55,6 +55,7 @@ fn summary(item: &Item) -> Value {
         "speed_bytes_per_sec": item.speed().round(),
         "category": item.category,
         "queue": item.queue,
+        "error": item.live.error.lock().unwrap().clone(),
     })
 }
 
@@ -65,7 +66,6 @@ fn detail(item: &Item) -> Value {
     v["folder"] = json!(item.folder.display().to_string());
     v["path"] = json!(item.path().display().to_string());
     v["time_left_secs"] = json!(item.secs_left().round());
-    v["error"] = json!(item.live.error.lock().unwrap().clone());
     v["checksum"] = json!(item.check);
     v["added"] = json!(item.added);
     v["last_try"] = json!(item.last_try);
@@ -80,30 +80,70 @@ impl App {
             return Err(OFF.into());
         }
         self.last_ai_call = Some(std::time::Instant::now());
+        self.execute(cmd, None)
+    }
+
+    /// Run a command for a person using the web interface: they only see and change their own downloads
+    /// (an administrator sees everybody's), and what they add goes into their own folder.
+    pub fn run_as(&mut self, cmd: Command, who: &crate::mcp::command::Who) -> Result<Value, String> {
+        self.execute(cmd, Some(who))
+    }
+
+    /// A request from either kind of caller.
+    pub fn run_request(&mut self, cmd: Command, who: Option<crate::mcp::command::Who>) -> Result<Value, String> {
+        match who {
+            Some(w) => self.run_as(cmd, &w),
+            None => self.run_command(cmd),
+        }
+    }
+
+    fn execute(&mut self, cmd: Command, who: Option<&crate::mcp::command::Who>) -> Result<Value, String> {
+        // `mine`: only this person's downloads. `owner`: who new downloads belong to.
+        let mine: Option<&str> = who.filter(|w| !w.name.is_empty() && !w.admin).map(|w| w.name.as_str());
+        let owner: &str = who.map(|w| w.name.as_str()).unwrap_or("");
+        let shared_server = who.is_some_and(|w| !w.name.is_empty());
+        let queue_rights = || if shared_server && mine.is_some() { Err("Only an administrator can start or stop queues.".to_string()) } else { Ok(()) };
         match cmd {
-            Command::ListDownloads { status, query, limit } => self.cmd_list(status, query, limit),
-            Command::GetDownload { id } => Ok(detail(self.find_item(id)?)),
-            Command::GetStatus => Ok(self.cmd_status()),
+            Command::ListDownloads { status, query, limit } => self.cmd_list(status, query, limit, mine),
+            Command::GetDownload { id } => Ok(detail(self.find_owned(id, mine)?)),
+            Command::GetStatus => Ok(self.cmd_status(mine)),
             Command::ListQueues => Ok(self.cmd_queues()),
-            Command::AddDownload { url, name, category, queue, start } => self.cmd_add(url, name, category, queue, start),
-            Command::Pause { id } => self.cmd_pause(id),
-            Command::Resume { id } => self.cmd_resume(id),
+            Command::AddDownload { url, name, category, queue, start } => self.cmd_add(url, name, category, queue, start, owner),
+            Command::Pause { id } => {
+                self.find_owned(id, mine)?;
+                self.cmd_pause(id)
+            }
+            Command::Resume { id } => {
+                self.find_owned(id, mine)?;
+                self.cmd_resume(id)
+            }
             Command::StartQueue { name } => {
+                queue_rights()?;
                 let name = self.queue_named(&name)?;
                 self.start_queue(&name);
                 Ok(json!({ "queue": name, "running": true, "waiting": self.waiting_in(&name) }))
             }
             Command::StopQueue { name } => {
+                queue_rights()?;
                 let name = self.queue_named(&name)?;
                 self.stop_queue(&name);
                 Ok(json!({ "queue": name, "running": false, "waiting": self.waiting_in(&name) }))
             }
             Command::Handoff => Err("Only a windowless engine hands the downloads over; this app is running them.".into()),
             Command::Remove { id } => {
-                let name = self.find_item(id)?.name.clone();
+                let name = self.find_owned(id, mine)?.name.clone();
                 self.forget_items(&[id]);
-                self.toast(format!("An AI assistant removed {name} from the list"));
+                if who.is_none() {
+                    self.toast(format!("An AI assistant removed {name} from the list"));
+                }
                 Ok(json!({ "removed": id, "name": name, "note": "Taken off the list. No files were deleted." }))
+            }
+            Command::Locate { id } => {
+                let item = self.find_owned(id, mine)?;
+                if item.status() != Status::Complete {
+                    return Err(format!("Download {id} is not finished yet."));
+                }
+                Ok(json!({ "path": item.path().display().to_string(), "name": item.name, "size": item.total() }))
             }
         }
     }
@@ -134,18 +174,64 @@ impl App {
         }
     }
 
-    /// Answer commands that arrived from `--mcp` processes. Called every frame.
+    /// Start, stop or move the web interface to match the settings.
+    pub(super) fn sync_web(&mut self) {
+        let want = self.settings.web_enabled && !self.demo && !self.headless && self.state_lock.is_some();
+        if !want {
+            self.web = None;
+            self.web_rx = None;
+            return;
+        }
+        let port = self.settings.web_port;
+        if self.web.as_ref().is_some_and(|h| h.addr.port() == port) {
+            return;
+        }
+        self.web = None;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let cfg = crate::web::server::Config { bind: [127, 0, 0, 1].into(), port, mode: crate::web::server::Mode::Personal, dir: self.config_dir.clone(), secure_cookie: false };
+        match crate::web::server::start_retrying(cfg, tx, self.ctx.clone(), 20) {
+            Ok(h) => {
+                self.web = Some(h);
+                self.web_rx = Some(rx);
+            }
+            Err(e) => self.toast(format!("The web interface could not start on port {port}: {e}")),
+        }
+    }
+
+    /// Set up a download server (`--server`): where files go, and whether private addresses are refused.
+    pub fn configure_server(&mut self, downloads: PathBuf, block_private: bool) {
+        self.settings.folder = downloads;
+        self.settings.per_category_folders = false;
+        self.settings.block_private = block_private;
+        self.dirty = true;
+        self.save();
+    }
+
+    /// The port of the web interface, when it is switched on in the settings.
+    pub fn web_port_if_enabled(&self) -> Option<u16> {
+        self.settings.web_enabled.then_some(self.settings.web_port)
+    }
+
+    /// The link that opens the web interface in a browser, while it is on.
+    pub(super) fn web_link(&self) -> Option<String> {
+        self.web.as_ref().map(|h| format!("http://127.0.0.1:{}/?key={}", h.addr.port(), h.key))
+    }
+
+    /// Answer commands that arrived from `--mcp` processes and browsers. Called every frame.
     pub(super) fn serve_control(&mut self) {
-        let Some(rx) = &self.control_rx else { return };
-        let jobs: Vec<_> = rx.try_iter().collect();
+        let mut jobs: Vec<_> = self.control_rx.iter().flat_map(|rx| rx.try_iter()).collect();
+        jobs.extend(self.web_rx.iter().flat_map(|rx| rx.try_iter()));
         for job in jobs {
-            let answer = self.run_command(job.cmd);
+            let answer = self.run_request(job.cmd, job.who);
             let _ = job.reply.send(answer);
         }
     }
 
     /// The window is closing: save, and stop advertising the control door.
     pub(super) fn close_control(&mut self) {
+        // Stop listening for browsers too, so the next process can take the port.
+        self.web = None;
+        self.web_rx = None;
         if self.control_rx.take().is_some() {
             crate::mcp::control::clear_info(&self.config_dir);
         }
@@ -206,6 +292,11 @@ impl App {
         self.items.iter().find(|i| i.id == id).ok_or_else(|| format!("No download with id {id}. Use list_downloads to see the ids."))
     }
 
+    /// Like `find_item`, but somebody else's download looks exactly like one that does not exist.
+    fn find_owned(&self, id: u64, mine: Option<&str>) -> Result<&Item, String> {
+        self.items.iter().find(|i| i.id == id && mine.is_none_or(|m| i.owner == m)).ok_or_else(|| format!("No download with id {id}. Use list_downloads to see the ids."))
+    }
+
     fn queue_named(&self, name: &str) -> Result<String, String> {
         let want = name.trim();
         self.settings
@@ -220,7 +311,7 @@ impl App {
         self.items.iter().filter(|i| i.queue.as_deref() == Some(queue) && i.status() == Status::Queued).count()
     }
 
-    fn cmd_list(&self, status: Option<String>, query: Option<String>, limit: Option<usize>) -> Result<Value, String> {
+    fn cmd_list(&self, status: Option<String>, query: Option<String>, limit: Option<usize>, mine: Option<&str>) -> Result<Value, String> {
         let want = match status.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
             None => None,
             Some(s) => Some(
@@ -234,6 +325,7 @@ impl App {
         let hits: Vec<&Item> = self
             .items
             .iter()
+            .filter(|i| mine.is_none_or(|m| i.owner == m))
             .filter(|i| want.is_none_or(|w| i.status() == w))
             .filter(|i| q.is_empty() || i.name.to_lowercase().contains(&q) || i.url.to_lowercase().contains(&q))
             .collect();
@@ -245,17 +337,18 @@ impl App {
         }))
     }
 
-    fn cmd_status(&self) -> Value {
-        let n = |f: &dyn Fn(Status) -> bool| self.items.iter().filter(|i| f(i.status())).count();
+    fn cmd_status(&self, mine: Option<&str>) -> Value {
+        let own = || self.items.iter().filter(|i| mine.is_none_or(|m| i.owner == m));
+        let n = |f: &dyn Fn(Status) -> bool| own().filter(|i| f(i.status())).count();
         json!({
             "mode": if self.headless { "headless" } else { "window" },
-            "downloads": self.items.len(),
+            "downloads": own().count(),
             "active": n(&|s| s.is_active()),
             "queued": n(&|s| s == Status::Queued),
             "paused": n(&|s| s == Status::Paused),
             "complete": n(&|s| s == Status::Complete),
             "failed": n(&|s| s == Status::Error),
-            "speed_bytes_per_sec": self.items.iter().filter(|i| i.status().is_active()).map(|i| i.speed()).sum::<f64>().round(),
+            "speed_bytes_per_sec": own().filter(|i| i.status().is_active()).map(|i| i.speed()).sum::<f64>().round(),
             "speed_limit_kbps": self.settings.limit_on.then_some(self.settings.limit_kbps),
             "queues_running": self.running.iter().collect::<Vec<_>>(),
         })
@@ -283,7 +376,7 @@ impl App {
         json!({ "queues": list })
     }
 
-    fn cmd_add(&mut self, url: String, name: Option<String>, category: Option<String>, queue: Option<String>, start: Option<bool>) -> Result<Value, String> {
+    fn cmd_add(&mut self, url: String, name: Option<String>, category: Option<String>, queue: Option<String>, start: Option<bool>, owner: &str) -> Result<Value, String> {
         let url = url.trim().to_string();
         Self::check_url(&url)?;
         let given = name.as_deref().map(str::trim).filter(|n| !n.is_empty());
@@ -303,7 +396,11 @@ impl App {
             None => MAIN_QUEUE.to_string(),
         };
         // The destination always comes from the category; there is no way to pick a folder.
-        let folder = self.folder_for(&category);
+        let mut folder = self.folder_for(&category);
+        // On a shared server everybody downloads into a folder of their own.
+        if !owner.is_empty() {
+            folder = folder.join(owner);
+        }
         let d = AddDialog { url, name_edited: given.is_some(), folder: folder.display().to_string(), name, category, queue, ..Default::default() };
         // Adding selects the new row; keep whatever the person had selected.
         let selection = std::mem::take(&mut self.selected);
@@ -311,10 +408,15 @@ impl App {
         self.selected = selection;
         let id = added?;
         self.progress_open.remove(&id);
+        if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
+            item.owner = owner.to_string();
+        }
         let item = self.find_item(id)?;
         let (shown, status) = (item.name.clone(), status_key(item.status()));
         let out = json!({ "id": id, "name": shown, "folder": item.folder.display().to_string(), "status": status, "queue": item.queue });
-        self.toast(format!("An AI assistant added {shown}"));
+        if owner.is_empty() {
+            self.toast(format!("An AI assistant added {shown}"));
+        }
         Ok(out)
     }
 
@@ -516,7 +618,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         app.control_rx = Some(rx);
         let (reply, answer) = std::sync::mpsc::channel();
-        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply }).unwrap();
+        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply, who: None }).unwrap();
         assert!(answer.try_recv().is_err(), "nothing happens before the app ticks");
         app.pump();
         let status = answer.try_recv().expect("answered during the tick").unwrap();
@@ -549,12 +651,12 @@ mod tests {
         app.control_rx = Some(rx);
         app.settings.mcp_enabled = false;
         let (reply, answer) = std::sync::mpsc::channel();
-        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply }).unwrap();
+        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply, who: None }).unwrap();
         app.pump();
         assert!(answer.try_recv().unwrap().unwrap_err().contains("turned off"));
         app.settings.mcp_enabled = true;
         let (reply, answer) = std::sync::mpsc::channel();
-        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply }).unwrap();
+        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply, who: None }).unwrap();
         app.pump();
         assert!(answer.try_recv().unwrap().is_ok(), "switching it back on works without a restart");
     }
@@ -572,5 +674,117 @@ mod tests {
         assert_eq!(app.ai_state(), AiState::Ready);
         app.run_command(Command::GetStatus).unwrap();
         assert_eq!(app.ai_state(), AiState::Active, "a command was just handled");
+    }
+
+    // --- a shared server: every person has their own downloads --------------------------------
+
+    use crate::mcp::command::Who;
+
+    fn person(name: &str, admin: bool) -> Who {
+        Who { name: name.into(), admin }
+    }
+
+    fn add_as(app: &mut App, who: &Who, url: &str, name: &str) -> u64 {
+        app.run_as(add(url, Some(name)), who).unwrap()["id"].as_u64().unwrap()
+    }
+
+    #[test]
+    fn people_see_and_change_only_their_own_downloads() {
+        let dir = scratch("owners");
+        let mut app = test_app(&dir);
+        let (anna, ben) = (person("anna", false), person("ben", false));
+        let a = add_as(&mut app, &anna, "https://e.com/a.zip", "a.zip");
+        let b = add_as(&mut app, &ben, "https://e.com/b.zip", "b.zip");
+
+        let list = |app: &mut App, who: &Who| app.run_as(Command::ListDownloads { status: None, query: None, limit: None }, who).unwrap();
+        assert_eq!(list(&mut app, &anna)["total"], 1);
+        assert_eq!(list(&mut app, &anna)["downloads"][0]["id"], a);
+        assert_eq!(list(&mut app, &ben)["downloads"][0]["id"], b);
+
+        // Somebody else's id looks exactly like an id that does not exist.
+        for cmd in [Command::GetDownload { id: b }, Command::Pause { id: b }, Command::Resume { id: b }, Command::Remove { id: b }, Command::Locate { id: b }] {
+            let e = app.run_as(cmd, &anna).unwrap_err();
+            assert!(e.contains("No download with id"), "{e}");
+        }
+        assert_eq!(app.items.len(), 2, "nothing was removed");
+        assert_eq!(app.run_as(Command::GetStatus, &anna).unwrap()["downloads"], 1);
+        app.run_as(Command::Remove { id: a }, &anna).unwrap();
+        assert_eq!(app.items.len(), 1);
+    }
+
+    #[test]
+    fn an_admin_sees_everybody_and_may_manage_queues() {
+        let dir = scratch("admin");
+        let mut app = test_app(&dir);
+        let (anna, admin) = (person("anna", false), person("root", true));
+        add_as(&mut app, &anna, "https://e.com/a.zip", "a.zip");
+        add_as(&mut app, &admin, "https://e.com/r.zip", "r.zip");
+        assert_eq!(app.run_as(Command::ListDownloads { status: None, query: None, limit: None }, &admin).unwrap()["total"], 2);
+        assert_eq!(app.run_as(Command::GetStatus, &admin).unwrap()["downloads"], 2);
+        assert!(app.run_as(Command::StartQueue { name: MAIN_QUEUE.into() }, &admin).is_ok());
+        let e = app.run_as(Command::StartQueue { name: MAIN_QUEUE.into() }, &anna).unwrap_err();
+        assert!(e.contains("administrator"), "{e}");
+        assert!(app.run_as(Command::StopQueue { name: MAIN_QUEUE.into() }, &anna).is_err());
+        assert!(app.run_as(Command::ListQueues, &anna).is_ok());
+    }
+
+    #[test]
+    fn each_person_downloads_into_their_own_folder() {
+        let dir = scratch("folders");
+        let mut app = test_app(&dir);
+        let id = add_as(&mut app, &person("anna", false), "https://e.com/a.zip", "a.zip");
+        let item = app.items.iter().find(|i| i.id == id).unwrap();
+        assert_eq!(item.folder, app.folder_for(&item.category).join("anna"));
+        assert_eq!(item.owner, "anna");
+        // The local page and MCP are not tied to anybody.
+        let local = add_as(&mut app, &person("", true), "https://e.com/l.zip", "l.zip");
+        let item = app.items.iter().find(|i| i.id == local).unwrap();
+        assert_eq!(item.folder, app.folder_for(&item.category));
+        assert_eq!(item.owner, "");
+        let mcp = app.run_command(add("https://e.com/m.zip", Some("m.zip"))).unwrap()["id"].as_u64().unwrap();
+        assert_eq!(app.items.iter().find(|i| i.id == mcp).unwrap().owner, "");
+    }
+
+    #[test]
+    fn the_local_page_sees_everything() {
+        let dir = scratch("local");
+        let mut app = test_app(&dir);
+        app.run_command(add("https://e.com/m.zip", Some("m.zip"))).unwrap();
+        let local = person("", true);
+        assert_eq!(app.run_as(Command::ListDownloads { status: None, query: None, limit: None }, &local).unwrap()["total"], 1);
+        assert!(app.run_as(Command::StartQueue { name: MAIN_QUEUE.into() }, &local).is_ok());
+    }
+
+    #[test]
+    fn a_file_can_be_fetched_only_when_it_is_finished() {
+        let dir = scratch("locate");
+        let mut app = test_app(&dir);
+        // Keep the test's files out of the real Downloads folder.
+        app.settings.folder = dir.join("downloads");
+        let anna = person("anna", false);
+        let id = add_as(&mut app, &anna, "https://e.com/a.bin", "a.bin");
+        assert!(app.run_as(Command::Locate { id }, &anna).unwrap_err().contains("not finished"));
+        let path = {
+            let item = app.items.iter().find(|i| i.id == id).unwrap();
+            std::fs::create_dir_all(&item.folder).unwrap();
+            std::fs::write(item.path(), b"12345").unwrap();
+            *item.live.status.lock().unwrap() = Status::Complete;
+            item.live.total.store(5, Ordering::Relaxed);
+            item.path()
+        };
+        let out = app.run_as(Command::Locate { id }, &anna).unwrap();
+        assert_eq!(out["path"], path.display().to_string());
+        assert_eq!(out["name"], "a.bin");
+        assert_eq!(out["size"], 5);
+    }
+
+    #[test]
+    fn owners_are_remembered() {
+        let dir = scratch("remember");
+        let mut app = test_app(&dir);
+        add_as(&mut app, &person("anna", false), "https://e.com/a.zip", "a.zip");
+        app.save();
+        let again = test_app(&dir);
+        assert_eq!(again.items[0].owner, "anna");
     }
 }

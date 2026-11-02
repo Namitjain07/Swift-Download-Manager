@@ -128,6 +128,7 @@ impl App {
             cookies: item.cookies.clone(),
             user_agent: item.user_agent.clone(),
             routes,
+            block_private: self.settings.block_private,
         };
         engine::start(job, item.live.clone(), item.limiter.clone(), self.ctx.clone());
         self.dirty = true;

@@ -23,6 +23,8 @@ const MAX_HEADERS: usize = 64;
 pub struct Request {
     pub cmd: Command,
     pub reply: Sender<Result<Value, String>>,
+    /// Set for the web interface; `None` for an AI assistant (MCP).
+    pub who: Option<super::command::Who>,
 }
 
 /// Where the listener can be found. Written to `control.json`.
@@ -52,7 +54,12 @@ fn looks_like_token(t: &str) -> bool {
 
 /// The shared secret, created on first use: 32 random bytes as hex, readable only by you.
 pub fn token(dir: &Path) -> io::Result<String> {
-    let path = dir.join("mcp-token");
+    token_in(dir, "mcp-token")
+}
+
+/// A secret kept in the file `file` of the settings folder (see `token`).
+pub fn token_in(dir: &Path, file: &str) -> io::Result<String> {
+    let path = dir.join(file);
     if let Ok(t) = std::fs::read_to_string(&path) {
         if looks_like_token(t.trim()) {
             return Ok(t.trim().to_string());
@@ -190,7 +197,7 @@ fn handle(stream: TcpStream, port: u16, token: &str, tx: &Sender<Request>, ctx: 
                 None => return respond(&stream, "400 Bad Request", &json!({ "error": "expected {\"command\": {...}}" })),
             };
             let (reply, answer) = mpsc::channel();
-            if tx.send(Request { cmd, reply }).is_err() {
+            if tx.send(Request { cmd, reply, who: None }).is_err() {
                 return respond(&stream, "503 Service Unavailable", &json!({ "error": "the app is shutting down" }));
             }
             ctx.request_repaint();

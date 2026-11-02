@@ -1,6 +1,6 @@
 [package]
 name = "swift_download_manager"
-version = "1.5.0-beta.1"
+version = "1.6.0-beta.1"
 edition = "2024"
 description = "Swift Download Manager: a fast download manager with split downloads, pause/resume, queues, scheduler and browser add-on"
 license = "MIT"
@@ -20,6 +20,7 @@ rfd = "0.17"
 getrandom = "0.4"
 socket2 = { version = "0.6", features = ["all"] }
 if-addrs = "0.15.0"
+ctrlc = { version = "3", features = ["termination"] }
 
 # The tray icon. One API on every system; on Linux it talks to the desktop directly (no GTK needed).
 [target.'cfg(target_os = "linux")'.dependencies]

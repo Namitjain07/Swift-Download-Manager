@@ -58,6 +58,8 @@ const YIELD_GRACE: Duration = Duration::from_secs(8);
 struct Local {
     app: App,
     rx: mpsc::Receiver<control::Request>,
+    /// The web interface, while this engine owns the downloads.
+    _web: Option<crate::web::server::Handle>,
     /// Released when this is dropped, after the app has saved.
     _lock: StateLock,
 }
@@ -72,11 +74,19 @@ pub struct Engine {
     pub(crate) yield_grace: Duration,
     /// When the downloads were last handed to a window.
     yielded: Option<Instant>,
+    /// A shared server: the web interface is configured here, and no window may take the downloads.
+    server: Option<crate::web::server::Config>,
 }
 
 impl Engine {
     pub fn new(dir: PathBuf) -> Self {
-        Engine { dir, local: None, busy_wait: BUSY_WAIT, yield_grace: YIELD_GRACE, yielded: None }
+        Engine { dir, local: None, busy_wait: BUSY_WAIT, yield_grace: YIELD_GRACE, yielded: None, server: None }
+    }
+
+    /// An engine for a shared server (`--server`): it serves the web interface to several people and never
+    /// hands its downloads to a window.
+    pub fn for_server(dir: PathBuf, web: crate::web::server::Config) -> Self {
+        Engine { server: Some(web), ..Engine::new(dir) }
     }
 
     /// Become the owner of the downloads, waiting up to `wait` for a window that is closing to let
@@ -118,8 +128,32 @@ impl Engine {
         eprintln!("swift-download-manager: no window is open, running the downloads without one");
         let app = App::headless_in(self.dir.clone());
         let (tx, rx) = mpsc::channel();
-        control::start(&self.dir, tx, eframe::egui::Context::default(), "headless").map_err(|e| format!("could not open the control door: {e}"))?;
-        self.local = Some(Local { app, rx, _lock: lock });
+        let ctx = eframe::egui::Context::default();
+        control::start(&self.dir, tx.clone(), ctx.clone(), "headless").map_err(|e| format!("could not open the control door: {e}"))?;
+        // The web interface: configured for a server, or switched on in the settings of a personal computer.
+        let cfg = match &self.server {
+            Some(c) => Some(c.clone()),
+            None if app.web_port_if_enabled().is_some() => Some(crate::web::server::Config {
+                bind: [127, 0, 0, 1].into(),
+                port: app.web_port_if_enabled().unwrap_or(9615),
+                mode: crate::web::server::Mode::Personal,
+                dir: self.dir.clone(),
+                secure_cookie: false,
+            }),
+            None => None,
+        };
+        let web = match cfg {
+            Some(c) => match crate::web::server::start_retrying(c, tx, ctx, 50) {
+                Ok(h) => Some(h),
+                Err(e) if self.server.is_some() => return Err(format!("the web interface could not start: {e}")),
+                Err(e) => {
+                    eprintln!("swift-download-manager: the web interface could not start: {e}");
+                    None
+                }
+            },
+            None => None,
+        };
+        self.local = Some(Local { app, rx, _web: web, _lock: lock });
         self.yielded = None;
         Ok(())
     }
@@ -131,12 +165,16 @@ impl Engine {
         let jobs: Vec<control::Request> = local.rx.try_iter().collect();
         let mut handoff = None;
         for job in jobs {
+            if job.cmd == Command::Handoff && self.server.is_some() {
+                let _ = job.reply.send(Err("This is a download server; it keeps its downloads and does not hand them to a window.".into()));
+                continue;
+            }
             if job.cmd == Command::Handoff {
                 local.app.prepare_handoff();
                 handoff = Some(job.reply);
                 break;
             }
-            let answer = local.app.run_command(job.cmd);
+            let answer = local.app.run_request(job.cmd, job.who);
             let _ = job.reply.send(answer);
         }
         if let Some(reply) = handoff {

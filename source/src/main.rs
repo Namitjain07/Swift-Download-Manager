@@ -10,7 +10,9 @@ mod engine;
 mod icons;
 mod mcp;
 mod netroute;
+mod serve;
 mod theme;
+mod web;
 mod widgets;
 
 use std::path::PathBuf;
@@ -20,6 +22,10 @@ fn main() -> eframe::Result<()> {
     // Keep downloading with no window, with an icon in the tray (started by "keep running in the background").
     if args.iter().skip(1).any(|a| a == "--background") {
         std::process::exit(background::run());
+    }
+    // A download server for a team: no window, several people sign in through the web interface.
+    if args.iter().skip(1).any(|a| matches!(a.as_str(), "--server" | "--add-user" | "--remove-user" | "--list-users" | "--healthcheck")) {
+        std::process::exit(serve::run(&args[1..]));
     }
     // MCP server for AI assistants: talks over stdin/stdout, no window.
     if args.iter().skip(1).any(|a| a == "--mcp") {

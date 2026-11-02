@@ -225,6 +225,11 @@ pub struct Settings {
     pub multi_network: bool,
     /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
     pub networks: Vec<String>,
+    /// Let a browser on this computer use the downloads (Options > Web interface).
+    pub web_enabled: bool,
+    pub web_port: u16,
+    /// Refuse links that lead to private or local addresses (set by `--server`).
+    pub block_private: bool,
 }
 
 impl Default for Settings {
@@ -256,6 +261,9 @@ impl Default for Settings {
             mcp_enabled: true,
             multi_network: false,
             networks: Vec::new(),
+            web_enabled: false,
+            web_port: 9615,
+            block_private: false,
         }
     }
 }
@@ -302,6 +310,8 @@ struct SavedItem {
     /// Was running when a window took the downloads over from the MCP engine: carry on.
     #[serde(default)]
     handoff_resume: bool,
+    #[serde(default)]
+    owner: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -343,6 +353,8 @@ pub struct Item {
     limit_kbps: u64,
     limiter: Arc<Limiter>,
     handoff_resume: bool,
+    /// On a shared server: whose download this is (empty on a personal computer).
+    owner: String,
     speed: f64,
     last_bytes: u64,
     last_status: Status,
@@ -377,6 +389,7 @@ impl Item {
             limit_kbps: 0,
             limiter: Arc::new(Limiter::chained(overall.clone())),
             handoff_resume: false,
+            owner: String::new(),
             speed: 0.0,
             last_bytes,
             last_status,
@@ -564,6 +577,9 @@ pub struct App {
     headless: bool,
     /// Commands from `--mcp` processes (see `mcp::control`).
     control_rx: Option<std::sync::mpsc::Receiver<crate::mcp::control::Request>>,
+    /// The web interface on this computer (Options > Web interface) and its requests.
+    web: Option<crate::web::server::Handle>,
+    web_rx: Option<std::sync::mpsc::Receiver<crate::mcp::control::Request>>,
     /// Owns the download list while this process runs (see `mcp::lock`).
     state_lock: Option<crate::mcp::lock::StateLock>,
     /// Queues that were running when the downloads were handed over; restarted on load.
@@ -640,6 +656,8 @@ impl App {
             config_dir: config_dir.unwrap_or_else(default_config_dir),
             headless,
             control_rx: None,
+            web: None,
+            web_rx: None,
             state_lock: None,
             handoff_queues: Vec::new(),
             last_ai_call: None,
@@ -661,6 +679,7 @@ impl App {
             if !headless {
                 if app.state_lock.is_some() {
                     app.start_control();
+                    app.sync_web();
                 } else {
                     app.toast("AI assistants cannot control the downloads: another copy of the app owns them");
                 }
@@ -753,6 +772,7 @@ impl App {
             item.user_agent = s.user_agent;
             item.set_limit(s.limit_kbps);
             item.handoff_resume = s.handoff_resume;
+            item.owner = s.owner;
             self.items.push(item);
         }
         self.fix_settings();
@@ -818,6 +838,7 @@ impl App {
                 user_agent: i.user_agent.clone(),
                 limit_kbps: i.limit_kbps,
                 handoff_resume: i.handoff_resume,
+                owner: i.owner.clone(),
             })
             .collect();
         let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items, handoff_queues: self.handoff_queues.clone() };
@@ -884,10 +905,11 @@ impl App {
         self.settings.queues.push(QueueDef { name: "Night".into(), ..Default::default() });
     }
 
-    fn apply_settings(&self) {
+    fn apply_settings(&mut self) {
         let v = if self.settings.limit_on { self.settings.limit_kbps.max(1) * 1024 } else { 0 };
         self.limiter.bytes_per_sec.store(v, Ordering::Relaxed);
         self.clipboard_on.store(self.settings.watch_clipboard && !self.demo, Ordering::Relaxed);
+        self.sync_web();
     }
 
     fn folder_for(&self, category: &str) -> PathBuf {
