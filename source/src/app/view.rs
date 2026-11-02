@@ -1,6 +1,7 @@
 //! Main window: menu, toolbar, categories, download list and status bar.
 
 use super::*;
+use super::mcp_cmds::AiState;
 use crate::icons::{self, Icon};
 use crate::widgets::{anim, capsule_bar, cat_row, sidebar_pill, sidebar_row, spinner, status_chip, tool_button, toolbar_sep, RowIcon};
 use eframe::egui::{RichText, Sense, Stroke};
@@ -43,6 +44,7 @@ impl eframe::App for App {
         self.delete_window(&ctx);
         self.properties_window(&ctx);
         self.browser_window(&ctx);
+        self.ai_window(&ctx);
         self.about_window(&ctx);
         self.toast_area(&ctx);
         self.drop_files(&ctx);
@@ -269,6 +271,9 @@ impl App {
                     if ui.button("Browser integration…").clicked() {
                         self.browser_open = true;
                     }
+                    if ui.button("AI assistants…").clicked() {
+                        self.ai_open = true;
+                    }
                     if ui.button("About").clicked() {
                         self.about_open = true;
                     }
@@ -384,6 +389,15 @@ impl App {
                             }
                         } else {
                             status_chip(ui, Some(pal.green), "Browser: connected", pal.secondary);
+                        }
+                        let (txt, dot, col) = match self.ai_state() {
+                            AiState::Off => ("AI: off", None, pal.secondary),
+                            AiState::Unavailable => ("AI: unavailable", Some(pal.orange), pal.orange),
+                            AiState::Ready => ("AI: ready", Some(pal.green), pal.secondary),
+                            AiState::Active => ("AI: active", Some(pal.blue), pal.blue),
+                        };
+                        if status_chip(ui, dot, txt, col).on_hover_text("AI assistants (MCP)…").clicked() {
+                            self.ai_open = true;
                         }
                         if self.settings.watch_clipboard {
                             status_chip(ui, None, "Clipboard: watching", pal.secondary);

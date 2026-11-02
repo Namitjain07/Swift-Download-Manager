@@ -3,7 +3,7 @@
 use super::*;
 use crate::engine;
 use crate::widgets::segment_bar;
-use crate::widgets::{button_row, plain_button, card, dialog_window, group_title, primary_button, spinner, tinted_button, toggle, toggle_row};
+use crate::widgets::{button_row, card, dialog_window, group_title, plain_button, primary_button, spinner, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
 
 fn browse_folder(current: &mut String) {
@@ -490,6 +490,11 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             toggle_row(ui, "Accept downloads from the browser add-on (restart to apply)", &mut s.browser_listen, false);
             ui.add_enabled_ui(s.browser_listen, |ui| toggle_row(ui, "Start browser downloads straight away without asking", &mut s.browser_start_now, true));
         });
+        group_title(ui, "AI assistants");
+        card(ui, |ui| {
+            toggle_row(ui, "Let AI assistants add, pause and remove downloads (MCP)", &mut s.mcp_enabled, true);
+        });
+        ui.label(RichText::new("They cannot delete files or choose folders. Setup: Help > AI assistants…").size(11.0).color(crate::theme::current(ui.ctx()).secondary));
         ui.add_space(8.0);
         egui::CollapsingHeader::new(RichText::new("Categories (file types and folders)").strong()).show(ui, |ui| {
             let mut remove = None;

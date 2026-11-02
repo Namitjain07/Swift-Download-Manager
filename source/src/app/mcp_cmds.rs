@@ -6,6 +6,19 @@ use crate::engine;
 use crate::mcp::command::Command;
 use serde_json::{json, Value};
 
+/// What the status bar says about AI assistants.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum AiState {
+    /// Switched off in the settings.
+    Off,
+    /// On, but this window could not open its control door (another copy owns the downloads).
+    Unavailable,
+    /// On and waiting for an assistant.
+    Ready,
+    /// An assistant used it in the last few seconds.
+    Active,
+}
+
 const OFF: &str = "MCP is turned off in Swift Download Manager (Options > AI assistants).";
 
 fn status_key(s: Status) -> &'static str {
@@ -66,6 +79,7 @@ impl App {
         if !self.settings.mcp_enabled {
             return Err(OFF.into());
         }
+        self.last_ai_call = Some(std::time::Instant::now());
         match cmd {
             Command::ListDownloads { status, query, limit } => self.cmd_list(status, query, limit),
             Command::GetDownload { id } => Ok(detail(self.find_item(id)?)),
@@ -91,6 +105,18 @@ impl App {
                 self.toast(format!("An AI assistant removed {name} from the list"));
                 Ok(json!({ "removed": id, "name": name, "note": "Taken off the list. No files were deleted." }))
             }
+        }
+    }
+
+    pub(super) fn ai_state(&self) -> AiState {
+        if !self.settings.mcp_enabled {
+            AiState::Off
+        } else if self.control_rx.is_none() && !self.demo {
+            AiState::Unavailable
+        } else if self.last_ai_call.is_some_and(|t| t.elapsed().as_secs() < 5) {
+            AiState::Active
+        } else {
+            AiState::Ready
         }
     }
 
@@ -513,5 +539,38 @@ mod tests {
         let dir = scratch("refuse");
         let mut app = test_app(&dir);
         assert!(app.run_command(Command::Handoff).is_err());
+    }
+
+    #[test]
+    fn control_requests_get_the_off_message_when_disabled() {
+        let dir = scratch("off-control");
+        let mut app = test_app(&dir);
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.control_rx = Some(rx);
+        app.settings.mcp_enabled = false;
+        let (reply, answer) = std::sync::mpsc::channel();
+        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply }).unwrap();
+        app.pump();
+        assert!(answer.try_recv().unwrap().unwrap_err().contains("turned off"));
+        app.settings.mcp_enabled = true;
+        let (reply, answer) = std::sync::mpsc::channel();
+        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply }).unwrap();
+        app.pump();
+        assert!(answer.try_recv().unwrap().is_ok(), "switching it back on works without a restart");
+    }
+
+    #[test]
+    fn ai_state_reports_what_the_status_bar_shows() {
+        let dir = scratch("ai-state");
+        let mut app = test_app(&dir);
+        app.settings.mcp_enabled = false;
+        assert_eq!(app.ai_state(), AiState::Off);
+        app.settings.mcp_enabled = true;
+        assert_eq!(app.ai_state(), AiState::Unavailable, "no control door in a test app");
+        let (_tx, rx) = std::sync::mpsc::channel();
+        app.control_rx = Some(rx);
+        assert_eq!(app.ai_state(), AiState::Ready);
+        app.run_command(Command::GetStatus).unwrap();
+        assert_eq!(app.ai_state(), AiState::Active, "a command was just handled");
     }
 }

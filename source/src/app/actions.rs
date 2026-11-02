@@ -487,7 +487,7 @@ impl App {
         if self.dirty && self.last_save.elapsed().as_millis() > 400 {
             self.save();
         }
-        if any_active || !self.running.is_empty() || self.toast.is_some() || self.items.iter().any(|i| i.is_checking) {
+        if any_active || !self.running.is_empty() || self.toast.is_some() || self.items.iter().any(|i| i.is_checking) || self.last_ai_call.is_some_and(|t| t.elapsed().as_secs() < 6) {
             self.ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         // The scheduler needs a look at the clock now and then even when idle.

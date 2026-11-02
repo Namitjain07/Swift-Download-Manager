@@ -4,7 +4,7 @@
 mod actions;
 mod dialogs;
 mod grabber;
-mod mcp_cmds;
+pub(crate) mod mcp_cmds;
 mod tools;
 mod view;
 
@@ -541,6 +541,9 @@ pub struct App {
     state_lock: Option<crate::mcp::lock::StateLock>,
     /// Queues that were running when the downloads were handed over; restarted on load.
     handoff_queues: Vec<String>,
+    /// When an AI assistant last used this app (for the status bar).
+    last_ai_call: Option<Instant>,
+    ai_open: bool,
     ctx: egui::Context,
 }
 
@@ -602,6 +605,8 @@ impl App {
             control_rx: None,
             state_lock: None,
             handoff_queues: Vec::new(),
+            last_ai_call: None,
+            ai_open: false,
             ctx,
         };
         if demo {
@@ -657,6 +662,7 @@ impl App {
             }
             "about" => self.about_open = true,
             "browser" => self.browser_open = true,
+            "ai" => self.ai_open = true,
             "grabber" => self.open_grabber(),
             other => eprintln!("unknown window: {other}"),
         }

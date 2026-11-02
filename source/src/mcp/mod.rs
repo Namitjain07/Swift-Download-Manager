@@ -10,6 +10,7 @@ pub mod control;
 pub mod lock;
 pub mod protocol;
 pub mod server;
+pub mod setup;
 
 #[cfg(test)]
 mod handoff_tests;
