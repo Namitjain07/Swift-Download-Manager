@@ -19,7 +19,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.frame += 1;
         let ctx = ui.ctx().clone();
-        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme));
+        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme), self.style_override.unwrap_or(self.settings.theme_style));
         self.tick();
         self.handle_screenshot(&ctx);
         self.shortcuts(&ctx);
@@ -257,6 +257,14 @@ impl App {
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_categories, "Show categories");
                     ui.menu_button("Appearance", |ui| {
+                        ui.label(RichText::new("DESIGN").size(11.0).color(theme::current(ui.ctx()).tertiary));
+                        for (style, name) in [(ThemeStyle::Drishti, "Drishti (default)"), (ThemeStyle::Ios, "iOS")] {
+                            if ui.selectable_value(&mut self.settings.theme_style, style, name).clicked() {
+                                self.dirty = true;
+                            }
+                        }
+                        ui.separator();
+                        ui.label(RichText::new("MODE").size(11.0).color(theme::current(ui.ctx()).tertiary));
                         for (mode, name) in [(ThemeMode::System, "Automatic (follow system)"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")] {
                             if ui.selectable_value(&mut self.settings.theme, mode, name).clicked() {
                                 self.dirty = true;

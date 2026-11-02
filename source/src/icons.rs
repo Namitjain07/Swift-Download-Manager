@@ -22,9 +22,9 @@ pub enum Icon {
 /// The tint a toolbar button gives each icon: blue to add, green to go, red to stop or remove.
 pub fn tint(icon: Icon, pal: &Palette) -> Color32 {
     match icon {
-        Icon::AddUrl | Icon::Batch | Icon::Scheduler => pal.blue,
-        Icon::Resume | Icon::StartQueue => pal.green,
-        Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red,
+        Icon::AddUrl | Icon::Batch | Icon::Scheduler => pal.blue_ink,
+        Icon::Resume | Icon::StartQueue => pal.green_ink,
+        Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red_ink,
         Icon::Options => pal.secondary,
     }
 }
@@ -204,7 +204,7 @@ mod tests {
                 let ctx = egui::Context::default();
                 let mut out = ctx.run_ui(Default::default(), |ui| {
                     let rect = Rect::from_center_size(pos2(40.0, 40.0), vec2(30.0, 30.0));
-                    draw(ui.painter(), rect, icon, tint(icon, &Palette::LIGHT), enabled);
+                    draw(ui.painter(), rect, icon, tint(icon, &Palette::IOS_LIGHT), enabled);
                 });
                 out.textures_delta.clear();
                 assert!(!out.shapes.is_empty(), "icon painted nothing (enabled={enabled})");
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn disabled_tint_is_dimmer_than_enabled() {
-        let on = tint(Icon::Stop, &Palette::LIGHT);
+        let on = tint(Icon::Stop, &Palette::IOS_LIGHT);
         assert!(dim_for(on, false).a() < dim_for(on, true).a());
     }
 }

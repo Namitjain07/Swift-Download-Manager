@@ -21,6 +21,7 @@ fn main() -> eframe::Result<()> {
     let mut screenshot: Option<PathBuf> = None;
     let mut demo = false;
     let mut theme: Option<theme::ThemeMode> = None;
+    let mut style: Option<theme::ThemeStyle> = None;
     let mut show: Option<String> = None;
     let mut start_url: Option<String> = None;
     let mut i = 1;
@@ -31,6 +32,14 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            "--style" if i + 1 < args.len() => {
+                style = match args[i + 1].as_str() {
+                    "drishti" => Some(theme::ThemeStyle::Drishti),
+                    "ios" => Some(theme::ThemeStyle::Ios),
+                    _ => None,
+                };
+                i += 1;
+            }
             // Opens one window at start-up, for screenshots: --show options|scheduler|add|batch|...
             "--show" if i + 1 < args.len() => {
                 show = Some(args[i + 1].clone());
@@ -84,7 +93,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         app::APP_NAME,
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, show, ..Default::default() })))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, style, show, ..Default::default() })))),
     )
 }
 
