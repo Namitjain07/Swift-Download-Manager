@@ -1,4 +1,4 @@
-Swift Download Manager Helper - browser add-on (version 1.2.0)
+Swift Download Manager Helper - browser add-on
 
 It sends the downloads you start in your browser to Swift Download Manager, adds
 "Download with Swift Download Manager" to the right-click menu, passes your login
@@ -6,7 +6,7 @@ for the site along, and spots videos and sounds a page plays.
 The app must be running for downloads to go to it; otherwise the browser downloads as usual.
 
 Chrome, Edge, Brave or Opera
-  1. Unzip SwiftDownloadManager-Helper-1.2.0-chrome.zip into a folder you keep
+  1. Unzip SwiftDownloadManager-Helper-<version>-chrome.zip (from the Releases page) into a folder you keep
      (the folder "chrome-unpacked" here is the same thing, already unzipped).
   2. Open the extensions page: chrome://extensions  (Edge: edge://extensions)
   3. Turn on "Developer mode" (top right).
@@ -16,7 +16,7 @@ Chrome, Edge, Brave or Opera
 
 Firefox
   - To try it now: open about:debugging, click "This Firefox", "Load Temporary Add-on…"
-    and choose SwiftDownloadManager-Helper-1.2.0-firefox.xpi. (Temporary add-ons are
+    and choose SwiftDownloadManager-Helper-<version>-firefox.xpi (from the Releases page). (Temporary add-ons are
     removed when Firefox closes.)
   - To install it for good, Firefox needs it signed: upload the .xpi at
     https://addons.mozilla.org/developers/ (free account; you can choose

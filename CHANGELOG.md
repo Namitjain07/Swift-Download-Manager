@@ -14,6 +14,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Animations: buttons fade and press, windows fade in, toasts slide up. The window only repaints while something moves
 - `--theme light|dark` and `--show <window>` for taking screenshots
 
+### Windows and a new icon
+- **Fixes the Windows Defender false positive** `Trojan:Win32/Bearfoos.A!ml` reported for 1.2.0. The Windows program is now built with
+  Microsoft's own toolchain on GitHub (it was cross-compiled before), carries an icon, version information and a manifest (it never asks
+  for administrator rights), has the C runtime built in, and is **signed** with the project's own code-signing certificate
+  (fingerprint in SECURITY.md; the private key is kept out of the repository)
+- New app icon: a glowing globe with a green arrow, in the window, the About window, the installers and the browser add-on
+- Every release file is now built by GitHub (Windows, Linux `.deb`, browser add-ons, source); the old binaries are no longer kept in the
+  repository. The `.deb` now works on Ubuntu 22.04+ and Debian 12+
+
 ### AI assistants (MCP)
 - New `--mcp` mode: AI assistants such as Claude can list, add, pause, resume and remove downloads, and run queues
   (ten tools, marked read-only, destructive or idempotent so clients can ask first)
@@ -26,7 +35,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Downloads in this release
 - Windows 10/11 (64-bit): `SwiftDownloadManager.exe`, and a `.zip` that also holds the browser add-on
-- Ubuntu 24.04+, Debian 13+, Mint 22+ (64-bit): `.deb` installer
+- Ubuntu 22.04+, Debian 12+, Mint 21+ (64-bit): `.deb` installer
 - Browser add-on packages and the source code as a `.zip`
 - `SHA256SUMS` to check the files
 - The Mac app has to be built on a Mac; see `mac/HOW TO GET THE MAC VERSION.txt`

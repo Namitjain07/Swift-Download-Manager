@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/images/icon.png" alt="Swift Download Manager icon: a glowing globe with a green arrow" width="96">
+
 # Swift Download Manager
 
 **A fast, IDM-inspired download manager for Windows, Linux and macOS, written in Rust.**
@@ -113,11 +115,13 @@ Get the files from the [**latest release**](https://github.com/Namitjain07/Swift
 
 | Platform | File | How to install |
 | --- | --- | --- |
-| **Windows 10/11** (64-bit) | `SwiftDownloadManager.exe` | Double-click it. No installer needed. Windows may warn about an unknown app: choose **More info**, then **Run anyway**. |
-| **Windows**, with browser add-on | `SwiftDownloadManager-<version>-windows-x64.zip` | The same program together with the browser add-on and a short read-me. |
-| **Ubuntu 24.04+, Debian 13+, Mint 22+** (64-bit) | `swift-download-manager_<version>_amd64.deb` | Double-click it, or run `sudo apt install ./swift-download-manager_<version>_amd64.deb`. |
+| **Windows 10/11** (64-bit) | `SwiftDownloadManager.exe` | Double-click it. No installer needed. It is signed with the project's own certificate, so Windows may say the publisher is unknown: choose **More info**, then **Run anyway** (see [Windows warnings](#windows-warnings-and-antivirus)). |
+| **Windows**, with browser add-on | `SwiftDownloadManager-<version>-windows-x64.zip` | The same program together with the browser add-on, the certificate and a short read-me. |
+| **Ubuntu 22.04+, Debian 12+, Mint 21+** (64-bit) | `swift-download-manager_<version>_amd64.deb` | Double-click it, or run `sudo apt install ./swift-download-manager_<version>_amd64.deb`. |
 | **macOS** | build it, see below | A Mac app can only be built on a Mac. See [`mac/HOW TO GET THE MAC VERSION.txt`](mac/HOW%20TO%20GET%20THE%20MAC%20VERSION.txt). On first start, right-click the app and choose **Open**, because it is not signed with a paid Apple developer account. |
-| **Older Linux** (e.g. Ubuntu 22.04) | build it, see below | `bash packaging/linux/build-deb.sh` in [`source/`](source/). |
+| **Other Linux** | build it, see below | `bash packaging/linux/build-deb.sh` in [`source/`](source/). |
+
+All files are built and, for Windows, signed by GitHub from the release's source code (see [`release.yml`](.github/workflows/release.yml)).
 
 Every release also lists a `SHA256SUMS` file so you can check what you downloaded.
 
@@ -138,6 +142,27 @@ The app has to be running for downloads to go to it; otherwise the browser downl
 
 The same steps are in the app under **Help > Browser integration**.
 
+### Windows warnings and antivirus
+
+**"Windows protected your PC" / unknown publisher.** The exe is signed with this project's own code-signing certificate,
+not one bought from a certificate authority, so Windows cannot tell who you are dealing with. That is expected. To check you have
+the genuine file, compare its SHA-256 with `SHA256SUMS` on the release page and look at the signature:
+
+```powershell
+Get-AuthenticodeSignature .\SwiftDownloadManager.exe | Format-List Status, SignerCertificate
+```
+
+The signer must be `CN=Swift Download Manager, O=Namitjain07` with SHA-256 fingerprint
+`22:B1:AE:1A:D3:BC:C4:0D:F5:3E:81:FD:D1:6A:E1:8E:83:22:2A:FC:51:B9:E6:A1:6A:F5:66:34:AE:F3:86:7A`
+(the public certificate is `swift-download-manager-codesign.cer` in the zip and in the repository).
+
+**`Trojan:Win32/Bearfoos.A!ml` or similar.** Version 1.2.0 was reported as this by Windows Defender. It is a *machine-learning guess* about
+programs it has not seen before, not a match with known malware, and it was a false positive: that build was an unsigned program with no
+icon, version information or manifest. From 1.3.0 the program is built with Microsoft's own toolchain, carries that information and is
+signed. If Defender still objects, open **Protection history**, restore the file, and please
+[send it to Microsoft](https://www.microsoft.com/en-us/wdsi/filesubmission) as a false positive (choose "Software developer").
+The source is here to read; see also [`SECURITY.md`](SECURITY.md).
+
 ## Build it yourself
 
 Install Rust from <https://rustup.rs>, then, in the [`source/`](source/) folder:
@@ -146,8 +171,8 @@ Install Rust from <https://rustup.rs>, then, in the [`source/`](source/) folder:
 | --- | --- | --- |
 | Run it now | `cargo run --release` | opens the app |
 | Linux installer (.deb) | `bash packaging/linux/build-deb.sh` | `dist/*.deb` |
-| Windows (from Windows) | `cargo build --release` | `target/release/swift_download_manager.exe` |
-| Windows (from Linux) | `bash packaging/windows/build-windows.sh` | `dist/windows/*.zip` |
+| Windows (from Windows) | `cargo build --release` | `target/release/swift_download_manager.exe` (with icon and version information) |
+| Windows (from Linux, unsigned) | `bash packaging/windows/build-windows.sh` | `dist/windows/*.zip` (for testing; releases come from GitHub's Windows build) |
 | Mac (on a Mac) | `bash packaging/macos/build-mac.sh` | `dist/*.dmg` |
 | Browser add-on | `python3 packaging/browser/build_extension.py` | `dist/browser/` (Chrome .zip, Firefox .xpi) |
 | Run the tests | `cargo test` | the automatic tests |
@@ -180,7 +205,7 @@ On a machine without a screen, put `xvfb-run -a` in front of the program.
 | [`source/src/app.rs`](source/src/app.rs), [`source/src/app/`](source/src/app/) | The window, dialogs, queues, scheduler and link grabber |
 | [`source/src/theme.rs`](source/src/theme.rs), [`source/src/widgets/`](source/src/widgets/) | The light and dark colours, and the widget kit (buttons, switch, wheel picker, progress bars) |
 | [`browser-extension/`](browser-extension/) | The browser add-on, packaged for Chrome and Firefox |
-| `linux/`, `windows/`, `mac/` | The ready-made program for each system |
+| `mac/` | How to get the Mac version |
 | [`docs/`](docs/) | Images used by this read-me |
 
 Settings and the download list are saved in `~/.config/swift-download-manager/` on Linux and macOS,
@@ -189,7 +214,7 @@ and in `%APPDATA%\swift-download-manager\` on Windows.
 ## Releases
 
 Releases are listed on the [releases page](https://github.com/Namitjain07/Swift-Download-Manager/releases), and what changed
-in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0` publishes a release; see
+in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0` builds, signs and publishes a release; see
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ## Contributing
