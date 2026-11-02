@@ -156,9 +156,15 @@ pub fn current(ctx: &egui::Context) -> Palette {
 }
 
 /// The sizes and rules of the design in use.
-#[allow(dead_code)] // read by the widgets in the next commit
 pub fn design(ctx: &egui::Context) -> Design {
     ctx.data(|d| d.get_temp::<Design>(design_id())).unwrap_or(Design::of(ThemeStyle::Drishti))
+}
+
+/// The hairline between list rows and around cards: Drishti's translucent `separator` token, or the
+/// softened iOS separator.
+pub fn hairline(ctx: &egui::Context) -> Color32 {
+    let (p, d) = (current(ctx), design(ctx));
+    if d.style == ThemeStyle::Drishti { p.separator } else { p.separator.gamma_multiply(0.7) }
 }
 
 /// Pick light or dark from the mode (and the operating system for `System`).

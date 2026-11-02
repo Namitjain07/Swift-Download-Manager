@@ -26,14 +26,14 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
     let pal = theme::current(&ctx);
     let shown = glide(&ctx, id.with("frac"), if frac.is_finite() { frac.clamp(0.0, 1.0) } else { 0.0 }, 0.22);
     let p = ui.painter();
-    p.rect_filled(rect, capsule(rect), pal.separator.gamma_multiply(0.45));
+    p.rect_filled(rect, capsule(rect), pal.track);
     let fw = capsule_fill_width(shown, rect.width(), rect.height());
     if fw > 0.0 {
         let fill = Rect::from_min_size(rect.min, egui::vec2(fw, rect.height()));
         p.rect_filled(fill, capsule(fill), tint);
     }
     if let Some(t) = text {
-        p.text(rect.center(), Align2::CENTER_CENTER, t, FontId::proportional(11.0), pal.label);
+        p.text(rect.center(), Align2::CENTER_CENTER, t, FontId::proportional(theme::design(&ctx).caption), pal.label);
     }
 }
 
@@ -41,12 +41,12 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
 pub fn segment_bar(ui: &mut Ui, frac: f32, total: u64, segs: &[Segment]) {
     let id = ui.next_auto_id();
     let pal = theme::current(ui.ctx());
-    capsule_bar(ui, id, frac, pal.green, 18.0, Some(&format!("{:.1}%", frac * 100.0)));
+    capsule_bar(ui, id, frac, pal.green_ink, 18.0, Some(&format!("{:.1}%", frac * 100.0)));
     ui.add_space(4.0);
     let w = ui.available_width();
     let (strip, _) = ui.allocate_exact_size(egui::vec2(w, 10.0), Sense::hover());
     let p = ui.painter();
-    p.rect_filled(strip, capsule(strip), pal.separator.gamma_multiply(0.45));
+    p.rect_filled(strip, capsule(strip), pal.track);
     if total > 0 {
         let last = segs.len().saturating_sub(1);
         for (i, s) in segs.iter().enumerate() {
@@ -66,7 +66,7 @@ pub fn segment_bar(ui: &mut Ui, frac: f32, total: u64, segs: &[Segment]) {
                 cr.ne = 5;
                 cr.se = 5;
             }
-            p.rect_filled(r.shrink2(egui::vec2(0.5, 0.0)), cr, pal.blue);
+            p.rect_filled(r.shrink2(egui::vec2(0.5, 0.0)), cr, pal.blue_ink);
         }
     }
 }

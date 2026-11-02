@@ -67,7 +67,7 @@ fn queue_lines(p: &Painter, c: Pos2, s: f32, st: Stroke) {
 pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
     let c = rect.center();
     let s = rect.width().min(rect.height());
-    let st = Stroke::new(1.5, dim_for(tint, enabled));
+    let st = Stroke::new(crate::theme::design(p.ctx()).icon_stroke, dim_for(tint, enabled));
     let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
     match icon {
         Icon::AddUrl => {
