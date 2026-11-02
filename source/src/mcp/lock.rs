@@ -52,12 +52,18 @@ pub fn acquire_with_handoff(dir: &Path, wait: Duration) -> Option<StateLock> {
                 return None;
             }
         }
-        if !asked && control::read_info(dir).is_some_and(|i| i.mode == "headless") {
-            asked = true;
-            if let Err(e) = request_handoff(dir, wait) {
-                eprintln!("swift-download-manager: the hand-over did not work: {e}");
+        match control::read_info(dir) {
+            Some(info) if info.mode == "headless" && !asked => {
+                asked = true;
+                if let Err(e) = request_handoff(dir, wait) {
+                    eprintln!("swift-download-manager: the hand-over did not work: {e}");
+                }
+                continue;
             }
-            continue;
+            // A window that is already open holds the lock for as long as it lives (the lock is
+            // released when it exits or crashes), so a second copy has nothing to wait for.
+            Some(info) if info.mode == "window" => return None,
+            _ => {}
         }
         if Instant::now() >= deadline {
             return None;
@@ -97,10 +103,19 @@ mod tests {
     }
 
     #[test]
-    fn another_window_is_not_asked_to_hand_over_and_the_wait_is_bounded() {
+    fn another_window_owner_is_refused_at_once_not_after_the_wait() {
         let dir = scratch("window");
         let _held = StateLock::try_acquire(&dir).unwrap().unwrap();
         std::fs::write(dir.join("control.json"), serde_json::to_string(&ControlInfo { port: 1, pid: 1, mode: "window".into() }).unwrap()).unwrap();
+        let t = Instant::now();
+        assert!(acquire_with_handoff(&dir, Duration::from_secs(5)).is_none());
+        assert!(t.elapsed() < Duration::from_millis(500), "a second copy of the app must not wait for a live window: {:?}", t.elapsed());
+    }
+
+    #[test]
+    fn an_owner_that_is_still_starting_is_waited_for_a_little_but_not_forever() {
+        let dir = scratch("starting");
+        let _held = StateLock::try_acquire(&dir).unwrap().unwrap();
         let t = Instant::now();
         assert!(acquire_with_handoff(&dir, Duration::from_millis(300)).is_none());
         assert!(t.elapsed() >= Duration::from_millis(250) && t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());

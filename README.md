@@ -95,7 +95,8 @@ assistant starting the program with pipes, as MCP clients do.)
 
 **With or without the window.** If the window is open, the assistant works in it and you see changes live. If it is
 closed, the assistant runs the downloads itself in the background. Opening the window while a download is running pauses it,
-hands everything over and carries on in the window, byte for byte.
+hands everything over and carries on in the window, byte for byte. (If the window is minimized and your system stops
+redrawing it, a request can time out after 10 seconds with a message saying so; restore the window and ask again.)
 
 **Safety.**
 - It is on by default; switch it off under **Options** or **Help → AI assistants…** and every request is refused.
