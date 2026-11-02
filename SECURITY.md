@@ -7,7 +7,7 @@ Security fixes are made for the latest release only. Please update to the newest
 
 | Version | Supported |
 | --- | --- |
-| Latest release (1.2.x) | Yes |
+| Latest release (1.3.x) | Yes |
 | Older releases | No |
 
 ## Reporting a vulnerability
@@ -41,6 +41,9 @@ Reports about these are especially welcome:
 - links, file names or server answers that make the app write outside the chosen download folder, or run something
 - the handling of cookies, logins and proxy settings (for example leaking them to another site)
 - the browser add-on's permissions and what it sends to the app
+- the MCP control door used by AI assistants (`--mcp`): it listens only on `127.0.0.1` on a random port, needs the
+  secret token from `mcp-token` in the settings folder, and must refuse web pages (an `Origin` header, a foreign
+  `Host`) and oversized requests; assistants must never be able to delete files, choose a folder or read passwords
 - the installers and the packaged files in a release
 
 Problems that need an attacker who already controls the user's computer, or ordinary bugs without a security effect,

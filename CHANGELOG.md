@@ -3,7 +3,7 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-02
 
 ### A new look
 - Flat, iOS-style design with **light and dark mode**; it follows the system by default and can be changed under **View → Appearance**
@@ -13,6 +13,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Download list with taller rows, status dots and thin progress bars; dialogs redrawn as sheets
 - Animations: buttons fade and press, windows fade in, toasts slide up. The window only repaints while something moves
 - `--theme light|dark` and `--show <window>` for taking screenshots
+
+### AI assistants (MCP)
+- New `--mcp` mode: AI assistants such as Claude can list, add, pause, resume and remove downloads, and run queues
+  (ten tools, marked read-only, destructive or idempotent so clients can ask first)
+- Works with the window open (the assistant uses it) or closed (the downloads run without a window); opening the
+  window while a download runs hands everything over and carries on, byte for byte
+- On by default, with a switch under Options and Help > AI assistants; a status-bar chip shows the state
+- Safe by design: assistants cannot delete files, choose folders, or see passwords and cookies; only `http` and `https`
+  links; the control door listens on your computer only and needs a secret token, and refuses web pages
+- Closing the window now saves the download list
+
+### Downloads in this release
+- Windows 10/11 (64-bit): `SwiftDownloadManager.exe`, and a `.zip` that also holds the browser add-on
+- Ubuntu 24.04+, Debian 13+, Mint 22+ (64-bit): `.deb` installer
+- Browser add-on packages and the source code as a `.zip`
+- `SHA256SUMS` to check the files
+- The Mac app has to be built on a Mac; see `mac/HOW TO GET THE MAC VERSION.txt`
 
 ## [1.2.0]
 
@@ -44,4 +61,5 @@ First release published on GitHub.
 - `SHA256SUMS` to check the files
 - The Mac app has to be built on a Mac; see `mac/HOW TO GET THE MAC VERSION.txt`
 
+[1.3.0]: https://github.com/Namitjain07/Swift-Download-Manager/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Namitjain07/Swift-Download-Manager/releases/tag/v1.2.0

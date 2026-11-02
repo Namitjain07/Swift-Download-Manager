@@ -39,6 +39,19 @@ jobs:
         run: cargo build --locked
       - name: Test
         run: cargo test --locked
+      - name: MCP smoke test (the --mcp server starts and lists its tools)
+        if: runner.os == 'Linux'
+        env:
+          XDG_CONFIG_HOME: ${{ runner.temp }}/sdm-config
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | target/debug/swift_download_manager --mcp > mcp-out.txt
+          cat mcp-out.txt
+          test "$(wc -l < mcp-out.txt)" -eq 2
+          grep -q '"name":"add_download"' mcp-out.txt
 
   browser-addon:
     name: Build the browser add-on
