@@ -1,5 +1,7 @@
 # Builds the app and runs its automatic tests on every push to main and on every pull request,
 # on Linux, Windows and macOS. It also checks that the browser add-on packages can be built.
+# Actions from outside GitHub are pinned to a full commit SHA (the version is in the comment), so a moved
+# tag cannot change what runs here. Dependabot keeps the pins up to date (see dependabot.yml).
 name: CI
 
 on:
@@ -27,8 +29,10 @@ jobs:
         working-directory: source
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: source
       - name: Build

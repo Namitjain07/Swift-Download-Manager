@@ -3,6 +3,8 @@
 # appear under "Artifacts".
 #
 # This only builds files for you to download. To publish a release, push a version tag (see release.yml).
+# Actions from outside GitHub are pinned to a full commit SHA (the version is in the comment), so a moved
+# tag cannot change what runs here. Dependabot keeps the pins up to date (see dependabot.yml).
 name: Build installers
 
 on:
@@ -16,7 +18,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
       - run: bash packaging/linux/build-deb.sh
         working-directory: source
       - uses: actions/upload-artifact@v4
@@ -31,7 +35,9 @@ jobs:
         working-directory: source
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
       - run: cargo build --release --locked
       - shell: pwsh
         run: |
@@ -51,7 +57,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
       - run: bash packaging/macos/build-mac.sh
         working-directory: source
       - uses: actions/upload-artifact@v4
