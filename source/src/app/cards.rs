@@ -143,7 +143,9 @@ impl App {
         if with_bar {
             let bar = Rect::from_min_size(egui::pos2(left, rect.top() + PAD + 50.0), Vec2::new(right - left, 6.0));
             let color = if st == Status::Downloading { pal.green_ink } else { pal.orange_ink };
-            ui.scope_builder(egui::UiBuilder::new().max_rect(bar), |ui| capsule_bar(ui, egui::Id::unique(("card_bar", id)), item.progress(), color, 6.0, None));
+            // new_child, not scope_builder: a scope would also advance the grid's layout cursor.
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar));
+            capsule_bar(&mut child, egui::Id::unique(("card_bar", id)), item.progress(), color, 6.0, None);
         }
 
         // The line under the bar: what is happening right now.
@@ -161,7 +163,8 @@ impl App {
         let line = truncated(&p, &line, FontId::proportional(d.caption), line_color, (right - left - button_row - 8.0).max(60.0));
         p.galley(egui::pos2(left, line_y), line, line_color);
         if st == Status::Connecting {
-            ui.scope_builder(egui::UiBuilder::new().max_rect(Rect::from_min_size(egui::pos2(left, rect.top() + PAD + 48.0), Vec2::splat(16.0))), |ui| spinner(ui, 14.0));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(egui::pos2(left, rect.top() + PAD + 48.0), Vec2::splat(16.0))));
+            spinner(&mut child, 14.0);
         }
 
         // Actions.
@@ -219,5 +222,44 @@ mod tests {
         assert_eq!(split_speed(0.0), ("0".into(), "B/s".into()));
         assert_eq!(split_speed(4_620_000.0), ("4.41".into(), "MB/s".into()));
         assert_eq!(split_speed(900.0), ("900".into(), "B/s".into()));
+    }
+
+    /// The rectangles of the painted cards (the shapes of exactly card size and card fill).
+    fn painted_cards(width: f32) -> Vec<Rect> {
+        let ctx = egui::Context::default();
+        let (mode, style) = (crate::theme::ThemeMode::Dark, crate::theme::ThemeStyle::Drishti);
+        let mut app = App::build(ctx.clone(), Launch { demo: true, ..Default::default() });
+        let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(width, 900.0))), ..Default::default() };
+        let mut cards = Vec::new();
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(input.clone(), |ui| {
+                crate::theme::apply(ui.ctx(), mode, style);
+                egui::CentralPanel::default().show(ui, |ui| app.cards_view(ui));
+            });
+            out.textures_delta.clear();
+            let fill = crate::theme::current(&ctx).card;
+            cards = out
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Rect(r) if r.fill == fill && (r.rect.height() - CARD_H).abs() < 0.01 => Some(r.rect),
+                    _ => None,
+                })
+                .collect();
+        }
+        cards
+    }
+
+    #[test]
+    fn cards_in_a_row_are_a_gap_apart() {
+        let cards = painted_cards(1000.0);
+        assert!(cards.len() >= 4, "the demo has nine downloads, got {} cards", cards.len());
+        let first_row: Vec<&Rect> = cards.iter().filter(|r| (r.top() - cards[0].top()).abs() < 0.5).collect();
+        assert_eq!(first_row.len(), 2, "1000 points fit two columns");
+        let gap = first_row[1].left() - first_row[0].right();
+        assert!((gap - CARD_GAP).abs() < 0.01, "the gap between neighbouring cards is {gap}, expected {CARD_GAP}");
+        // And the rows are a gap apart too.
+        let below = cards.iter().find(|r| r.top() > cards[0].top() + 1.0).unwrap();
+        assert!((below.top() - cards[0].bottom() - CARD_GAP).abs() < 0.01);
     }
 }
