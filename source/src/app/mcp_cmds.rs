@@ -94,14 +94,45 @@ impl App {
     }
 
     /// Per-frame work for a windowless engine: speeds, queues, schedules, saving.
-    #[allow(dead_code)] // used by the --mcp server
     pub fn pump(&mut self) {
         self.tick();
     }
 
-    /// Save now (used when handing the downloads over or shutting down).
-    #[allow(dead_code)] // used by the --mcp server
-    pub fn save_now(&mut self) {
+    /// Open the private control door so `--mcp` processes can reach this app.
+    pub(super) fn start_control(&mut self) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        match crate::mcp::control::start(&self.config_dir, tx, self.ctx.clone(), "window") {
+            Ok(_) => self.control_rx = Some(rx),
+            Err(e) => eprintln!("swift-download-manager: the MCP control listener could not start: {e}"),
+        }
+    }
+
+    /// Answer commands that arrived from `--mcp` processes. Called every frame.
+    pub(super) fn serve_control(&mut self) {
+        let Some(rx) = &self.control_rx else { return };
+        let jobs: Vec<_> = rx.try_iter().collect();
+        for job in jobs {
+            let answer = self.run_command(job.cmd);
+            let _ = job.reply.send(answer);
+        }
+    }
+
+    /// The window is closing: save, and stop advertising the control door.
+    pub(super) fn close_control(&mut self) {
+        if self.control_rx.take().is_some() {
+            crate::mcp::control::clear_info(&self.config_dir);
+        }
+    }
+
+    /// A windowless engine is stopping: pause everything and save.
+    pub fn shutdown(&mut self) {
+        self.stop_all();
+        for _ in 0..150 {
+            if !self.items.iter().any(|i| i.status().is_active()) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         self.save();
     }
 
@@ -410,5 +441,19 @@ mod tests {
     fn old_settings_default_mcp_on() {
         let s: Settings = serde_json::from_str("{}").unwrap();
         assert!(s.mcp_enabled);
+    }
+
+    #[test]
+    fn control_requests_are_answered_on_the_next_tick() {
+        let dir = scratch("serve");
+        let mut app = test_app(&dir);
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.control_rx = Some(rx);
+        let (reply, answer) = std::sync::mpsc::channel();
+        tx.send(crate::mcp::control::Request { cmd: Command::GetStatus, reply }).unwrap();
+        assert!(answer.try_recv().is_err(), "nothing happens before the app ticks");
+        app.pump();
+        let status = answer.try_recv().expect("answered during the tick").unwrap();
+        assert_eq!(status["mode"], "headless");
     }
 }

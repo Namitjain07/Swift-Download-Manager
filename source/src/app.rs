@@ -527,6 +527,8 @@ pub struct App {
     config_dir: PathBuf,
     /// Running without a window (MCP engine).
     headless: bool,
+    /// Commands from `--mcp` processes (see `mcp::control`).
+    control_rx: Option<std::sync::mpsc::Receiver<crate::mcp::control::Request>>,
     ctx: egui::Context,
 }
 
@@ -539,7 +541,6 @@ impl App {
     }
 
     /// An app with no window, for `--mcp` when nothing else owns the downloads.
-    #[allow(dead_code)] // used by the --mcp server
     pub fn headless() -> Self {
         Self::build(egui::Context::default(), Launch { headless: true, ..Default::default() })
     }
@@ -586,6 +587,7 @@ impl App {
             theme_override,
             config_dir: config_dir.unwrap_or_else(default_config_dir),
             headless,
+            control_rx: None,
             ctx,
         };
         if demo {
@@ -593,6 +595,7 @@ impl App {
         } else {
             app.load();
             if !headless {
+                app.start_control();
                 if app.settings.browser_listen {
                     app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
                 }

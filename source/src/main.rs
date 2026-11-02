@@ -14,6 +14,10 @@ use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    // MCP server for AI assistants: talks over stdin/stdout, no window.
+    if args.iter().skip(1).any(|a| a == "--mcp") {
+        std::process::exit(mcp::server::run_stdio());
+    }
     let mut screenshot: Option<PathBuf> = None;
     let mut demo = false;
     let mut theme: Option<theme::ThemeMode> = None;

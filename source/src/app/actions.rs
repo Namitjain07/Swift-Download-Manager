@@ -421,6 +421,7 @@ impl App {
 
     /// Per-frame bookkeeping.
     pub(super) fn tick(&mut self) {
+        self.serve_control();
         // Speeds.
         let dt = self.last_sample.elapsed().as_secs_f64();
         if dt >= 0.5 {

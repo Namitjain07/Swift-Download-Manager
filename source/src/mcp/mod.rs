@@ -2,9 +2,10 @@
 //!
 //! - `protocol`: the JSON-RPC messages and the tool list (no I/O, easy to test)
 //! - `command`: what a tool call asks the app to do
-
-// The pieces are wired together in the next commits.
-#![allow(dead_code)]
+//! - `control`: the private, token-protected door into the open window
+//! - `server`: the `--mcp` stdio loop
 
 pub mod command;
+pub mod control;
 pub mod protocol;
+pub mod server;

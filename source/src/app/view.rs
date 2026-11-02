@@ -10,6 +10,7 @@ impl eframe::App for App {
     /// Closing the window keeps everything: an MCP client that is still attached takes over.
     fn on_exit(&mut self) {
         self.save();
+        self.close_control();
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

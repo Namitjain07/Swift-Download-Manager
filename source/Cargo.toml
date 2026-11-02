@@ -17,6 +17,7 @@ sha2 = "0.10"
 chrono = "0.4"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 rfd = "0.17"
+getrandom = "0.3"
 
 [profile.dev]
 opt-level = 1
