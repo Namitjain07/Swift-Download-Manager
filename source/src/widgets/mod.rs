@@ -6,11 +6,15 @@
 pub mod anim;
 pub mod button;
 pub mod card;
+pub mod progress;
 pub mod segmented;
+pub mod spinner;
 pub mod switch;
 
 pub use button::{button, ButtonKind};
 pub use card::{card, card_row};
+pub use progress::{capsule_bar, mini_bar, segment_bar};
+pub use spinner::spinner;
 pub use segmented::segmented;
 pub use switch::switch;
 
@@ -77,44 +81,4 @@ pub fn cat_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, col: C
         );
     }
     resp
-}
-
-pub fn mini_bar(ui: &mut egui::Ui, frac: f32, col: Color32, text: &str) {
-    let w = ui.available_width().min(110.0);
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 16.0), Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(228, 232, 236));
-    let mut fill = rect;
-    fill.set_width(rect.width() * frac.clamp(0.0, 1.0));
-    p.rect_filled(fill, CornerRadius::same(3), col);
-    p.text(rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(11.5), Color32::from_rgb(20, 24, 30));
-}
-
-/// Overall progress plus a strip showing what each connection has fetched.
-pub fn segment_bar(ui: &mut egui::Ui, frac: f32, total: u64, segs: &[Segment]) {
-    let w = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 18.0), Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(228, 232, 236));
-    let mut fill = rect;
-    fill.set_width(rect.width() * frac.clamp(0.0, 1.0));
-    p.rect_filled(fill, CornerRadius::same(3), Color32::from_rgb(46, 164, 79));
-    p.text(rect.center(), egui::Align2::CENTER_CENTER, format!("{:.1}%", frac * 100.0), egui::FontId::proportional(12.0), Color32::from_rgb(20, 24, 30));
-
-    let (strip, _) = ui.allocate_exact_size(egui::vec2(w, 12.0), Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(strip, CornerRadius::ZERO, Color32::from_rgb(236, 238, 242));
-    if total > 0 {
-        for s in segs {
-            let x0 = strip.left() + strip.width() * (s.start as f32 / total as f32);
-            let x1 = strip.left() + strip.width() * ((s.start + s.done.min(s.len())) as f32 / total as f32);
-            p.rect_filled(
-                egui::Rect::from_min_max(egui::pos2(x0, strip.top()), egui::pos2(x1.max(x0), strip.bottom())),
-                CornerRadius::ZERO,
-                Color32::from_rgb(33, 118, 214),
-            );
-            p.line_segment([egui::pos2(x0, strip.top()), egui::pos2(x0, strip.bottom())], Stroke::new(1.0, Color32::WHITE));
-        }
-    }
-    p.rect_stroke(strip, CornerRadius::ZERO, Stroke::new(1.0, Color32::from_rgb(200, 205, 212)), StrokeKind::Inside);
 }
