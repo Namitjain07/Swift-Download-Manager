@@ -55,6 +55,7 @@ fn summary(item: &Item) -> Value {
         "speed_bytes_per_sec": item.speed().round(),
         "category": item.category,
         "queue": item.queue,
+        "error": item.live.error.lock().unwrap().clone(),
     })
 }
 
@@ -65,7 +66,6 @@ fn detail(item: &Item) -> Value {
     v["folder"] = json!(item.folder.display().to_string());
     v["path"] = json!(item.path().display().to_string());
     v["time_left_secs"] = json!(item.secs_left().round());
-    v["error"] = json!(item.live.error.lock().unwrap().clone());
     v["checksum"] = json!(item.check);
     v["added"] = json!(item.added);
     v["last_try"] = json!(item.last_try);
@@ -196,6 +196,15 @@ impl App {
             }
             Err(e) => self.toast(format!("The web interface could not start on port {port}: {e}")),
         }
+    }
+
+    /// Set up a download server (`--server`): where files go, and whether private addresses are refused.
+    pub fn configure_server(&mut self, downloads: PathBuf, block_private: bool) {
+        self.settings.folder = downloads;
+        self.settings.per_category_folders = false;
+        self.settings.block_private = block_private;
+        self.dirty = true;
+        self.save();
     }
 
     /// The port of the web interface, when it is switched on in the settings.

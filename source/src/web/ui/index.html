@@ -1,1 +1,316 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><title>Swift Download Manager</title><body>placeholder</body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Swift Download Manager</title>
+<style>
+:root {
+  --bg: #000; --card: #1c1c1e; --surface: #2c2c2e; --surface3: #3a3a3c; --track: #3a3a3c;
+  --label: #fff; --secondary: #aeaeb2; --tertiary: #8e8e93; --sep: rgba(255,255,255,.12); --hover: rgba(255,255,255,.08);
+  --blue: #0a84ff; --blue-ink: #409cff; --blue-solid: #0a6cff; --blue-tint: rgba(10,132,255,.16);
+  --green: #30d158; --green-tint: rgba(48,209,88,.16); --orange: #ff9f0a; --orange-tint: rgba(255,159,10,.16);
+  --red: #ff453a; --red-ink: #ff6961; --red-tint: rgba(255,69,58,.16);
+  --radius: 14px; --ctl: 36px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f2f7; --card: #fff; --surface: #e5e5ea; --surface3: #d1d1d6; --track: #d1d1d6;
+    --label: #000; --secondary: #48484a; --tertiary: #6e6e73; --sep: rgba(60,60,67,.22); --hover: rgba(0,0,0,.05);
+    --blue: #007aff; --blue-ink: #005ecb; --blue-solid: #0071e3; --blue-tint: rgba(0,122,255,.12);
+    --green: #34c759; --green-tint: rgba(52,199,89,.14); --orange: #ff9500; --orange-tint: rgba(255,149,0,.14);
+    --red: #ff3b30; --red-ink: #c4001a; --red-tint: rgba(255,59,48,.12);
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--label); font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+button, input { font: inherit; color: inherit; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+header h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: -.01em; flex: 1; }
+.logo { width: 32px; height: 32px; border-radius: 9px; background: var(--blue-solid); display: grid; place-items: center; }
+.logo svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.who { color: var(--secondary); font-size: 13px; }
+.btn { height: var(--ctl); padding: 0 14px; border-radius: 10px; border: 0; background: var(--surface); cursor: pointer; transition: background .15s, transform .1s, opacity .15s; white-space: nowrap; }
+.btn:hover { background: var(--surface3); }
+.btn:active { transform: scale(.97); }
+.btn:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.btn.primary { background: var(--blue-solid); color: #fff; font-weight: 600; }
+.btn.primary:hover { background: var(--blue); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.icon { width: var(--ctl); padding: 0; display: inline-grid; place-items: center; background: transparent; }
+.btn.icon:hover { background: var(--hover); }
+.btn.icon svg { width: 18px; height: 18px; stroke: var(--secondary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn.icon.danger:hover svg { stroke: var(--red-ink); }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--card); border-radius: var(--radius); padding: 14px 16px; }
+.tile .k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--tertiary); }
+.tile .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin-top: 2px; }
+.tile .v small { font-size: 13px; font-weight: 400; color: var(--secondary); margin-left: 4px; }
+.add { display: flex; gap: 8px; flex-wrap: wrap; background: var(--card); border-radius: var(--radius); padding: 12px; margin-bottom: 16px; }
+input[type=text], input[type=password], input[type=url] { height: var(--ctl); border-radius: 10px; border: 1px solid var(--sep); background: var(--bg); padding: 0 12px; min-width: 0; }
+.add input.url { flex: 1 1 320px; }
+.add input.name { flex: 0 1 200px; }
+.bar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.seg { display: inline-flex; background: var(--surface); border-radius: 10px; padding: 2px; }
+.seg button { height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; color: var(--secondary); transition: background .15s, color .15s; }
+.seg button[aria-pressed=true] { background: var(--surface3); color: var(--label); font-weight: 600; }
+.bar .count { color: var(--tertiary); font-size: 13px; margin-left: auto; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.card { background: var(--card); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; min-height: 124px; }
+.card .top { display: flex; gap: 12px; align-items: center; }
+.badge { flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--blue-tint); color: var(--blue-ink); display: grid; place-items: center; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.card .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .sub { color: var(--tertiary); font-size: 12.5px; }
+.card .titles { min-width: 0; flex: 1; }
+.chip { flex: none; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface); color: var(--secondary); }
+.chip.downloading, .chip.connecting { background: var(--blue-tint); color: var(--blue-ink); }
+.chip.complete { background: var(--green-tint); color: var(--green); }
+.chip.error { background: var(--red-tint); color: var(--red-ink); }
+.chip.paused, .chip.queued { background: var(--orange-tint); color: var(--orange); }
+.progress { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--blue); border-radius: 3px; transition: width .5s ease; }
+.card.complete .progress i { background: var(--green); }
+.card.error .progress i { background: var(--red); }
+.row { display: flex; align-items: center; gap: 4px; }
+.row .meta { color: var(--secondary); font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .err { color: var(--red-ink); }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
+.empty { text-align: center; color: var(--secondary); padding: 56px 16px; background: var(--card); border-radius: var(--radius); }
+.empty b { display: block; font-size: 17px; color: var(--label); margin-bottom: 4px; }
+.login { max-width: 360px; margin: 12vh auto 0; background: var(--card); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; gap: 12px; }
+.login h2 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.01em; }
+.login p { margin: 0 0 8px; color: var(--secondary); }
+.login .err { color: var(--red-ink); min-height: 1.4em; font-size: 13px; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface3); padding: 10px 16px; border-radius: 12px; max-width: 90vw; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+@media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } .tile .v { font-size: 22px; } }
+@media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .add .btn, .add input.name { flex: 1 1 100%; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app" class="wrap"></div>
+<script>
+"use strict";
+// Everything shown comes from the server's answers and is put on the page as plain text,
+// never as HTML, so a file name cannot run code.
+const $app = document.getElementById("app");
+const ICONS = {
+  logo: "M12 3v12m0 0l-5-5m5 5l5-5M5 20h14",
+  pause: "M8 5v14M16 5v14",
+  play: "M7 4l13 8-13 8z",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+  down: "M12 4v12m0 0l-5-5m5 5l5-5M5 20h14",
+};
+function svg(path) {
+  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("viewBox", "0 0 24 24");
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  p.setAttribute("d", path);
+  s.appendChild(p);
+  return s;
+}
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return e;
+}
+function iconButton(label, path, onclick, extra) {
+  const b = h("button", { class: "btn icon " + (extra || ""), type: "button", title: label, "aria-label": label, onclick });
+  b.appendChild(svg(path));
+  return b;
+}
+const fmtBytes = (n) => {
+  if (!n) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  const v = n / Math.pow(1024, i);
+  return (v >= 100 || i === 0 ? v.toFixed(0) : v.toFixed(v >= 10 ? 1 : 2)) + " " + u[i];
+};
+const fmtTime = (s) => {
+  if (!isFinite(s) || s <= 0) return "";
+  if (s < 60) return Math.round(s) + " s left";
+  if (s < 3600) return Math.round(s / 60) + " min left";
+  return (s / 3600).toFixed(1) + " h left";
+};
+const STATES = { queued: "Queued", connecting: "Connecting", downloading: "Downloading", paused: "Paused", complete: "Complete", error: "Failed" };
+
+let me = null, items = [], stat = null, filter = "all", query = "", timer = null, lastJson = "";
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "same-origin", headers: { "X-SDM-Request": "1" } };
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  let r;
+  try { r = await fetch(path, opts); } catch (e) { return { ok: false, status: 0, data: { error: "The server is not reachable" } }; }
+  let data = null;
+  try { data = await r.json(); } catch (e) { data = {}; }
+  return { ok: r.ok, status: r.status, data };
+}
+function toast(text) {
+  document.querySelectorAll(".toast").forEach((t) => t.remove());
+  const t = h("div", { class: "toast", role: "status" }, text);
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function header() {
+  return h("header", null,
+    h("div", { class: "logo" }, (() => { const s = svg(ICONS.logo); return s; })()),
+    h("h1", null, "Swift Download Manager"),
+    me && me.shared ? h("span", { class: "who" }, me.user + (me.admin ? " (administrator)" : "")) : null,
+    me && me.shared ? h("button", { class: "btn", type: "button", onclick: logout }, "Sign out") : null);
+}
+
+function showLogin(shared, message) {
+  stop();
+  if (!shared) {
+    $app.replaceChildren(h("div", { class: "login" }, h("h2", null, "Swift Download Manager"),
+      h("p", null, "Open this page from the link in the app: Options > Web interface > Open. The link holds the key that lets this browser in.")));
+    return;
+  }
+  const user = h("input", { type: "text", name: "user", placeholder: "User name", autocomplete: "username", autocapitalize: "none", required: true, autofocus: true });
+  const pass = h("input", { type: "password", name: "password", placeholder: "Password", autocomplete: "current-password", required: true });
+  const err = h("div", { class: "err", role: "alert" }, message || "");
+  const go = h("button", { class: "btn primary", type: "submit" }, "Sign in");
+  const form = h("form", { class: "login", onsubmit: async (e) => {
+    e.preventDefault();
+    go.disabled = true;
+    const r = await api("POST", "/api/login", { user: user.value.trim(), password: pass.value });
+    go.disabled = false;
+    if (r.ok) { pass.value = ""; boot(); } else { err.textContent = r.data.error || "Could not sign in"; }
+  } }, h("h2", null, "Sign in"), h("p", null, "Use the account your administrator made for you."), user, pass, err, go);
+  $app.replaceChildren(form);
+}
+
+async function logout() {
+  await api("POST", "/api/logout");
+  me = null; items = []; lastJson = "";
+  showLogin(true);
+}
+
+function tiles() {
+  const s = stat || {};
+  const sp = s.speed_bytes_per_sec || 0;
+  const [num, unit] = fmtBytes(sp).split(" ");
+  const tile = (k, v, small) => h("div", { class: "tile" }, h("div", { class: "k" }, k), h("div", { class: "v" }, v, small ? h("small", null, small) : null));
+  return h("div", { class: "tiles" },
+    tile("Speed", num, unit + "/s"), tile("Active", s.active || 0, "downloading"), tile("Queued", (s.queued || 0) + (s.paused || 0), "waiting"), tile("Finished", s.complete || 0, "done"));
+}
+
+function addForm() {
+  const url = h("input", { class: "url", type: "url", placeholder: "Paste a download link", "aria-label": "Download link", required: true });
+  const name = h("input", { class: "name", type: "text", placeholder: "File name (optional)", "aria-label": "File name" });
+  const btn = h("button", { class: "btn primary", type: "submit" }, "Add download");
+  return h("form", { class: "add", onsubmit: async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    const r = await api("POST", "/api/downloads", { url: url.value.trim(), name: name.value.trim() || undefined });
+    btn.disabled = false;
+    if (r.ok) { url.value = ""; name.value = ""; refresh(); } else toast(r.data.error || "Could not add the link");
+  } }, url, name, btn);
+}
+
+function visible() {
+  const q = query.trim().toLowerCase();
+  return items.filter((i) => {
+    if (filter === "active" && !["downloading", "connecting", "queued", "paused"].includes(i.status)) return false;
+    if (filter === "done" && i.status !== "complete") return false;
+    if (filter === "failed" && i.status !== "error") return false;
+    return !q || i.name.toLowerCase().includes(q);
+  });
+}
+
+function card(i) {
+  const ext = (i.name.includes(".") ? i.name.split(".").pop() : "file").slice(0, 4).toUpperCase();
+  const pct = Math.round((i.progress || 0) * 100);
+  let meta = fmtBytes(i.downloaded_bytes) + (i.size_bytes ? " of " + fmtBytes(i.size_bytes) : "");
+  if (i.status === "downloading" && i.speed_bytes_per_sec) meta += " · " + fmtBytes(i.speed_bytes_per_sec) + "/s";
+  const left = i.status === "downloading" && i.speed_bytes_per_sec && i.size_bytes ? fmtTime((i.size_bytes - i.downloaded_bytes) / i.speed_bytes_per_sec) : "";
+  if (left) meta += " · " + left;
+  const failed = i.status === "error" && i.error;
+  const buttons = [];
+  if (i.status === "complete") buttons.push(h("a", { class: "btn primary", href: "/files/" + i.id, download: i.name }, "Download"));
+  else if (["downloading", "connecting"].includes(i.status)) buttons.push(iconButton("Pause", ICONS.pause, () => act("POST", `/api/downloads/${i.id}/pause`)));
+  else buttons.push(iconButton("Resume", ICONS.play, () => act("POST", `/api/downloads/${i.id}/resume`)));
+  buttons.push(iconButton("Remove from the list", ICONS.trash, () => { if (confirm("Remove " + i.name + " from the list? The file is kept on the server.")) act("DELETE", `/api/downloads/${i.id}`); }, "danger"));
+  return h("div", { class: "card " + i.status },
+    h("div", { class: "top" }, h("div", { class: "badge" }, ext),
+      h("div", { class: "titles" }, h("div", { class: "name", title: i.name }, i.name), h("div", { class: "sub" }, i.category || "")),
+      h("span", { class: "chip " + i.status }, STATES[i.status] || i.status)),
+    h("div", { class: "progress", role: "progressbar", "aria-valuenow": pct, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: "width:" + pct + "%" })),
+    h("div", { class: "row" }, h("span", { class: "meta" + (failed ? " err" : ""), title: failed ? i.error : "" }, failed ? i.error : meta), buttons));
+}
+
+async function act(method, path) {
+  const r = await api(method, path);
+  if (!r.ok) toast(r.data.error || "That did not work");
+  refresh();
+}
+
+function render() {
+  const list = visible();
+  const seg = h("div", { class: "seg", role: "group", "aria-label": "Show" },
+    [["all", "All"], ["active", "Active"], ["done", "Done"], ["failed", "Failed"]].map(([k, label]) =>
+      h("button", { type: "button", "aria-pressed": String(filter === k), onclick: () => { filter = k; render(); } }, label)));
+  const search = h("input", { type: "text", placeholder: "Search", "aria-label": "Search downloads", value: query, oninput: (e) => { query = e.target.value; renderList(); } });
+  const holder = h("div", { id: "list" });
+  $app.replaceChildren(header(), tiles(), addForm(), h("div", { class: "bar" }, seg, search, h("span", { class: "count" }, list.length + (list.length === 1 ? " download" : " downloads"))), holder);
+  renderList();
+}
+
+function renderList() {
+  const holder = document.getElementById("list");
+  if (!holder) return;
+  const list = visible();
+  const count = document.querySelector(".bar .count");
+  if (count) count.textContent = list.length + (list.length === 1 ? " download" : " downloads");
+  if (!list.length) {
+    holder.replaceChildren(h("div", { class: "empty" }, h("b", null, items.length ? "Nothing matches" : "No downloads yet"), items.length ? "Try another filter or search." : "Paste a link above to start."));
+  } else {
+    holder.replaceChildren(h("div", { class: "grid" }, list.map(card)));
+  }
+}
+
+async function refresh() {
+  const [d, s] = await Promise.all([api("GET", "/api/downloads?limit=500"), api("GET", "/api/status")]);
+  if (d.status === 401 || s.status === 401) { showLogin(!!(d.data && d.data.shared), "Your session ended. Please sign in again."); return; }
+  if (!d.ok) return;
+  items = d.data.downloads || [];
+  stat = s.ok ? s.data : stat;
+  const json = JSON.stringify([items, stat]);
+  if (json === lastJson) return;
+  lastJson = json;
+  // Keep the cursor in the search box while the list updates.
+  if (document.getElementById("list")) {
+    const t = document.querySelector(".tiles");
+    if (t) t.replaceWith(tiles());
+    renderList();
+  } else render();
+}
+
+function start() { stop(); timer = setInterval(() => { if (!document.hidden) refresh(); }, 1500); }
+function stop() { if (timer) clearInterval(timer); timer = null; }
+
+async function boot() {
+  const r = await api("GET", "/api/me");
+  if (r.status === 401) { showLogin(!!(r.data && r.data.shared)); return; }
+  if (!r.ok) { $app.replaceChildren(h("div", { class: "empty" }, h("b", null, "Cannot reach the server"), "Reload the page to try again.")); return; }
+  me = r.data;
+  lastJson = "";
+  await refresh();
+  render();
+  start();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && me) refresh(); });
+boot();
+</script>
+</body>
+</html>
