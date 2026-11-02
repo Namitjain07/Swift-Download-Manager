@@ -125,6 +125,20 @@ Releases are listed on the [releases page](https://github.com/Namitjain07/Swift-
 in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.2.0` publishes a release; see
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Please read the [contributing guide](CONTRIBUTING.md) first, and
+note that everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md). To report a problem
+or ask for a feature, [open an issue](https://github.com/Namitjain07/Swift-Download-Manager/issues/new/choose).
+
+Pull requests are built and tested automatically on Linux, Windows and macOS (see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+## Security
+
+Please do not report security problems in a public issue. See the [security policy](SECURITY.md) for how to report
+them privately.
+
 ## License
 
 Released under the Apache License 2.0. See [`LICENSE`](LICENSE).

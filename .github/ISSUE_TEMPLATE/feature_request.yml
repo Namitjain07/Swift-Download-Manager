@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest an idea or an improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Please look through the existing issues first; it may already be asked for. In that case,
+        add a thumbs-up or a comment there.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you want solved?
+      description: Describe what you are trying to do and what gets in the way today.
+      placeholder: "When I download a hundred files I would like to ..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+      description: How you imagine it working. A sketch or a screenshot of a similar program is welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other ways you thought of
+      description: Other solutions, or how you work around it now.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part is it about?
+      options:
+        - Download engine (speed, connections, resume)
+        - Queues and scheduler
+        - Window and menus
+        - Batch downloads and link grabber
+        - Browser add-on
+        - Installers and packaging
+        - Something else
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I would like to work on this myself (see CONTRIBUTING.md).
+          required: false

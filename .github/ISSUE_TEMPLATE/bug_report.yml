@@ -1,0 +1,93 @@
+name: Bug report
+description: Something does not work the way it should
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A good report is the fastest way to a fix.
+        **Security problem?** Do not use this form; see the [security policy](https://github.com/Namitjain07/Swift-Download-Manager/security/policy).
+        Please remove private parts of links (tokens, session ids, passwords) before pasting them here.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you start
+      options:
+        - label: I looked through the existing issues and did not find this one.
+          required: true
+        - label: I use the latest release, or I say below why not.
+          required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the app under Help > About.
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Your system
+      options:
+        - Windows 11
+        - Windows 10
+        - Ubuntu / Debian / Mint
+        - Other Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you got the app
+      options:
+        - SwiftDownloadManager.exe (Windows)
+        - Windows .zip
+        - Linux .deb
+        - Built from the source myself
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Tell us what you saw. If the app showed an error message, copy it here word for word.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen again?
+      description: The steps you took, one per line. A link that shows the problem (with private parts removed) helps a lot.
+      placeholder: |
+        1. Click Add URL
+        2. Paste ...
+        3. Press OK
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: addon
+    attributes:
+      label: Is the browser add-on involved?
+      options:
+        - "No"
+        - Yes, in Chrome / Edge / Brave / Opera
+        - Yes, in Firefox
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, your speed limit or proxy settings, how many connections you use, and so on. You can drag images into this box.
