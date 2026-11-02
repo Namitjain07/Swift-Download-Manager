@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{cat_row, mini_bar, sidebar_pill, sidebar_row, status_chip, tool_button, toolbar_sep, RowIcon};
-use eframe::egui::{RichText, Sense};
+use crate::widgets::{capsule_bar, cat_row, sidebar_pill, sidebar_row, status_chip, tool_button, toolbar_sep, RowIcon};
+use eframe::egui::{RichText, Sense, Stroke};
 use egui_extras::{Column, TableBuilder};
 
 impl eframe::App for App {
@@ -474,7 +474,7 @@ impl App {
                 } else {
                     "Nothing in this category."
                 };
-                ui.label(RichText::new(msg).color(Color32::from_gray(130)).size(15.0));
+                ui.label(RichText::new(msg).color(theme::current(ui.ctx()).secondary).size(15.0));
             });
             return;
         }
@@ -485,9 +485,16 @@ impl App {
         let mut sort_click: Option<SortCol> = None;
         let modifiers = ui.input(|i| i.modifiers);
         let sort = self.sort;
+        let pal = theme::current(ui.ctx());
+        let hair = Stroke::new(1.0, pal.separator.gamma_multiply(0.7));
+        let painter = ui.painter().clone();
+        // Column dividers only show while hovered or dragged, like a native list.
+        ui.visuals_mut().widgets.noninteractive.bg_stroke = Stroke::NONE;
+        ui.visuals_mut().widgets.hovered.bg_stroke = Stroke::new(1.0, pal.separator);
+        ui.visuals_mut().widgets.active.bg_stroke = Stroke::new(1.0, pal.blue);
 
         TableBuilder::new(ui)
-            .striped(true)
+            .striped(false)
             .resizable(true)
             .sense(Sense::click())
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
@@ -498,7 +505,7 @@ impl App {
             .column(Column::initial(95.0).at_least(50.0))
             .column(Column::initial(125.0).at_least(60.0))
             .column(Column::remainder().at_least(80.0).clip(true))
-            .header(24.0, |mut h| {
+            .header(28.0, |mut h| {
                 let cols = [
                     ("File Name", SortCol::Name),
                     ("Size", SortCol::Size),
@@ -515,7 +522,7 @@ impl App {
                             Some((sc, false)) if sc == c => " ▼",
                             _ => "",
                         };
-                        let r = ui.add(egui::Label::new(RichText::new(format!("{t}{arrow}")).strong().color(Color32::from_rgb(60, 66, 76))).sense(Sense::click()));
+                        let r = ui.add(egui::Label::new(RichText::new(format!("{t}{arrow}")).size(11.0).color(pal.secondary)).sense(Sense::click()));
                         if r.on_hover_text("Click to sort").clicked() {
                             sort_click = Some(c);
                         }
@@ -523,7 +530,7 @@ impl App {
                 }
             })
             .body(|body| {
-                body.rows(24.0, rows.len(), |mut row| {
+                body.rows(34.0, rows.len(), |mut row| {
                     let item = &self.items[rows[row.index()]];
                     row.set_selected(self.selected.contains(&item.id));
                     let st = item.status();
@@ -537,27 +544,31 @@ impl App {
                         ui.label(if t > 0 { human_size(t) } else { String::new() });
                     });
                     row.col(|ui| {
-                        if st == Status::Downloading || (st == Status::Paused && item.total() > 0) {
-                            let col = if st == Status::Paused { Color32::from_rgb(232, 168, 60) } else { Color32::from_rgb(46, 164, 79) };
-                            mini_bar(ui, item.progress(), col, &item.status_text());
-                        } else {
-                            let col = match st {
-                                Status::Complete => Color32::from_rgb(40, 130, 60),
-                                Status::Error => Color32::from_rgb(200, 50, 40),
-                                Status::Queued => Color32::from_rgb(110, 118, 128),
-                                _ => Color32::from_rgb(60, 66, 76),
-                            };
-                            ui.colored_label(col, item.status_text());
-                        }
+                        let (dot, text_col) = match st {
+                            Status::Downloading => (pal.green, pal.label),
+                            Status::Connecting | Status::Paused => (pal.orange, pal.label),
+                            Status::Complete => (pal.blue, pal.secondary),
+                            Status::Error => (pal.red, pal.red),
+                            Status::Queued => (pal.secondary, pal.secondary),
+                        };
+                        let with_bar = st == Status::Downloading || (st == Status::Paused && item.total() > 0);
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+                            ui.set_max_width(112.0);
+                            status_chip(ui, Some(dot), &item.status_text(), text_col);
+                            if with_bar {
+                                capsule_bar(ui, egui::Id::unique(("row_bar", item.id)), item.progress(), dot, 5.0, None);
+                            }
+                        });
                     });
                     row.col(|ui| {
-                        ui.label(item.time_left());
+                        ui.label(RichText::new(item.time_left()).color(pal.secondary));
                     });
                     row.col(|ui| {
-                        ui.label(if st == Status::Downloading { human_speed(item.speed()) } else { String::new() });
+                        ui.label(RichText::new(if st == Status::Downloading { human_speed(item.speed()) } else { String::new() }).color(pal.secondary));
                     });
                     row.col(|ui| {
-                        ui.label(&item.last_try);
+                        ui.label(RichText::new(&item.last_try).color(pal.secondary));
                     });
                     row.col(|ui| {
                         let d = if st == Status::Error {
@@ -567,9 +578,10 @@ impl App {
                         } else {
                             item.description.clone()
                         };
-                        ui.label(RichText::new(d).color(Color32::from_gray(110)));
+                        ui.label(RichText::new(d).color(pal.secondary));
                     });
                     let resp = row.response();
+                    painter.hline(resp.rect.x_range(), resp.rect.bottom(), hair);
                     let id = item.id;
                     if resp.clicked() {
                         clicked = Some((id, modifiers));
