@@ -25,7 +25,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(540.0)
+            .default_width(crate::widgets::fit_width(ctx, 540.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0])
             .show(ctx, |ui| {
                 if let Some(src) = &d.from_outside {
@@ -34,7 +34,7 @@ impl App {
                 }
                 egui::Grid::new("add_grid").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
                     ui.label("Address:");
-                    let r = ui.add(egui::TextEdit::singleline(&mut d.url).hint_text("https://…").desired_width(410.0));
+                    let r = ui.add(egui::TextEdit::singleline(&mut d.url).hint_text("https://…").desired_width(crate::widgets::fit_field(ui, 410.0)));
                     if !d.focused {
                         r.request_focus();
                         d.focused = true;
@@ -46,7 +46,7 @@ impl App {
                     }
                     ui.end_row();
                     ui.label("Save as:");
-                    if ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(410.0)).changed() {
+                    if ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(crate::widgets::fit_field(ui, 410.0))).changed() {
                         d.name_edited = true;
                     }
                     ui.end_row();
@@ -63,20 +63,20 @@ impl App {
                     ui.end_row();
                     ui.label("Save to:");
                     ui.horizontal(|ui| {
-                        ui.add(egui::TextEdit::singleline(&mut d.folder).desired_width(330.0));
+                        ui.add(egui::TextEdit::singleline(&mut d.folder).desired_width(crate::widgets::fit_field(ui, 330.0)));
                         if tinted_button(ui, "Browse…").clicked() {
                             browse_folder(&mut d.folder);
                         }
                     });
                     ui.end_row();
                     ui.label("Description:");
-                    ui.add(egui::TextEdit::singleline(&mut d.description).desired_width(410.0));
+                    ui.add(egui::TextEdit::singleline(&mut d.description).desired_width(crate::widgets::fit_field(ui, 410.0)));
                     ui.end_row();
                 });
                 egui::CollapsingHeader::new("More options (login, referrer, checksum)").show(ui, |ui| {
                     egui::Grid::new("add_adv").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
                         ui.label("Referrer page:");
-                        ui.add(egui::TextEdit::singleline(&mut d.referer).hint_text("Page the link came from (some sites need it)").desired_width(360.0));
+                        ui.add(egui::TextEdit::singleline(&mut d.referer).hint_text("Page the link came from (some sites need it)").desired_width(crate::widgets::fit_field(ui, 360.0)));
                         ui.end_row();
                         ui.label("User name:");
                         ui.add(egui::TextEdit::singleline(&mut d.user).desired_width(200.0));
@@ -85,7 +85,7 @@ impl App {
                         ui.add(egui::TextEdit::singleline(&mut d.pass).password(true).desired_width(200.0));
                         ui.end_row();
                         ui.label("SHA-256:");
-                        ui.add(egui::TextEdit::singleline(&mut d.expected_sha).hint_text("Optional: checked when the download finishes").desired_width(360.0));
+                        ui.add(egui::TextEdit::singleline(&mut d.expected_sha).hint_text("Optional: checked when the download finishes").desired_width(crate::widgets::fit_field(ui, 360.0)));
                         ui.end_row();
                     });
                 });
@@ -145,7 +145,7 @@ impl App {
                     .open(&mut open)
                     .collapsible(false)
                     .resizable(false)
-                    .default_width(470.0)
+                    .default_width(crate::widgets::fit_width(ctx, 470.0))
                     .default_pos(egui::pos2(280.0 + (id % 5) as f32 * 24.0, 150.0 + (id % 5) as f32 * 24.0))
                     .show(ctx, |ui| {
                         egui::Grid::new(("pg", id)).num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {
@@ -284,7 +284,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(540.0)
+            .default_width(crate::widgets::fit_width(ctx, 540.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -10.0])
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().max_height(ctx.content_rect().height() - 140.0).show(ui, |ui| options_body(ui, &mut s, &mut result));
@@ -360,7 +360,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(500.0)
+            .default_width(crate::widgets::fit_width(ctx, 500.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 egui::Grid::new("props").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
@@ -394,7 +394,7 @@ impl App {
                     ui.text_edit_singleline(&mut item.description);
                     ui.end_row();
                     ui.label("Expected SHA-256");
-                    ui.add(egui::TextEdit::singleline(&mut item.expected_sha).hint_text("Paste the checksum from the website").desired_width(330.0));
+                    ui.add(egui::TextEdit::singleline(&mut item.expected_sha).hint_text("Paste the checksum from the website").desired_width(crate::widgets::fit_field(ui, 330.0)));
                     ui.end_row();
                     ui.label("Checksum");
                     ui.horizontal(|ui| {

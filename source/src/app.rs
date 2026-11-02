@@ -3,7 +3,9 @@
 
 mod actions;
 mod dialogs;
+mod cards;
 mod grabber;
+pub(crate) mod layout;
 pub(crate) mod mcp_cmds;
 mod tools;
 mod view;
@@ -210,6 +212,8 @@ pub struct Settings {
     pub theme: ThemeMode,
     /// Drishti or iOS (View > Appearance).
     pub theme_style: ThemeStyle,
+    /// Cards or the classic table (View > Show downloads as).
+    pub view: layout::ViewMode,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
 }
@@ -237,6 +241,7 @@ impl Default for Settings {
             site_logins: Vec::new(),
             theme: ThemeMode::Dark,
             theme_style: ThemeStyle::Drishti,
+            view: layout::ViewMode::Cards,
             mcp_enabled: true,
         }
     }
@@ -521,6 +526,8 @@ pub struct App {
     completed: Vec<u64>,
     about_open: bool,
     about_icon: Option<egui::TextureHandle>,
+    /// Narrow windows show the categories in a drawer that this opens.
+    drawer_open: bool,
     browser_open: bool,
     show_categories: bool,
     /// Queues that are running now.
@@ -592,6 +599,7 @@ impl App {
             completed: Vec::new(),
             about_open: false,
             about_icon: None,
+            drawer_open: false,
             browser_open: false,
             show_categories: true,
             running: BTreeSet::new(),
@@ -671,6 +679,8 @@ impl App {
             "about" => self.about_open = true,
             "browser" => self.browser_open = true,
             "ai" => self.ai_open = true,
+            "drawer" => self.drawer_open = true,
+            "table" => self.settings.view = layout::ViewMode::Table,
             "grabber" => self.open_grabber(),
             other => eprintln!("unknown window: {other}"),
         }
@@ -869,5 +879,13 @@ mod tests {
         assert_eq!((s.theme, s.theme_style), (crate::theme::ThemeMode::Light, crate::theme::ThemeStyle::Ios));
         let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!((back.theme, back.theme_style), (s.theme, s.theme_style));
+    }
+
+    #[test]
+    fn old_settings_get_the_card_view_and_a_saved_table_view_is_kept() {
+        let s: Settings = serde_json::from_str(r#"{"connections":4}"#).unwrap();
+        assert_eq!(s.view, layout::ViewMode::Cards);
+        let s: Settings = serde_json::from_str(r#"{"view":"Table"}"#).unwrap();
+        assert_eq!(s.view, layout::ViewMode::Table);
     }
 }

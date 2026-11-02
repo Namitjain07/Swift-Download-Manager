@@ -4,7 +4,8 @@ use super::*;
 use super::mcp_cmds::AiState;
 use crate::icons::{self, Icon};
 use crate::theme::ThemeStyle;
-use crate::widgets::{anim, capsule_bar, cat_row, sidebar_pill, sidebar_row, spinner, state_chip, status_chip, tool_button, toolbar_sep, Hue, RowIcon};
+use super::layout;
+use crate::widgets::{anim, capsule_bar, icon_button, icon_segmented, rail_row, sidebar_pill, sidebar_row, spinner, state_chip, status_chip, tool_button, tool_button_icon, toolbar_sep, Hue, RowIcon};
 use eframe::egui::{RichText, Sense, Stroke};
 use egui_extras::{Column, TableBuilder};
 
@@ -25,16 +26,31 @@ impl eframe::App for App {
         self.handle_screenshot(&ctx);
         self.shortcuts(&ctx);
 
+        let bp = self.breakpoint(&ctx);
         self.menu_bar(ui);
-        self.toolbar(ui);
-        self.status_bar(ui);
+        self.toolbar(ui, bp);
+        self.status_bar(ui, bp);
         if self.show_categories {
-            self.categories_panel(ui);
+            self.categories_panel(ui, bp);
         }
         let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
-        // Drishti: the list floats on a rounded surface above the page ground; iOS: it fills the window.
-        let page = if d.floating_list { egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::same(16)) } else { egui::Frame::NONE.fill(pal.card) };
-        egui::CentralPanel::default().frame(page).show(ui, |ui| self.table(ui));
+        let bp = self.breakpoint(&ctx);
+        let cards = self.settings.view == layout::ViewMode::Cards || bp == layout::Breakpoint::Compact;
+        // The list floats on a rounded surface above the page ground (Drishti), or fills the window (iOS table).
+        let floating = d.floating_list || cards;
+        let margin = if bp == layout::Breakpoint::Compact { 10 } else { 16 };
+        let page = if floating { egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::same(margin)) } else { egui::Frame::NONE.fill(pal.card) };
+        egui::CentralPanel::default().frame(page).show(ui, |ui| {
+            if bp != layout::Breakpoint::Compact && !self.items.is_empty() {
+                self.stats_row(ui);
+                ui.add_space(layout::CARD_GAP);
+            }
+            if cards {
+                self.cards_view(ui);
+            } else {
+                self.table(ui);
+            }
+        });
 
         self.add_window(&ctx);
         self.batch_window(&ctx);
@@ -260,6 +276,13 @@ impl App {
                 });
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_categories, "Show categories");
+                    ui.menu_button("Show downloads as", |ui| {
+                        for (mode, name) in [(layout::ViewMode::Cards, "Cards"), (layout::ViewMode::Table, "Table")] {
+                            if ui.selectable_value(&mut self.settings.view, mode, name).clicked() {
+                                self.dirty = true;
+                            }
+                        }
+                    });
                     ui.menu_button("Appearance", |ui| {
                         ui.label(RichText::new("DESIGN").size(11.0).color(theme::current(ui.ctx()).tertiary));
                         for (style, name) in [(ThemeStyle::Drishti, "Drishti (default)"), (ThemeStyle::Ios, "iOS")] {
@@ -294,77 +317,128 @@ impl App {
         });
     }
 
-    fn toolbar(&mut self, ui: &mut egui::Ui) {
+    /// The tools, in groups. Whether each one is available depends on the selection and the queues.
+    fn tool_groups(&self) -> Vec<Vec<Tool>> {
         let sel = self.selected_ids();
         let sel_has = |f: &dyn Fn(Status) -> bool| sel.iter().any(|id| self.items.iter().any(|i| i.id == *id && f(i.status())));
         let can_resume = sel_has(&|s| matches!(s, Status::Paused | Status::Error | Status::Queued));
         let can_stop = sel_has(&|s| s.is_active() || s == Status::Queued);
         let any_active = self.items.iter().any(|i| i.status().is_active());
         let any_done = self.items.iter().any(|i| i.status() == Status::Complete);
-        let cq0 = self.current_queue();
-        let any_queued = self.items.iter().any(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(cq0.as_str()));
-
-        let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
-        let toolbar = if d.floating_list { egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::symmetric(16, 8)) } else { egui::Frame::NONE.fill(pal.card).inner_margin(egui::Margin::symmetric(10, 6)) };
-        egui::Panel::top("toolbar")
-            .frame(toolbar)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    if tool_button(ui, Icon::AddUrl, "Add URL", true, "Add a new download (Ctrl+N)") {
-                        self.open_add_dialog(None);
-                    }
-                    if tool_button(ui, Icon::Batch, "Batch", true, "Add many links at once (Ctrl+B)") {
-                        self.open_batch();
-                    }
-                    toolbar_sep(ui);
-                    if tool_button(ui, Icon::Resume, "Resume", can_resume, "Start or resume the selected downloads") {
-                        for id in &sel {
-                            self.start_item(*id);
-                        }
-                    }
-                    if tool_button(ui, Icon::Stop, "Stop", can_stop, "Pause the selected downloads") {
-                        for id in &sel {
-                            self.stop_item(*id);
-                        }
-                    }
-                    if tool_button(ui, Icon::StopAll, "Stop All", any_active, "Pause every running download") {
-                        self.stop_all();
-                    }
-                    toolbar_sep(ui);
-                    if tool_button(ui, Icon::Delete, "Delete", !sel.is_empty(), "Remove the selected downloads") {
-                        self.ask_delete(sel.clone());
-                    }
-                    if tool_button(ui, Icon::DeleteDone, "Clear Done", any_done, "Remove all completed downloads from the list") {
-                        self.delete_completed();
-                    }
-                    toolbar_sep(ui);
-                    if tool_button(ui, Icon::Options, "Options", true, "Folder, connections, speed limit, proxy, browser") {
-                        self.options = Some(self.settings.clone());
-                    }
-                    let cq = self.current_queue();
-                    if tool_button(ui, Icon::Scheduler, "Scheduler", true, &format!("Start and stop \"{cq}\" at set times")) {
-                        self.open_scheduler(&cq);
-                    }
-                    toolbar_sep(ui);
-                    let cq_running = self.running.contains(&cq);
-                    if tool_button(ui, Icon::StartQueue, "Start Queue", any_queued && !cq_running, &format!("Start \"{cq}\" (pick another queue on the left)")) {
-                        self.start_queue(&cq);
-                    }
-                    if tool_button(ui, Icon::StopQueue, "Stop Queue", cq_running, &format!("Stop \"{cq}\"")) {
-                        self.stop_queue(&cq);
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if !self.search.is_empty() && ui.small_button("✕").on_hover_text("Clear search").clicked() {
-                            self.search.clear();
-                        }
-                        ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Search downloads").desired_width(170.0));
-                    });
-                });
-            });
+        let cq = self.current_queue();
+        let any_queued = self.items.iter().any(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(cq.as_str()));
+        let cq_running = self.running.contains(&cq);
+        let t = |key, icon, label, tip: &str, enabled| Tool { key, icon, label, tip: tip.to_string(), enabled };
+        vec![
+            vec![t(ToolKey::Add, Icon::AddUrl, "Add URL", "Add a new download (Ctrl+N)", true), t(ToolKey::Batch, Icon::Batch, "Batch", "Add many links at once (Ctrl+B)", true)],
+            vec![
+                t(ToolKey::Resume, Icon::Resume, "Resume", "Start or resume the selected downloads", can_resume),
+                t(ToolKey::Stop, Icon::Stop, "Stop", "Pause the selected downloads", can_stop),
+                t(ToolKey::StopAll, Icon::StopAll, "Stop All", "Pause every running download", any_active),
+            ],
+            vec![t(ToolKey::Delete, Icon::Delete, "Delete", "Remove the selected downloads", !sel.is_empty()), t(ToolKey::ClearDone, Icon::DeleteDone, "Clear Done", "Remove all completed downloads from the list", any_done)],
+            vec![
+                t(ToolKey::Options, Icon::Options, "Options", "Folder, connections, speed limit, proxy, browser", true),
+                t(ToolKey::Scheduler, Icon::Scheduler, "Scheduler", &format!("Start and stop \"{cq}\" at set times"), true),
+            ],
+            vec![
+                t(ToolKey::StartQueue, Icon::StartQueue, "Start Queue", &format!("Start \"{cq}\" (pick another queue on the left)"), any_queued && !cq_running),
+                t(ToolKey::StopQueue, Icon::StopQueue, "Stop Queue", &format!("Stop \"{cq}\""), cq_running),
+            ],
+        ]
     }
 
-    fn status_bar(&mut self, ui: &mut egui::Ui) {
+    fn run_tool(&mut self, key: ToolKey) {
+        let sel = self.selected_ids();
+        let cq = self.current_queue();
+        match key {
+            ToolKey::Add => self.open_add_dialog(None),
+            ToolKey::Batch => self.open_batch(),
+            ToolKey::Resume => sel.iter().for_each(|id| self.start_item(*id)),
+            ToolKey::Stop => sel.iter().for_each(|id| self.stop_item(*id)),
+            ToolKey::StopAll => self.stop_all(),
+            ToolKey::Delete => self.ask_delete(sel),
+            ToolKey::ClearDone => self.delete_completed(),
+            ToolKey::Options => self.options = Some(self.settings.clone()),
+            ToolKey::Scheduler => self.open_scheduler(&cq),
+            ToolKey::StartQueue => self.start_queue(&cq),
+            ToolKey::StopQueue => self.stop_queue(&cq),
+        }
+    }
+
+    fn toolbar(&mut self, ui: &mut egui::Ui, bp: layout::Breakpoint) {
+        use layout::Breakpoint::{Compact, Medium, Wide};
+        let groups = self.tool_groups();
+        let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
+        let margin = if bp == Compact { egui::Margin::symmetric(10, 6) } else if d.floating_list { egui::Margin::symmetric(16, 8) } else { egui::Margin::symmetric(10, 6) };
+        let frame = if d.floating_list { egui::Frame::NONE.fill(pal.bg).inner_margin(margin) } else { egui::Frame::NONE.fill(pal.card).inner_margin(margin) };
+        let mut chosen: Option<ToolKey> = None;
+        let mut drawer = false;
+        let mut view = self.settings.view;
+        egui::Panel::top("toolbar").frame(frame).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                match bp {
+                    Wide | Medium => {
+                        for (n, group) in groups.iter().enumerate() {
+                            if n > 0 {
+                                toolbar_sep(ui);
+                            }
+                            for t in group {
+                                let hit = if bp == Wide { tool_button(ui, t.icon, t.label, t.enabled, &t.tip) } else { tool_button_icon(ui, t.icon, t.enabled, &t.tip) };
+                                if hit {
+                                    chosen = Some(t.key);
+                                }
+                            }
+                        }
+                    }
+                    Compact => {
+                        if icon_button(ui, Icon::Menu, "Categories and queues").clicked() {
+                            drawer = true;
+                        }
+                        let all: Vec<&Tool> = groups.iter().flatten().collect();
+                        for t in all.iter().filter(|t| matches!(t.key, ToolKey::Add | ToolKey::Resume | ToolKey::Stop)) {
+                            if tool_button_icon(ui, t.icon, t.enabled, &t.tip) {
+                                chosen = Some(t.key);
+                            }
+                        }
+                        let more = icon_button(ui, Icon::More, "More actions");
+                        egui::Popup::menu(&more).show(|ui| {
+                            for t in all.iter().filter(|t| !matches!(t.key, ToolKey::Add | ToolKey::Resume | ToolKey::Stop)) {
+                                if ui.add_enabled(t.enabled, egui::Button::new(t.label)).on_hover_text(&t.tip).clicked() {
+                                    chosen = Some(t.key);
+                                    ui.close();
+                                }
+                            }
+                        });
+                    }
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if bp != Compact {
+                        icon_segmented(ui, &[(layout::ViewMode::Cards, Icon::Cards, "Showing cards"), (layout::ViewMode::Table, Icon::List, "Showing the table")], &mut view);
+                        ui.add_space(6.0);
+                    }
+                    if !self.search.is_empty() && icon_button(ui, Icon::Close, "Clear search").clicked() {
+                        self.search.clear();
+                    }
+                    let w = if bp == Wide { 170.0 } else { (ui.available_width() - 8.0).clamp(90.0, 170.0) };
+                    ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Search downloads").desired_width(w));
+                });
+            });
+        });
+        if drawer {
+            self.drawer_open = !self.drawer_open;
+        }
+        if view != self.settings.view {
+            self.settings.view = view;
+            self.dirty = true;
+        }
+        if let Some(k) = chosen {
+            self.run_tool(k);
+        }
+    }
+
+    fn status_bar(&mut self, ui: &mut egui::Ui, bp: layout::Breakpoint) {
         let pal = theme::current(ui.ctx());
         let active = self.items.iter().filter(|i| i.status().is_active()).count();
         let speed: f64 = self.items.iter().filter(|i| i.status().is_active()).map(|i| i.speed()).sum();
@@ -376,22 +450,29 @@ impl App {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 16.0;
-                    status_chip(ui, None, &format!("{} downloads", self.items.len()), pal.secondary);
+                    let compact = bp == layout::Breakpoint::Compact;
+                    if !compact {
+                        status_chip(ui, None, &format!("{} downloads", self.items.len()), pal.secondary);
+                    }
                     status_chip(ui, (active > 0).then_some(pal.green), &format!("{active} active"), pal.secondary);
-                    status_chip(ui, None, &format!("{queued} queued"), pal.secondary);
-                    if !running.is_empty() {
+                    if !compact {
+                        status_chip(ui, None, &format!("{queued} queued"), pal.secondary);
+                    }
+                    if bp == layout::Breakpoint::Wide && !running.is_empty() {
                         status_chip(ui, Some(pal.green), &format!("Running: {}", running.join(", ")), pal.green_ink);
                     }
-                    if let Some((q, t)) = &scheduled {
+                    if let (Some((q, t)), true) = (&scheduled, bp == layout::Breakpoint::Wide) {
                         status_chip(ui, Some(pal.blue), &format!("{q} starts at {t}"), pal.blue_ink);
                     }
-                    if self.settings.limit_on {
+                    if self.settings.limit_on && bp != layout::Breakpoint::Compact {
                         status_chip(ui, Some(pal.orange), &format!("Speed limit {} KB/s", self.settings.limit_kbps), pal.orange_ink);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let s = if speed > 0.0 { human_speed(speed) } else { "0 B/s".into() };
                         ui.label(RichText::new(format!("↓ {s}")).size(11.0).color(pal.label));
-                        if !self.demo {
+                        if bp == layout::Breakpoint::Compact {
+                            // Only the essentials fit.
+                        } else if !self.demo {
                             let (txt, dot, col) = match &self.listener {
                                 Ok(()) => ("Browser: connected", Some(pal.green), pal.secondary),
                                 Err(_) if !self.settings.browser_listen => ("Browser: off", None, pal.secondary),
@@ -403,16 +484,18 @@ impl App {
                         } else {
                             status_chip(ui, Some(pal.green), "Browser: connected", pal.secondary);
                         }
-                        let (txt, dot, col) = match self.ai_state() {
+                        if bp != layout::Breakpoint::Compact {
+                            let (txt, dot, col) = match self.ai_state() {
                             AiState::Off => ("AI: off", None, pal.secondary),
                             AiState::Unavailable => ("AI: unavailable", Some(pal.orange), pal.orange_ink),
                             AiState::Ready => ("AI: ready", Some(pal.green), pal.secondary),
                             AiState::Active => ("AI: active", Some(pal.blue), pal.blue_ink),
                         };
-                        if status_chip(ui, dot, txt, col).on_hover_text("AI assistants (MCP)…").clicked() {
-                            self.ai_open = true;
+                            if status_chip(ui, dot, txt, col).on_hover_text("AI assistants (MCP)…").clicked() {
+                                self.ai_open = true;
+                            }
                         }
-                        if self.settings.watch_clipboard {
+                        if self.settings.watch_clipboard && bp == layout::Breakpoint::Wide {
                             status_chip(ui, None, "Clipboard: watching", pal.secondary);
                         }
                     });
@@ -420,7 +503,11 @@ impl App {
             });
     }
 
-    fn categories_panel(&mut self, ui: &mut egui::Ui) {
+    fn categories_panel(&mut self, ui: &mut egui::Ui, bp: layout::Breakpoint) {
+        let rail_mode = bp == layout::Breakpoint::Medium;
+        if bp == layout::Breakpoint::Compact && !self.drawer_open {
+            return;
+        }
         let count = |f: &dyn Fn(&Item) -> bool| self.items.iter().filter(|i| f(i)).count();
         let all = self.items.len();
         let cats: Vec<(String, usize)> = self.settings.categories.iter().map(|c| (c.name.clone(), count(&|i: &Item| i.category == c.name))).collect();
@@ -434,21 +521,22 @@ impl App {
             .collect();
 
         let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
-        let rail = egui::Panel::left("categories")
-            .resizable(true)
-            .default_size(d.sidebar_w)
-            .show_separator_line(!d.floating_list)
-            .frame(egui::Frame::NONE.fill(if d.floating_list { pal.sidebar } else { pal.bg }).inner_margin(egui::Margin::symmetric(8, 10)))
+        let panel = egui::Panel::left("categories").show_separator_line(!d.floating_list);
+        let panel = if rail_mode { panel.resizable(false).exact_size(60.0) } else { panel.resizable(true).default_size(if bp == layout::Breakpoint::Compact { 230.0 } else { d.sidebar_w }) };
+        let rail = panel
+            .frame(egui::Frame::NONE.fill(if d.floating_list { pal.sidebar } else { pal.bg }).inner_margin(egui::Margin::symmetric(if rail_mode { 8 } else { 8 }, 10)))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 sidebar_pill(ui);
-                section_header(ui, "Categories", &pal);
+                if !rail_mode {
+                    section_header(ui, "Categories", &pal);
+                }
                 let mut new_filter = None;
-                if cat_row(ui, "All Downloads", all, 0.0, pal.blue, self.filter == Filter::All).clicked() {
+                if side_row(ui, rail_mode, "All Downloads", all, 0.0, RowIcon::Folder, pal.blue_ink, self.filter == Filter::All).clicked() {
                     new_filter = Some(Filter::All);
                 }
                 for (c, n) in &cats {
-                    let r = cat_row(ui, c, *n, 14.0, icons::category_color(c), self.filter == Filter::Category(c.clone()));
+                    let r = side_row(ui, rail_mode, c, *n, 14.0, RowIcon::Folder, icons::category_color(c), self.filter == Filter::Category(c.clone()));
                     if r.clicked() {
                         new_filter = Some(Filter::Category(c.clone()));
                     }
@@ -459,25 +547,29 @@ impl App {
                     });
                 }
                 ui.add_space(4.0);
-                if cat_row(ui, "Unfinished", unfinished, 0.0, pal.orange, self.filter == Filter::Unfinished).clicked() {
+                if side_row(ui, rail_mode, "Unfinished", unfinished, 0.0, RowIcon::Folder, pal.orange_ink, self.filter == Filter::Unfinished).clicked() {
                     new_filter = Some(Filter::Unfinished);
                 }
-                if cat_row(ui, "Finished", finished, 0.0, pal.green, self.filter == Filter::Finished).clicked() {
+                if side_row(ui, rail_mode, "Finished", finished, 0.0, RowIcon::Folder, pal.green_ink, self.filter == Filter::Finished).clicked() {
                     new_filter = Some(Filter::Finished);
                 }
                 ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    section_header(ui, "Queues", &pal);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.small_button("+").on_hover_text("Manage queues").clicked() {
-                            self.queues_open = true;
-                        }
+                if rail_mode {
+                    ui.separator();
+                } else {
+                    ui.horizontal(|ui| {
+                        section_header(ui, "Queues", &pal);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.small_button("+").on_hover_text("Manage queues").clicked() {
+                                self.queues_open = true;
+                            }
+                        });
                     });
-                });
+                }
                 for (q, n) in &queues {
                     let on = self.running.contains(q);
                     let col = if on { pal.green } else { pal.secondary };
-                    let r = sidebar_row(ui, q, *n, 0.0, RowIcon::Dot, col, self.filter == Filter::Queue(q.clone()));
+                    let r = side_row(ui, rail_mode, q, *n, 0.0, RowIcon::Dot, col, self.filter == Filter::Queue(q.clone()));
                     if r.clicked() {
                         new_filter = Some(Filter::Queue(q.clone()));
                     }
@@ -498,6 +590,9 @@ impl App {
                 }
                 if let Some(f) = new_filter {
                     self.filter = f;
+                    if bp == layout::Breakpoint::Compact {
+                        self.drawer_open = false;
+                    }
                 }
             });
         if d.floating_list {
@@ -524,16 +619,7 @@ impl App {
         let d = theme::design(ui.ctx());
         let rows = self.visible_rows();
         if rows.is_empty() {
-            ui.centered_and_justified(|ui| {
-                let msg = if self.items.is_empty() {
-                    "No downloads yet.\nClick \"Add URL\" (or press Ctrl+N) and paste a link,\nor copy a download link and it will be picked up automatically."
-                } else if !self.search.trim().is_empty() {
-                    "No downloads match your search."
-                } else {
-                    "Nothing in this category."
-                };
-                ui.label(RichText::new(msg).color(theme::current(ui.ctx()).secondary).size(15.0));
-            });
+            self.empty_view(ui);
             return;
         }
         let mut clicked: Option<(u64, egui::Modifiers)> = None;
@@ -687,35 +773,45 @@ impl App {
             };
         }
         if let Some((id, m)) = clicked {
-            if m.command {
-                if !self.selected.remove(&id) {
-                    self.selected.insert(id);
-                }
-            } else if m.shift && !self.selected.is_empty() {
-                let pos = |x: u64| rows.iter().position(|&r| self.items[r].id == x);
-                let anchor = self.selected.iter().filter_map(|&s| pos(s)).min().unwrap_or(0);
-                if let Some(p) = pos(id) {
-                    let (a, b) = if anchor <= p { (anchor, p) } else { (p, anchor) };
-                    self.selected = rows[a..=b].iter().map(|&r| self.items[r].id).collect();
-                }
-            } else {
-                self.selected.clear();
-                self.selected.insert(id);
-            }
+            self.apply_click(&rows, id, m);
         }
         if let Some(id) = double {
-            if self.items.iter().any(|i| i.id == id && i.status() == Status::Complete) {
-                self.properties = Some(id);
-            } else {
-                self.progress_open.insert(id);
-            }
+            self.open_details(id);
         }
         if let Some((id, a)) = action {
             self.row_action(ui.ctx(), id, &a);
         }
     }
 
-    fn row_action(&mut self, ctx: &egui::Context, id: u64, a: &str) {
+    /// A click on a row or card: plain click selects it, Ctrl toggles, Shift selects a range.
+    pub(super) fn apply_click(&mut self, rows: &[usize], id: u64, m: egui::Modifiers) {
+        if m.command {
+            if !self.selected.remove(&id) {
+                self.selected.insert(id);
+            }
+        } else if m.shift && !self.selected.is_empty() {
+            let pos = |x: u64| rows.iter().position(|&r| self.items[r].id == x);
+            let anchor = self.selected.iter().filter_map(|&s| pos(s)).min().unwrap_or(0);
+            if let Some(p) = pos(id) {
+                let (a, b) = if anchor <= p { (anchor, p) } else { (p, anchor) };
+                self.selected = rows[a..=b].iter().map(|&r| self.items[r].id).collect();
+            }
+        } else {
+            self.selected.clear();
+            self.selected.insert(id);
+        }
+    }
+
+    /// Double click: finished downloads show their properties, the others their progress.
+    pub(super) fn open_details(&mut self, id: u64) {
+        if self.items.iter().any(|i| i.id == id && i.status() == Status::Complete) {
+            self.properties = Some(id);
+        } else {
+            self.progress_open.insert(id);
+        }
+    }
+
+    pub(super) fn row_action(&mut self, ctx: &egui::Context, id: u64, a: &str) {
         let Some(item) = self.items.iter().find(|i| i.id == id) else { return };
         let (path, folder, url) = (item.path(), item.folder.clone(), item.url.clone());
         match a {
@@ -781,7 +877,7 @@ impl App {
     }
 }
 
-fn row_menu(ui: &mut egui::Ui, id: u64, st: Status, queues: &[String], action: &mut Option<(u64, String)>) {
+pub(super) fn row_menu(ui: &mut egui::Ui, id: u64, st: Status, queues: &[String], action: &mut Option<(u64, String)>) {
     let done = st == Status::Complete;
     let mut item = |ui: &mut egui::Ui, enabled: bool, label: &str, key: &str| {
         if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
@@ -825,8 +921,37 @@ fn row_menu(ui: &mut egui::Ui, id: u64, st: Status, queues: &[String], action: &
 }
 
 /// Small grey section title above a group of sidebar rows.
+/// One sidebar row: a full row with its label and count, or just the glyph in the narrow rail.
+fn side_row(ui: &mut egui::Ui, rail: bool, label: &str, count: usize, indent: f32, icon: RowIcon, col: Color32, selected: bool) -> egui::Response {
+    if rail { rail_row(ui, label, count, icon, col, selected) } else { sidebar_row(ui, label, count, indent, icon, col, selected) }
+}
+
 fn section_header(ui: &mut egui::Ui, text: &str, pal: &crate::theme::Palette) {
     ui.add_space(2.0);
     ui.label(RichText::new(text.to_uppercase()).size(theme::design(ui.ctx()).overline).color(pal.tertiary));
     ui.add_space(2.0);
+}
+
+/// What a toolbar button does.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ToolKey {
+    Add,
+    Batch,
+    Resume,
+    Stop,
+    StopAll,
+    Delete,
+    ClearDone,
+    Options,
+    Scheduler,
+    StartQueue,
+    StopQueue,
+}
+
+struct Tool {
+    key: ToolKey,
+    icon: Icon,
+    label: &'static str,
+    tip: String,
+    enabled: bool,
 }

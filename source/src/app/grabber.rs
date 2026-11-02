@@ -188,13 +188,13 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
-            .default_width(620.0)
+            .default_width(crate::widgets::fit_width(ctx, 620.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -10.0])
             .show(ctx, |ui| {
                 ui.label("Reads a web page and lists the files it links to.");
                 ui.horizontal(|ui| {
                     ui.label("Page:");
-                    ui.add(egui::TextEdit::singleline(&mut g.url).hint_text("https://example.com/downloads/").desired_width(420.0));
+                    ui.add(egui::TextEdit::singleline(&mut g.url).hint_text("https://example.com/downloads/").desired_width(crate::widgets::fit_field(ui, 420.0)));
                     let ok = g.url.trim().starts_with("http") && !busy;
                     if ui.add_enabled(ok, egui::Button::new(RichText::new("Find links").strong())).clicked() {
                         let st = Arc::new(Mutex::new(GrabState::default()));
@@ -211,7 +211,7 @@ impl App {
                     toggle(ui, &mut g.all_links, "All links");
                     ui.add_enabled_ui(!g.all_links, |ui| {
                         ui.label("File types:");
-                        if ui.add(egui::TextEdit::singleline(&mut g.exts).desired_width(380.0)).changed() {
+                        if ui.add(egui::TextEdit::singleline(&mut g.exts).desired_width(crate::widgets::fit_field(ui, 380.0))).changed() {
                             g.found.clear();
                         }
                     });
@@ -245,9 +245,9 @@ impl App {
                     }
                 });
                 ui.separator();
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Save to:");
-                    ui.add(egui::TextEdit::singleline(&mut g.folder).desired_width(300.0));
+                    ui.add(egui::TextEdit::singleline(&mut g.folder).desired_width(crate::widgets::fit_field(ui, 300.0)));
                     ui.label("Queue:");
                     egui::ComboBox::from_id_salt("grab_q").selected_text(g.queue.clone()).show_ui(ui, |ui| {
                         for q in &queues {

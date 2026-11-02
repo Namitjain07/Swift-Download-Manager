@@ -17,6 +17,16 @@ pub enum Icon {
     StopQueue,
     Batch,
     Scheduler,
+    Play,
+    Pause,
+    Folder,
+    File,
+    Close,
+    Menu,
+    More,
+    Cards,
+    List,
+    Search,
 }
 
 /// The tint a toolbar button gives each icon: blue to add, green to go, red to stop or remove.
@@ -25,7 +35,9 @@ pub fn tint(icon: Icon, pal: &Palette) -> Color32 {
         Icon::AddUrl | Icon::Batch | Icon::Scheduler => pal.blue_ink,
         Icon::Resume | Icon::StartQueue => pal.green_ink,
         Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red_ink,
-        Icon::Options => pal.secondary,
+        Icon::Play => pal.green_ink,
+        Icon::Pause => pal.orange_ink,
+        Icon::Options | Icon::Folder | Icon::File | Icon::Close | Icon::Menu | Icon::More | Icon::Cards | Icon::List | Icon::Search => pal.secondary,
     }
 }
 
@@ -121,6 +133,46 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
                 p.rect_stroke(Rect::from_center_size(pt(x, *y), vec2(0.64 * s, 0.22 * s)), CornerRadius::same(4), st, StrokeKind::Middle);
             }
         }
+        Icon::Play => closed(p, vec![pt(-0.22, -0.36), pt(0.38, 0.0), pt(-0.22, 0.36)], st),
+        Icon::Pause => {
+            for x in [-0.2, 0.2] {
+                p.rect_stroke(Rect::from_center_size(pt(x, 0.0), vec2(0.18 * s, 0.62 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
+            }
+        }
+        Icon::Folder => closed(p, vec![pt(-0.44, 0.32), pt(-0.44, -0.30), pt(-0.12, -0.30), pt(0.0, -0.18), pt(0.44, -0.18), pt(0.44, 0.32)], st),
+        Icon::File => {
+            closed(p, vec![pt(-0.28, -0.42), pt(0.08, -0.42), pt(0.30, -0.20), pt(0.30, 0.42), pt(-0.28, 0.42)], st);
+            line(p, vec![pt(0.08, -0.42), pt(0.08, -0.20), pt(0.30, -0.20)], st);
+        }
+        Icon::Close => {
+            line(p, vec![pt(-0.26, -0.26), pt(0.26, 0.26)], st);
+            line(p, vec![pt(0.26, -0.26), pt(-0.26, 0.26)], st);
+        }
+        Icon::Menu => {
+            for y in [-0.26, 0.0, 0.26] {
+                line(p, vec![pt(-0.36, y), pt(0.36, y)], st);
+            }
+        }
+        Icon::More => {
+            for x in [-0.28, 0.0, 0.28] {
+                p.circle_filled(pt(x, 0.0), 0.055 * s + 0.4, st.color);
+            }
+        }
+        Icon::Cards => {
+            for (x, y) in [(-0.2, -0.2), (0.2, -0.2), (-0.2, 0.2), (0.2, 0.2)] {
+                p.rect_stroke(Rect::from_center_size(pt(x, y), vec2(0.3 * s, 0.3 * s)), CornerRadius::same(3), st, StrokeKind::Middle);
+            }
+        }
+        Icon::List => {
+            for y in [-0.28, 0.0, 0.28] {
+                line(p, vec![pt(-0.08, y), pt(0.42, y)], st);
+                p.circle_filled(pt(-0.34, y), 0.04 * s + 0.4, st.color);
+            }
+        }
+        Icon::Search => {
+            p.circle_stroke(pt(-0.08, -0.08), 0.28 * s, st);
+            line(p, vec![pt(0.13, 0.13), pt(0.4, 0.4)], st);
+        }
         Icon::Scheduler => {
             p.circle_stroke(c, 0.42 * s, st);
             line(p, vec![c, pt(0.0, -0.24)], st);
@@ -183,7 +235,7 @@ mod tests {
     use crate::theme::Palette;
     use eframe::egui;
 
-    const ALL: [Icon; 11] = [
+    const ALL: [Icon; 21] = [
         Icon::AddUrl,
         Icon::Resume,
         Icon::Stop,
@@ -195,6 +247,16 @@ mod tests {
         Icon::StopQueue,
         Icon::Batch,
         Icon::Scheduler,
+        Icon::Play,
+        Icon::Pause,
+        Icon::Folder,
+        Icon::File,
+        Icon::Close,
+        Icon::Menu,
+        Icon::More,
+        Icon::Cards,
+        Icon::List,
+        Icon::Search,
     ];
 
     #[test]

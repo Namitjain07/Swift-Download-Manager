@@ -23,6 +23,7 @@ fn main() -> eframe::Result<()> {
     let mut theme: Option<theme::ThemeMode> = None;
     let mut style: Option<theme::ThemeStyle> = None;
     let mut show: Option<String> = None;
+    let mut size = [1180.0f32, 680.0];
     let mut start_url: Option<String> = None;
     let mut i = 1;
     while i < args.len() {
@@ -32,6 +33,15 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            // Starting size of the window, for screenshots of the narrow layouts: --size 900x600
+            "--size" if i + 1 < args.len() => {
+                if let Some((w, h)) = args[i + 1].split_once('x') {
+                    if let (Ok(w), Ok(h)) = (w.parse::<f32>(), h.parse::<f32>()) {
+                        size = [w.clamp(300.0, 4000.0), h.clamp(300.0, 3000.0)];
+                    }
+                }
+                i += 1;
+            }
             "--style" if i + 1 < args.len() => {
                 style = match args[i + 1].as_str() {
                     "drishti" => Some(theme::ThemeStyle::Drishti),
@@ -84,8 +94,8 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title(app::APP_NAME)
-            .with_inner_size([1180.0, 680.0])
-            .with_min_inner_size([760.0, 420.0])
+            .with_inner_size(size)
+            .with_min_inner_size([420.0, 420.0])
             .with_app_id("swift-download-manager")
             .with_icon(appicon::egui_icon()),
         ..Default::default()

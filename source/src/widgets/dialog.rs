@@ -17,7 +17,27 @@ pub fn dialog_window(ctx: &egui::Context, title: impl Into<WidgetText>) -> egui:
         .stroke(Stroke::new(1.0, edge))
         .shadow(shadow)
         .inner_margin(Margin::same(20));
-    egui::Window::new(title).frame(frame).collapsible(false).resizable(false).fade_in(true)
+    // Narrow or short windows: the dialog never grows past the window, and scrolls when it must.
+    let screen = ctx.content_rect();
+    egui::Window::new(title)
+        .frame(frame)
+        .collapsible(false)
+        .resizable(false)
+        .fade_in(true)
+        .max_width((screen.width() - 24.0).max(280.0))
+        .max_height((screen.height() - 24.0).max(240.0))
+        .vscroll(true)
+}
+
+/// A preferred dialog width, cut down so the dialog always fits inside a narrow window.
+pub fn fit_width(ctx: &egui::Context, preferred: f32) -> f32 {
+    preferred.min((ctx.content_rect().width() - 24.0).max(280.0))
+}
+
+/// A preferred width for a field inside a dialog, cut down so the dialog fits a narrow window
+/// (the margins, the label and the buttons next to it take about 270 points).
+pub fn fit_field(ui: &Ui, preferred: f32) -> f32 {
+    preferred.min(ui.ctx().content_rect().width() - 270.0).max(120.0)
 }
 
 /// The main action of a dialog: solid blue.
