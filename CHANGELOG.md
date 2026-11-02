@@ -1,0 +1,36 @@
+# Changelog
+
+All notable changes to Swift Download Manager are listed here, newest first.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [1.2.0]
+
+First release published on GitHub.
+
+### Download engine
+- Splits each download into up to 32 connections, and gives a free connection half of the biggest remaining part
+- Pause and resume, also after the app was closed; broken connections are retried and busy servers get fewer connections
+- SHA-256 checksum check and refreshing a link that has expired
+- Overall and per-download speed limits, a proxy, saved site logins, and a referrer and login per download
+
+### Organising downloads
+- Several queues, each with its own schedule (start and stop times, daily or once, close the app when done)
+- Categories with your own file types and folders, search, and sorting by any column
+- Batch downloads (a list of links, or numbered links like `img*.jpg`), import and export of link lists,
+  and dropping link files onto the window
+- A link grabber that lists the files a web page links to
+- Clipboard watching: copy a download link and the app offers to download it
+
+### Browser add-on
+- Chrome, Edge, Brave, Opera (`.zip`) and Firefox (`.xpi`)
+- Catches downloads, passes the browser login (cookies) along, adds a right-click "Download with Swift Download Manager"
+  item and spots videos and sounds a page plays
+
+### Downloads in this release
+- Windows 10/11 (64-bit): `SwiftDownloadManager.exe`, and a `.zip` that also holds the browser add-on
+- Ubuntu 24.04+, Debian 13+, Mint 22+ (64-bit): `.deb` installer
+- Browser add-on packages and the source code as a `.zip`
+- `SHA256SUMS` to check the files
+- The Mac app has to be built on a Mac; see `mac/HOW TO GET THE MAC VERSION.txt`
+
+[1.2.0]: https://github.com/Namitjain07/Swift-Download-Manager/releases/tag/v1.2.0
