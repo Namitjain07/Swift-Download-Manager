@@ -515,6 +515,7 @@ pub struct App {
     properties: Option<u64>,
     completed: Vec<u64>,
     about_open: bool,
+    about_icon: Option<egui::TextureHandle>,
     browser_open: bool,
     show_categories: bool,
     /// Queues that are running now.
@@ -585,6 +586,7 @@ impl App {
             properties: None,
             completed: Vec::new(),
             about_open: false,
+            about_icon: None,
             browser_open: false,
             show_categories: true,
             running: BTreeSet::new(),

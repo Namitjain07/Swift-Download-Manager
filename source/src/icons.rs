@@ -15,7 +15,6 @@ pub enum Icon {
     Options,
     StartQueue,
     StopQueue,
-    Grabber,
     Batch,
     Scheduler,
 }
@@ -23,7 +22,7 @@ pub enum Icon {
 /// The tint a toolbar button gives each icon: blue to add, green to go, red to stop or remove.
 pub fn tint(icon: Icon, pal: &Palette) -> Color32 {
     match icon {
-        Icon::AddUrl | Icon::Batch | Icon::Grabber | Icon::Scheduler => pal.blue,
+        Icon::AddUrl | Icon::Batch | Icon::Scheduler => pal.blue,
         Icon::Resume | Icon::StartQueue => pal.green,
         Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red,
         Icon::Options => pal.secondary,
@@ -116,10 +115,6 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
             queue_lines(p, c, s, st);
             p.rect_stroke(Rect::from_center_size(pt(0.30, 0.0), vec2(0.32 * s, 0.32 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
         }
-        Icon::Grabber => {
-            p.rect_stroke(Rect::from_center_size(c, vec2(0.58 * s, 0.80 * s)), CornerRadius::same(4), st, StrokeKind::Middle);
-            arrow_down(p, pt(0.0, 0.04), s * 0.7, st);
-        }
         Icon::Batch => {
             for (i, y) in [-0.28f32, 0.0, 0.28].iter().enumerate() {
                 let x = (i as f32 - 1.0) * 0.06;
@@ -188,7 +183,7 @@ mod tests {
     use crate::theme::Palette;
     use eframe::egui;
 
-    const ALL: [Icon; 12] = [
+    const ALL: [Icon; 11] = [
         Icon::AddUrl,
         Icon::Resume,
         Icon::Stop,
@@ -198,7 +193,6 @@ mod tests {
         Icon::Options,
         Icon::StartQueue,
         Icon::StopQueue,
-        Icon::Grabber,
         Icon::Batch,
         Icon::Scheduler,
     ];

@@ -2,7 +2,7 @@
 
 use super::actions::{expand_pattern, normalize_time};
 use super::*;
-use crate::icons::{self, Icon};
+use crate::icons;
 use super::mcp_cmds::AiState;
 use crate::widgets::{button_row, card, card_row, card_row_h, dialog_window, group_title, plain_button, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
 use eframe::egui::{RichText, Sense};
@@ -554,6 +554,7 @@ impl App {
             return;
         }
         let mut open = true;
+        let mut about_icon = self.about_icon.take();
         dialog_window(ctx, "About")
             .open(&mut open)
             .collapsible(false)
@@ -561,13 +562,14 @@ impl App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(48.0, 48.0), Sense::hover());
-                    icons::draw(ui.painter(), r, Icon::Grabber, icons::tint(Icon::Grabber, &crate::theme::current(ui.ctx())), true);
+                    let icon = about_icon.get_or_insert_with(|| ctx.load_texture("about-icon", egui::ColorImage::from_rgba_unmultiplied([128, 128], &crate::appicon::rgba(128)), egui::TextureOptions::LINEAR));
+                    ui.add(egui::Image::new((icon.id(), egui::vec2(72.0, 72.0))));
                     ui.heading(APP_NAME);
                     ui.label(format!("Version {}, written in Rust", env!("CARGO_PKG_VERSION")));
                     ui.label("Splits each download into several connections, re-splits as parts finish,\nretries broken connections, pauses and resumes, keeps a scheduled queue\nand works with your browser and clipboard.");
                 });
             });
+        self.about_icon = about_icon;
         self.about_open = open;
     }
 }
