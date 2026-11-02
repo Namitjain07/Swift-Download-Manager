@@ -6,6 +6,7 @@ mod appicon;
 mod bridge;
 mod engine;
 mod icons;
+mod mcp;
 mod theme;
 mod widgets;
 
@@ -13,6 +14,10 @@ use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    // MCP server for AI assistants: talks over stdin/stdout, no window.
+    if args.iter().skip(1).any(|a| a == "--mcp") {
+        std::process::exit(mcp::server::run_stdio());
+    }
     let mut screenshot: Option<PathBuf> = None;
     let mut demo = false;
     let mut theme: Option<theme::ThemeMode> = None;
@@ -79,7 +84,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         app::APP_NAME,
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, show })))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, show, ..Default::default() })))),
     )
 }
 

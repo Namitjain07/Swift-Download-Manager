@@ -49,11 +49,63 @@ sooner and a broken connection never means starting over.
 - **Clipboard watching**: copy a download link and the app offers to download it
 - A download-complete window when a file is finished
 
+**AI assistants** (Model Context Protocol)
+- Let Claude or another MCP-capable assistant list, add, pause, resume and remove downloads: see [Use it from an AI assistant](#use-it-from-an-ai-assistant-mcp)
+- Works with the window open, or without it: close the window and the assistant's downloads keep going; open it again and it takes over mid-download
+- On by default with a switch in the app; assistants cannot delete files or choose folders
+
 **Browser add-on** (Chrome, Edge, Brave, Opera and Firefox)
 - Catches downloads you start in the browser and hands them to the app
 - Passes your browser login (cookies) along, so downloads behind a login work
 - Adds **Download with Swift Download Manager** to the right-click menu
 - Spots videos and sounds that a page plays
+
+## Use it from an AI assistant (MCP)
+
+Swift Download Manager speaks the [Model Context Protocol](https://modelcontextprotocol.io), so an assistant such as Claude
+can look at your downloads and manage them for you ("download this video", "pause everything", "what is still running?").
+
+<img src="docs/images/ai-assistants.png" alt="The AI assistants window: a switch, the live state, and copy-ready setup text for Claude Code and Claude Desktop" width="520">
+
+**Connect it.** The assistant starts the program itself with `--mcp`. The app shows these commands with the right path
+filled in under **Help → AI assistants…**.
+
+| Client | How |
+| --- | --- |
+| Claude Code | `claude mcp add swift-download-manager -- /path/to/swift_download_manager --mcp` |
+| Claude Desktop and most other apps | add the block below to their MCP settings |
+
+```json
+{ "mcpServers": { "swift-download-manager": { "command": "/path/to/swift_download_manager", "args": ["--mcp"] } } }
+```
+
+On Windows use the path of `SwiftDownloadManager.exe`. (`--mcp` talks over standard input and output, which relies on the
+assistant starting the program with pipes, as MCP clients do.)
+
+**What it can do.** Ten tools; assistants that support it ask you before each action unless you tell them not to.
+
+| Tool | What it does |
+| --- | --- |
+| `list_downloads`, `get_download` | See downloads, their progress, speed and errors (read-only) |
+| `get_status`, `list_queues` | Overall state; queues and their schedules (read-only) |
+| `add_download` | Start a download from an `http(s)` link; saved in the folder of its category |
+| `pause_download`, `resume_download` | Pause or resume one download |
+| `start_queue`, `stop_queue` | Run or stop a queue |
+| `remove_download` | Take a download off the list (marked as destructive so clients ask first) |
+
+**With or without the window.** If the window is open, the assistant works in it and you see changes live. If it is
+closed, the assistant runs the downloads itself in the background. Opening the window while a download is running pauses it,
+hands everything over and carries on in the window, byte for byte. (If the window is minimized and your system stops
+redrawing it, a request can time out after 10 seconds with a message saying so; restore the window and ask again.)
+
+**Safety.**
+- It is on by default; switch it off under **Options** or **Help → AI assistants…** and every request is refused.
+- An assistant can never delete files from your disk (not even partly downloaded ones) and cannot choose where a file is
+  saved: the folder always comes from the file's category. Only `http` and `https` links are accepted.
+- The window listens only on your own computer, on a random port, and only answers requests that carry a secret token stored in
+  your settings folder (`mcp-token`, readable only by you). Requests that come from a web page are refused. This is separate
+  from the browser add-on's listener.
+- Passwords and cookies are never shown to the assistant.
 
 ## Download
 
@@ -124,6 +176,7 @@ On a machine without a screen, put `xvfb-run -a` in front of the program.
 | [`source/`](source/) | The Rust source code and the installer scripts |
 | [`source/src/engine.rs`](source/src/engine.rs) | The download engine: connections, splitting, resume, retries, speed limits |
 | [`source/src/bridge.rs`](source/src/bridge.rs) | The local link listener for the browser add-on, and clipboard watching |
+| [`source/src/mcp/`](source/src/mcp/) | The MCP server for AI assistants: protocol, the private control door, the lock and hand-over |
 | [`source/src/app.rs`](source/src/app.rs), [`source/src/app/`](source/src/app/) | The window, dialogs, queues, scheduler and link grabber |
 | [`source/src/theme.rs`](source/src/theme.rs), [`source/src/widgets/`](source/src/widgets/) | The light and dark colours, and the widget kit (buttons, switch, wheel picker, progress bars) |
 | [`browser-extension/`](browser-extension/) | The browser add-on, packaged for Chrome and Firefox |
@@ -136,7 +189,7 @@ and in `%APPDATA%\swift-download-manager\` on Windows.
 ## Releases
 
 Releases are listed on the [releases page](https://github.com/Namitjain07/Swift-Download-Manager/releases), and what changed
-in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.2.0` publishes a release; see
+in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0` publishes a release; see
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ## Contributing

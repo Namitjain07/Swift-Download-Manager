@@ -183,11 +183,22 @@ impl App {
     }
 
     pub(super) fn remove_items(&mut self, ids: &[u64], delete_files: bool) {
+        self.drop_items(ids, true, delete_files);
+    }
+
+    /// Take downloads off the list and stop them, leaving every file on disk (even partial ones).
+    pub(super) fn forget_items(&mut self, ids: &[u64]) {
+        self.drop_items(ids, false, false);
+    }
+
+    fn drop_items(&mut self, ids: &[u64], delete_partial: bool, delete_files: bool) {
         for id in ids {
             if let Some(item) = self.items.iter().find(|i| i.id == *id) {
                 item.live.stop.store(true, Ordering::SeqCst);
                 if !self.demo {
-                    let _ = std::fs::remove_file(engine::temp_path(&item.path()));
+                    if delete_partial {
+                        let _ = std::fs::remove_file(engine::temp_path(&item.path()));
+                    }
                     if delete_files && item.status() == Status::Complete {
                         let _ = std::fs::remove_file(item.path());
                     }
@@ -410,6 +421,7 @@ impl App {
 
     /// Per-frame bookkeeping.
     pub(super) fn tick(&mut self) {
+        self.serve_control();
         // Speeds.
         let dt = self.last_sample.elapsed().as_secs_f64();
         if dt >= 0.5 {
@@ -475,7 +487,7 @@ impl App {
         if self.dirty && self.last_save.elapsed().as_millis() > 400 {
             self.save();
         }
-        if any_active || !self.running.is_empty() || self.toast.is_some() || self.items.iter().any(|i| i.is_checking) {
+        if any_active || !self.running.is_empty() || self.toast.is_some() || self.items.iter().any(|i| i.is_checking) || self.last_ai_call.is_some_and(|t| t.elapsed().as_secs() < 6) {
             self.ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         // The scheduler needs a look at the clock now and then even when idle.

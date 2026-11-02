@@ -14,6 +14,8 @@ A fast desktop download manager written in Rust (with the egui toolkit).
 - SHA-256 checksum check, a download-complete window, and refreshing a link that has expired
 - Browser add-on (Chrome, Edge, Brave, Firefox) in `browser-extension/`: catches downloads, passes your browser login (cookies) along, adds a right-click "Download with…" item and spots videos and sounds a page plays
 - Clipboard watching: copy a download link and the app offers to download it
+- MCP server (`--mcp`) so AI assistants such as Claude can list, add, pause, resume and remove downloads (never deleting files)
+- Light and dark mode, switches, wheel pickers and smooth animations
 
 ## Building it yourself
 
@@ -38,6 +40,7 @@ On Linux the app also needs the usual desktop libraries (they are already there 
 
 - `src/engine.rs`: the download engine (connections, splitting, resume, retries, speed limits)
 - `src/bridge.rs`: the local link listener for the browser add-on, and clipboard watching
+- `src/mcp/`: the MCP server (`--mcp`) for AI assistants: protocol, the private control door, the lock and hand-over
 - `src/app.rs` and `src/app/`: the window, dialogs, queues, scheduler and link grabber
 - `src/theme.rs` and `src/widgets/`: the light and dark colours and the widget kit (buttons, switch, wheel picker, progress bars)
 - `browser-extension/`: the browser add-on

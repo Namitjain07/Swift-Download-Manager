@@ -3,7 +3,8 @@
 use super::actions::{expand_pattern, normalize_time};
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{button_row, plain_button, card, card_row, card_row_h, dialog_window, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
+use super::mcp_cmds::AiState;
+use crate::widgets::{button_row, card, card_row, card_row_h, dialog_window, group_title, plain_button, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
 use eframe::egui::{RichText, Sense};
 
 const ADDON_FILES: [(&str, &[u8]); 9] = [
@@ -495,6 +496,59 @@ impl App {
         self.browser_open = open;
     }
 
+    /// Help > AI assistants: the switch, the state, and setup text to copy.
+    pub(super) fn ai_window(&mut self, ctx: &egui::Context) {
+        if !self.ai_open {
+            return;
+        }
+        // The sample window (--demo, screenshots) shows a placeholder instead of this machine's path.
+        let exe = if self.demo { "/path/to/swift_download_manager".to_string() } else { std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "swift_download_manager".into()) };
+        let (state, mut on) = (self.ai_state(), self.settings.mcp_enabled);
+        let (code, desktop) = (crate::mcp::setup::claude_code_command(&exe), crate::mcp::setup::desktop_config(&exe));
+        let mut copied = None;
+        let mut open = true;
+        dialog_window(ctx, "AI assistants (MCP)")
+            .open(&mut open)
+            .default_width(540.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
+            .show(ctx, |ui| {
+                let pal = crate::theme::current(ui.ctx());
+                ui.label("Let an AI assistant such as Claude look at your downloads and add, pause, resume or remove them. It cannot delete files from your disk or pick the folder a file is saved in.");
+                ui.add_space(8.0);
+                card(ui, |ui| {
+                    toggle_row(ui, "Allow AI assistants", &mut on, false);
+                    card_row(ui, true, |ui| {
+                        let (text, col) = match state {
+                            AiState::Off => ("Off: assistants are refused", pal.secondary),
+                            AiState::Unavailable => ("Another copy of the app owns the downloads, so this window cannot be controlled", pal.orange),
+                            AiState::Ready => ("Ready: connect an assistant below", pal.green),
+                            AiState::Active => ("An assistant is using it right now", pal.blue),
+                        };
+                        ui.label(RichText::new(text).size(11.0).color(col));
+                    });
+                });
+                for (title, text) in [("Claude Code: run this once", &code), ("Claude Desktop and other apps: add this to their MCP settings", &desktop)] {
+                    group_title(ui, title);
+                    ui.add(egui::Label::new(RichText::new(text.as_str()).monospace().size(11.0)).selectable(true));
+                    ui.add_space(4.0);
+                    if tinted_button(ui, "Copy").clicked() {
+                        copied = Some(text.clone());
+                    }
+                }
+                ui.add_space(6.0);
+                ui.label(RichText::new("The assistant starts this program itself and shares your open window, or runs the downloads without one while it is closed. Clients ask you before each action unless you tell them not to.").size(11.0).color(pal.secondary));
+            });
+        if on != self.settings.mcp_enabled {
+            self.settings.mcp_enabled = on;
+            self.dirty = true;
+        }
+        if let Some(text) = copied {
+            ctx.copy_text(text);
+            self.toast("Copied");
+        }
+        self.ai_open = open;
+    }
+
     pub(super) fn about_window(&mut self, ctx: &egui::Context) {
         if !self.about_open {
             return;
@@ -510,7 +564,7 @@ impl App {
                     let (r, _) = ui.allocate_exact_size(egui::vec2(48.0, 48.0), Sense::hover());
                     icons::draw(ui.painter(), r, Icon::Grabber, icons::tint(Icon::Grabber, &crate::theme::current(ui.ctx())), true);
                     ui.heading(APP_NAME);
-                    ui.label("Version 1.2, written in Rust");
+                    ui.label(format!("Version {}, written in Rust", env!("CARGO_PKG_VERSION")));
                     ui.label("Splits each download into several connections, re-splits as parts finish,\nretries broken connections, pauses and resumes, keeps a scheduled queue\nand works with your browser and clipboard.");
                 });
             });

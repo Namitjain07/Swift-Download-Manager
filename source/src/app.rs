@@ -4,6 +4,7 @@
 mod actions;
 mod dialogs;
 mod grabber;
+pub(crate) mod mcp_cmds;
 mod tools;
 mod view;
 
@@ -76,12 +77,13 @@ fn home_dir() -> PathBuf {
     std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn config_file() -> PathBuf {
+/// Where settings and the download list live (`downloads.json` and the MCP files).
+pub fn default_config_dir() -> PathBuf {
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from))
         .unwrap_or_else(|| home_dir().join(".config"));
-    base.join("swift-download-manager").join("downloads.json")
+    base.join("swift-download-manager")
 }
 
 fn open_path(path: &std::path::Path) {
@@ -206,6 +208,8 @@ pub struct Settings {
     pub site_logins: Vec<SiteLogin>,
     /// System, Light or Dark (View > Appearance).
     pub theme: ThemeMode,
+    /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
+    pub mcp_enabled: bool,
 }
 
 impl Default for Settings {
@@ -230,6 +234,7 @@ impl Default for Settings {
             categories: default_categories(),
             site_logins: Vec::new(),
             theme: ThemeMode::System,
+            mcp_enabled: true,
         }
     }
 }
@@ -273,6 +278,9 @@ struct SavedItem {
     user_agent: String,
     #[serde(default)]
     limit_kbps: u64,
+    /// Was running when a window took the downloads over from the MCP engine: carry on.
+    #[serde(default)]
+    handoff_resume: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -280,6 +288,9 @@ struct SavedState {
     settings: Settings,
     next_id: u64,
     items: Vec<SavedItem>,
+    /// Queues that were running at a hand-over.
+    #[serde(default)]
+    handoff_queues: Vec<String>,
 }
 
 pub struct Item {
@@ -310,6 +321,7 @@ pub struct Item {
     /// This download's own speed limit (0 = none), chained to the overall limit.
     limit_kbps: u64,
     limiter: Arc<Limiter>,
+    handoff_resume: bool,
     speed: f64,
     last_bytes: u64,
     last_status: Status,
@@ -343,6 +355,7 @@ impl Item {
             user_agent: String::new(),
             limit_kbps: 0,
             limiter: Arc::new(Limiter::chained(overall.clone())),
+            handoff_resume: false,
             speed: 0.0,
             last_bytes,
             last_status,
@@ -472,6 +485,10 @@ pub struct Launch {
     pub theme: Option<ThemeMode>,
     /// Opens one window at start-up (screenshots).
     pub show: Option<String>,
+    /// No window: the engine runs for an MCP client. No browser listener or clipboard watching.
+    pub headless: bool,
+    /// Where to keep settings and the download list (default: the user's config folder).
+    pub config_dir: Option<PathBuf>,
 }
 
 pub struct App {
@@ -515,6 +532,18 @@ pub struct App {
     toast: Option<(String, Instant)>,
     /// Forces a theme for this run only (`--theme`), without touching the saved choice.
     theme_override: Option<ThemeMode>,
+    config_dir: PathBuf,
+    /// Running without a window (MCP engine).
+    headless: bool,
+    /// Commands from `--mcp` processes (see `mcp::control`).
+    control_rx: Option<std::sync::mpsc::Receiver<crate::mcp::control::Request>>,
+    /// Owns the download list while this process runs (see `mcp::lock`).
+    state_lock: Option<crate::mcp::lock::StateLock>,
+    /// Queues that were running when the downloads were handed over; restarted on load.
+    handoff_queues: Vec<String>,
+    /// When an AI assistant last used this app (for the status bar).
+    last_ai_call: Option<Instant>,
+    ai_open: bool,
     ctx: egui::Context,
 }
 
@@ -522,8 +551,17 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
-        let Launch { screenshot, demo, start_url, theme: theme_override, show } = launch;
         theme::setup(&cc.egui_ctx);
+        Self::build(cc.egui_ctx.clone(), launch)
+    }
+
+    /// An app with no window, for `--mcp` when nothing else owns the downloads.
+    pub fn headless_in(config_dir: PathBuf) -> Self {
+        Self::build(egui::Context::default(), Launch { headless: true, config_dir: Some(config_dir), ..Default::default() })
+    }
+
+    pub(crate) fn build(ctx: egui::Context, launch: Launch) -> Self {
+        let Launch { screenshot, demo, start_url, theme: theme_override, show, headless, config_dir } = launch;
         let mut app = App {
             items: Vec::new(),
             next_id: 1,
@@ -562,16 +600,35 @@ impl App {
             listener: Err("off".into()),
             toast: None,
             theme_override,
-            ctx: cc.egui_ctx.clone(),
+            config_dir: config_dir.unwrap_or_else(default_config_dir),
+            headless,
+            control_rx: None,
+            state_lock: None,
+            handoff_queues: Vec::new(),
+            last_ai_call: None,
+            ai_open: false,
+            ctx,
         };
         if demo {
             app.load_demo();
         } else {
-            app.load();
-            if app.settings.browser_listen {
-                app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
+            // The lock comes first: a windowless engine may have to save before we read.
+            if !headless {
+                app.take_state_lock();
             }
-            bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
+            app.load();
+            app.resume_handed_over();
+            if !headless {
+                if app.state_lock.is_some() {
+                    app.start_control();
+                } else {
+                    app.toast("AI assistants cannot control the downloads: another copy of the app owns them");
+                }
+                if app.settings.browser_listen {
+                    app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
+                }
+                bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
+            }
         }
         if let Some(url) = start_url {
             app.inbox.lock().unwrap().push(Incoming {
@@ -605,15 +662,21 @@ impl App {
             }
             "about" => self.about_open = true,
             "browser" => self.browser_open = true,
+            "ai" => self.ai_open = true,
             "grabber" => self.open_grabber(),
             other => eprintln!("unknown window: {other}"),
         }
     }
 
+    fn state_file(&self) -> PathBuf {
+        self.config_dir.join("downloads.json")
+    }
+
     fn load(&mut self) {
-        let Ok(text) = std::fs::read_to_string(config_file()) else { return };
+        let Ok(text) = std::fs::read_to_string(self.state_file()) else { return };
         let Ok(state) = serde_json::from_str::<SavedState>(&text) else { return };
         self.settings = state.settings;
+        self.handoff_queues = state.handoff_queues;
         self.next_id = state.next_id.max(1);
         for s in state.items {
             // Anything that was running when the app closed is now paused.
@@ -634,6 +697,7 @@ impl App {
             item.cookies = s.cookies;
             item.user_agent = s.user_agent;
             item.set_limit(s.limit_kbps);
+            item.handoff_resume = s.handoff_resume;
             self.items.push(item);
         }
         self.fix_settings();
@@ -698,10 +762,11 @@ impl App {
                 cookies: i.cookies.clone(),
                 user_agent: i.user_agent.clone(),
                 limit_kbps: i.limit_kbps,
+                handoff_resume: i.handoff_resume,
             })
             .collect();
-        let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items };
-        let path = config_file();
+        let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items, handoff_queues: self.handoff_queues.clone() };
+        let path = self.state_file();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
