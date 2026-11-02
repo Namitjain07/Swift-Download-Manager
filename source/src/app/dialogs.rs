@@ -3,7 +3,8 @@
 use super::*;
 use crate::engine;
 use crate::widgets::segment_bar;
-use crate::widgets::{button_row, card, dialog_window, group_title, plain_button, primary_button, spinner, tinted_button, toggle, toggle_row};
+use crate::theme::{ThemeMode, ThemeStyle};
+use crate::widgets::{button_row, card, card_row, dialog_window, group_title, plain_button, primary_button, segmented, spinner, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
 
 fn browse_folder(current: &mut String) {
@@ -28,7 +29,7 @@ impl App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0])
             .show(ctx, |ui| {
                 if let Some(src) = &d.from_outside {
-                    ui.colored_label(crate::theme::current(ui.ctx()).blue, format!("ℹ {src}"));
+                    ui.colored_label(crate::theme::current(ui.ctx()).blue_ink, format!("ℹ {src}"));
                     ui.add_space(4.0);
                 }
                 egui::Grid::new("add_grid").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
@@ -89,7 +90,7 @@ impl App {
                     });
                 });
                 if let Some(e) = &d.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
                 }
                 ui.add_space(6.0);
                 button_row(ui, |ui| {
@@ -149,7 +150,7 @@ impl App {
                     .show(ctx, |ui| {
                         egui::Grid::new(("pg", id)).num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {
                             ui.label("Address");
-                            ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue)).truncate());
+                            ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue_ink)).truncate());
                             ui.end_row();
                             ui.label("Status");
                             let s = match st {
@@ -406,7 +407,7 @@ impl App {
                             ui.label(RichText::new("Checking…").color(crate::theme::current(ui.ctx()).secondary));
                         }
                         if let Some(c) = &item.check {
-                            let col = if c.contains("NOT") { crate::theme::current(ui.ctx()).red } else if c.contains("matches") { crate::theme::current(ui.ctx()).green } else { crate::theme::current(ui.ctx()).secondary };
+                            let col = if c.contains("NOT") { crate::theme::current(ui.ctx()).red_ink } else if c.contains("matches") { crate::theme::current(ui.ctx()).green_ink } else { crate::theme::current(ui.ctx()).secondary };
                             let r = ui.add(egui::Label::new(RichText::new(c).color(col)).truncate().sense(egui::Sense::click()));
                             if r.on_hover_text("Click to copy").clicked() {
                                 ui.ctx().copy_text(c.trim_start_matches("SHA-256: ").to_string());
@@ -489,6 +490,17 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             toggle_row(ui, "Watch the clipboard and offer to download copied file links", &mut s.watch_clipboard, false);
             toggle_row(ui, "Accept downloads from the browser add-on (restart to apply)", &mut s.browser_listen, false);
             ui.add_enabled_ui(s.browser_listen, |ui| toggle_row(ui, "Start browser downloads straight away without asking", &mut s.browser_start_now, true));
+        });
+        group_title(ui, "Appearance");
+        card(ui, |ui| {
+            card_row(ui, false, |ui| {
+                ui.label("Design");
+                button_row(ui, |ui| segmented(ui, &[(ThemeStyle::Drishti, "Drishti"), (ThemeStyle::Ios, "iOS")], &mut s.theme_style));
+            });
+            card_row(ui, true, |ui| {
+                ui.label("Mode");
+                button_row(ui, |ui| segmented(ui, &[(ThemeMode::System, "Automatic"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")], &mut s.theme));
+            });
         });
         group_title(ui, "AI assistants");
         card(ui, |ui| {

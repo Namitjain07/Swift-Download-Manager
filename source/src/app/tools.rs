@@ -100,11 +100,11 @@ impl App {
                         ui.label(RichText::new("No links yet.").color(crate::theme::current(ui.ctx()).secondary));
                     }
                     Err(e) => {
-                        ui.colored_label(crate::theme::current(ui.ctx()).red, e);
+                        ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
                     }
                 }
                 if let Some(e) = &b.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
                 }
                 ui.add_space(6.0);
                 let ok = urls.as_ref().is_ok_and(|l| !l.is_empty());
@@ -190,7 +190,7 @@ impl App {
                 });
                 let bad = (s.start_on && normalize_time(&s.start_time).is_empty()) || (s.stop_on && normalize_time(&s.stop_time).is_empty());
                 if bad {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red, "Write times as hours and minutes, e.g. 02:30 or 23:15.");
+                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, "Write times as hours and minutes, e.g. 02:30 or 23:15.");
                 }
                 ui.label(RichText::new(format!("Time now: {}", chrono::Local::now().format("%H:%M"))).color(crate::theme::current(ui.ctx()).secondary));
                 ui.add_space(6.0);
@@ -361,7 +361,7 @@ impl App {
                 ui.add_space(4.0);
                 ui.add(egui::TextEdit::singleline(&mut r.url).desired_width(500.0));
                 if let Some(e) = &r.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
                 }
                 ui.add_space(4.0);
                 button_row(ui, |ui| {
@@ -415,7 +415,7 @@ impl App {
                             ui.label(format!("{}  ·  {}", human_size(item.total()), item.folder.display()));
                         });
                     });
-                    ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue)).truncate());
+                    ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue_ink)).truncate());
                     if let Some(c) = &item.check {
                         ui.label(c);
                     }
@@ -461,9 +461,9 @@ impl App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 match (&self.listener, self.settings.browser_listen) {
-                    (Ok(()), _) => ui.colored_label(crate::theme::current(ui.ctx()).green, format!("● Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
+                    (Ok(()), _) => ui.colored_label(crate::theme::current(ui.ctx()).green_ink, format!("● Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
                     (Err(_), false) => ui.colored_label(crate::theme::current(ui.ctx()).secondary, "○ Turned off in Options."),
-                    (Err(e), true) => ui.colored_label(crate::theme::current(ui.ctx()).red, format!("● Not available: {e}. Another copy of the app may be open.")),
+                    (Err(e), true) => ui.colored_label(crate::theme::current(ui.ctx()).red_ink, format!("● Not available: {e}. Another copy of the app may be open.")),
                 };
                 ui.add_space(6.0);
                 ui.label("The browser add-on sends the downloads you start in Chrome, Edge, Brave or Firefox to this app, and adds “Download with Swift Download Manager” when you right-click a link.");
@@ -520,9 +520,9 @@ impl App {
                     card_row(ui, true, |ui| {
                         let (text, col) = match state {
                             AiState::Off => ("Off: assistants are refused", pal.secondary),
-                            AiState::Unavailable => ("Another copy of the app owns the downloads, so this window cannot be controlled", pal.orange),
-                            AiState::Ready => ("Ready: connect an assistant below", pal.green),
-                            AiState::Active => ("An assistant is using it right now", pal.blue),
+                            AiState::Unavailable => ("Another copy of the app owns the downloads, so this window cannot be controlled", pal.orange_ink),
+                            AiState::Ready => ("Ready: connect an assistant below", pal.green_ink),
+                            AiState::Active => ("An assistant is using it right now", pal.blue_ink),
                         };
                         ui.label(RichText::new(text).size(11.0).color(col));
                     });

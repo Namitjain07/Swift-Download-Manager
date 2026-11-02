@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.3.0] - 2026-11-02
 
+### Two designs: Drishti (new default) and iOS
+- New **Drishti** design, built from the Drishti design system: dark-first palette with one blue accent, `-ink` text colours that hold their
+  contrast in both modes, 36 px rounded controls, a 220 px sidebar rail with a blue-tinted active row, the download list on its own rounded
+  surface with 48 px rows, state chips that always carry a word, 20 px dialogs with the design system's sheet shadow, and a 44 x 26 switch
+- The flat **iOS** design stays as an option: capsule buttons, bordered grouped cards, compact rows. Switch under **View > Appearance > Design**
+  or in **Options**; each design has Automatic, Light and Dark modes. New installs start in Drishti, dark
+- `--style drishti|ios` for screenshots
+
 ### A new look
 - Flat, iOS-style design with **light and dark mode**; it follows the system by default and can be changed under **View → Appearance**
 - New widgets: capsule buttons, switches, segmented controls, grouped cards, wheel pickers for the scheduler times,

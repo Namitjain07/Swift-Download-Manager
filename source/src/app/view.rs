@@ -380,13 +380,13 @@ impl App {
                     status_chip(ui, (active > 0).then_some(pal.green), &format!("{active} active"), pal.secondary);
                     status_chip(ui, None, &format!("{queued} queued"), pal.secondary);
                     if !running.is_empty() {
-                        status_chip(ui, Some(pal.green), &format!("Running: {}", running.join(", ")), pal.green);
+                        status_chip(ui, Some(pal.green), &format!("Running: {}", running.join(", ")), pal.green_ink);
                     }
                     if let Some((q, t)) = &scheduled {
-                        status_chip(ui, Some(pal.blue), &format!("{q} starts at {t}"), pal.blue);
+                        status_chip(ui, Some(pal.blue), &format!("{q} starts at {t}"), pal.blue_ink);
                     }
                     if self.settings.limit_on {
-                        status_chip(ui, Some(pal.orange), &format!("Speed limit {} KB/s", self.settings.limit_kbps), pal.orange);
+                        status_chip(ui, Some(pal.orange), &format!("Speed limit {} KB/s", self.settings.limit_kbps), pal.orange_ink);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let s = if speed > 0.0 { human_speed(speed) } else { "0 B/s".into() };
@@ -395,7 +395,7 @@ impl App {
                             let (txt, dot, col) = match &self.listener {
                                 Ok(()) => ("Browser: connected", Some(pal.green), pal.secondary),
                                 Err(_) if !self.settings.browser_listen => ("Browser: off", None, pal.secondary),
-                                Err(_) => ("Browser: unavailable", Some(pal.red), pal.red),
+                                Err(_) => ("Browser: unavailable", Some(pal.red), pal.red_ink),
                             };
                             if status_chip(ui, dot, txt, col).on_hover_text("Browser integration…").clicked() {
                                 self.browser_open = true;
@@ -405,9 +405,9 @@ impl App {
                         }
                         let (txt, dot, col) = match self.ai_state() {
                             AiState::Off => ("AI: off", None, pal.secondary),
-                            AiState::Unavailable => ("AI: unavailable", Some(pal.orange), pal.orange),
+                            AiState::Unavailable => ("AI: unavailable", Some(pal.orange), pal.orange_ink),
                             AiState::Ready => ("AI: ready", Some(pal.green), pal.secondary),
-                            AiState::Active => ("AI: active", Some(pal.blue), pal.blue),
+                            AiState::Active => ("AI: active", Some(pal.blue), pal.blue_ink),
                         };
                         if status_chip(ui, dot, txt, col).on_hover_text("AI assistants (MCP)…").clicked() {
                             self.ai_open = true;

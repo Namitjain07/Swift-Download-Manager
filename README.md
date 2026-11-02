@@ -13,12 +13,14 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
-  <img src="docs/images/screenshot.png" alt="Swift Download Manager main window in light mode: a category tree and queues on the left, a table of downloads with status dots and thin progress bars in the middle, and a toolbar of line icons on top" width="900">
+  <img src="docs/images/screenshot.png" alt="Swift Download Manager in its default Drishti design: a sidebar rail with categories and queues, and a rounded list of downloads with state chips, thin progress bars and a toolbar of line icons on top" width="900">
 </picture>
 
-<sub>The main window in light and dark mode (it follows your system), shown with the app's built-in sample data (<code>--demo</code> mode).</sub>
+<sub>The main window in the default **Drishti** design, light and dark (it follows your system). Shown with the app's built-in sample data (<code>--demo</code> mode).</sub>
 
-<img src="docs/images/screenshot-dark.png" alt="The same window in dark mode" width="440"> <img src="docs/images/scheduler-dark.png" alt="The scheduler window in dark mode with a wheel picker for the start time" width="300">
+<img src="docs/images/screenshot-ios.png" alt="The same window in the iOS design: capsule buttons, a bordered card list and compact rows" width="440"> <img src="docs/images/scheduler-dark.png" alt="The scheduler window in the Drishti design, dark, with a wheel picker for the start time" width="300">
+
+<sub>Left: the optional **iOS** design. Right: the scheduler in Drishti dark.</sub>
 
 </div>
 
@@ -36,7 +38,7 @@ sooner and a broken connection never means starting over.
 - **SHA-256 checksum** check, plus refreshing a link that has expired
 
 **A calm, native-feeling window**
-- A flat, iOS-style look with **light and dark mode** that follows your system (or choose under **View → Appearance**)
+- Two designs, switchable under **View → Appearance** (or in **Options**): **Drishti** (the default), built from the Drishti design system with a dark-first palette, 36 px rounded controls, a sidebar rail, a list on its own surface and state chips that always carry a word, and the flat **iOS** look with capsule buttons and grouped cards. Both come in light and dark and follow your system
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in
 - Switches, wheel pickers for times, and spinner wheels while something is loading. The window stays idle when nothing moves
 
@@ -188,6 +190,8 @@ The app can draw itself with sample data and save a picture of its window, which
 cd source
 cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
 cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
+cargo run --release -- --screenshot ../docs/images/screenshot-ios.png --theme light --style ios
+# the other design: --style ios   (drishti is the default)
 # a window other than the main one: --show add|batch|options|scheduler|queues|properties|progress|delete|about|browser|grabber
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
@@ -203,7 +207,7 @@ On a machine without a screen, put `xvfb-run -a` in front of the program.
 | [`source/src/bridge.rs`](source/src/bridge.rs) | The local link listener for the browser add-on, and clipboard watching |
 | [`source/src/mcp/`](source/src/mcp/) | The MCP server for AI assistants: protocol, the private control door, the lock and hand-over |
 | [`source/src/app.rs`](source/src/app.rs), [`source/src/app/`](source/src/app/) | The window, dialogs, queues, scheduler and link grabber |
-| [`source/src/theme.rs`](source/src/theme.rs), [`source/src/widgets/`](source/src/widgets/) | The light and dark colours, and the widget kit (buttons, switch, wheel picker, progress bars) |
+| [`source/src/theme/`](source/src/theme/), [`source/src/widgets/`](source/src/widgets/) | The two designs (Drishti and iOS) in light and dark, and the widget kit (buttons, switch, wheel picker, progress bars) |
 | [`browser-extension/`](browser-extension/) | The browser add-on, packaged for Chrome and Firefox |
 | `mac/` | How to get the Mac version |
 | [`docs/`](docs/) | Images used by this read-me |
