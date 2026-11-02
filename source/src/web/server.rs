@@ -49,7 +49,6 @@ pub struct Config {
 struct Shared {
     cfg: Config,
     key: String,
-    users: Mutex<Users>,
     sessions: Sessions,
     throttle: Throttle,
     tx: Mutex<Sender<Request>>,
@@ -97,7 +96,6 @@ pub fn start(cfg: Config, tx: Sender<Request>, ctx: egui::Context) -> io::Result
     let addr = listener.local_addr()?;
     let key = control::token_in(&cfg.dir, "web-key")?;
     let state = Arc::new(Shared {
-        users: Mutex::new(Users::load(&cfg.dir)),
         key: key.clone(),
         sessions: Sessions::default(),
         throttle: Throttle::default(),
@@ -238,8 +236,12 @@ fn cookie(state: &Shared, token: &str, req: &Req) -> String {
 fn identify(state: &Shared, req: &Req) -> Option<Who> {
     if let Some(s) = req.cookie(COOKIE).and_then(|t| state.sessions.lookup(&t)) {
         // The account may have been removed since.
-        if state.cfg.mode == Mode::Shared && !state.users.lock().unwrap().names().iter().any(|(n, _)| *n == s.user) {
-            return None;
+        // The accounts are read fresh each time, so people added or removed with `--add-user` / `--remove-user`
+        // while the server runs take effect at once.
+        if state.cfg.mode == Mode::Shared {
+            let users = Users::load(&state.cfg.dir);
+            let admin = users.names().into_iter().find(|(n, _)| *n == s.user).map(|(_, a)| a)?;
+            return Some(Who { name: s.user, admin });
         }
         return Some(Who { name: s.user, admin: s.admin });
     }
@@ -259,7 +261,7 @@ fn login(state: &Shared, stream: &TcpStream, req: &Req, peer: IpAddr) -> io::Res
     }
     let body: Value = serde_json::from_slice(&req.body).unwrap_or(Value::Null);
     let (user, password) = (body["user"].as_str().unwrap_or(""), body["password"].as_str().unwrap_or(""));
-    let found = state.users.lock().unwrap().verify(user, password).cloned();
+    let found = Users::load(&state.cfg.dir).verify(user, password).cloned();
     match found {
         Some(u) => {
             state.throttle.succeeded(peer);

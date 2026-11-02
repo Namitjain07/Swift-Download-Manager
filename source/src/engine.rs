@@ -385,7 +385,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
             Err(e) => {
                 let e = e.msg;
                 // 4xx answers will not get better by retrying.
-                let permanent = e.starts_with("Server answered 4") && !e.contains("429");
+                let permanent = (e.starts_with("Server answered 4") && !e.contains("429")) || e.contains("may not download from private");
                 if live.stopped() || permanent || attempt >= job.retries {
                     return Err(e);
                 }

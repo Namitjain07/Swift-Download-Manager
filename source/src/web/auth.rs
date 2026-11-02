@@ -108,6 +108,7 @@ impl Users {
         self.list.iter().map(|u| (u.name.clone(), u.admin)).collect()
     }
 
+    #[cfg(test)]
     pub fn is_admin(&self, name: &str) -> bool {
         self.list.iter().any(|u| u.name == name && u.admin)
     }
@@ -207,11 +208,6 @@ impl Sessions {
 
     pub fn destroy(&self, token: &str) {
         self.map.lock().unwrap().remove(token);
-    }
-
-    /// Log a user out everywhere (their password changed or they were removed).
-    pub fn destroy_user(&self, user: &str) {
-        self.map.lock().unwrap().retain(|_, s| s.user != user);
     }
 }
 
@@ -336,9 +332,6 @@ mod tests {
         let other = s.create("ben", false);
         s.destroy(&other);
         assert!(s.lookup(&other).is_none());
-        let t2 = s.create("anna", true);
-        s.destroy_user("anna");
-        assert!(s.lookup(&t2).is_none());
     }
 
     #[test]

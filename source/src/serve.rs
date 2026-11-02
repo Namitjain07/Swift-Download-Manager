@@ -21,6 +21,8 @@ pub enum Task {
     AddUser { name: String, admin: bool },
     RemoveUser { name: String },
     ListUsers,
+    /// Used by the container's health check: is the server answering?
+    Healthcheck,
 }
 
 #[derive(Debug, PartialEq)]
@@ -56,6 +58,8 @@ pub fn parse(args: &[String], env: &dyn Fn(&str) -> Option<String>) -> Result<Op
         Task::RemoveUser { name }
     } else if args.iter().any(|a| a == "--list-users") {
         Task::ListUsers
+    } else if args.iter().any(|a| a == "--healthcheck") {
+        Task::Healthcheck
     } else {
         Task::Serve
     };
@@ -94,6 +98,18 @@ fn bootstrap_admin(users: &mut Users, env: &dyn Fn(&str) -> Option<String>) -> R
     }
 }
 
+/// Does a server answer on `addr`? It is asked for its favicon, which needs no sign-in.
+pub fn healthy(addr: std::net::SocketAddr) -> bool {
+    use std::io::{Read, Write};
+    let Ok(mut s) = std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)) else { return false };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
+    if s.write_all(b"GET /favicon.ico HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").is_err() {
+        return false;
+    }
+    let mut head = [0u8; 12];
+    s.read_exact(&mut head).is_ok() && head.starts_with(b"HTTP/1.1 204")
+}
+
 pub fn run(args: &[String]) -> i32 {
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     let opts = match parse(args, &env) {
@@ -103,6 +119,11 @@ pub fn run(args: &[String]) -> i32 {
             return 2;
         }
     };
+    if opts.task == Task::Healthcheck {
+        let up = healthy(std::net::SocketAddr::from(([127, 0, 0, 1], opts.port)));
+        println!("{}", if up { "ok" } else { "the server is not answering" });
+        return if up { 0 } else { 1 };
+    }
     let data = opts.data.clone().unwrap_or_else(crate::app::default_config_dir);
     let mut users = Users::load(&data);
     match &opts.task {
@@ -141,7 +162,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
             };
         }
-        Task::Serve => {}
+        Task::Serve | Task::Healthcheck => {}
     }
 
     match bootstrap_admin(&mut users, &env) {
@@ -234,6 +255,21 @@ mod tests {
         assert!(parse(&args(&["--server", "--bind", "everywhere"]), &no_env).unwrap_err().contains("not an address"));
         assert!(parse(&args(&["--server", "--data"]), &no_env).unwrap_err().contains("needs a value"));
         assert!(parse(&args(&["--server", "--data", "--port", "1"]), &no_env).unwrap_err().contains("needs a value"));
+    }
+
+    #[test]
+    fn the_health_check_sees_a_running_server() {
+        let dir = std::env::temp_dir().join(format!("sdm-health-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let cfg = Config { bind: "127.0.0.1".parse().unwrap(), port: 0, mode: Mode::Shared, dir, secure_cookie: false };
+        let handle = crate::web::server::start(cfg, tx, eframe::egui::Context::default()).unwrap();
+        assert!(healthy(handle.addr));
+        let addr = handle.addr;
+        drop(handle);
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!healthy(addr), "nothing answers after it stopped");
+        assert_eq!(parse(&args(&["--healthcheck", "--port", "9"]), &no_env).unwrap().task, Task::Healthcheck);
     }
 
     #[test]

@@ -262,6 +262,24 @@ fn logging_out_ends_the_session() {
 }
 
 #[test]
+fn accounts_changed_while_the_server_runs_take_effect() {
+    let s = site("live-users", Mode::Shared, &[("anna", "correct horse", false)]);
+    assert_eq!(login(&s, "ben", "another password").code, 401, "not an account yet");
+    Users::load(&s.dir).set("ben", "another password", false).unwrap();
+    let ben = login(&s, "ben", "another password");
+    assert_eq!(ben.code, 200, "added with --add-user while running");
+    let cookie = ben.cookie().unwrap();
+    assert_eq!(get(&s, "/api/status", &cookie).code, 200);
+    // Promoted: the session follows the account, not what it was at sign-in.
+    Users::load(&s.dir).set("ben", "another password", true).unwrap();
+    assert_eq!(get(&s, "/api/me", &cookie).json()["admin"], true);
+    // Removed: the session stops working at once.
+    Users::load(&s.dir).remove("ben").unwrap();
+    assert_eq!(get(&s, "/api/status", &cookie).code, 401);
+    assert_eq!(login(&s, "ben", "another password").code, 401);
+}
+
+#[test]
 fn a_shared_server_has_no_key_door() {
     let s = site("shared-key", Mode::Shared, &[("anna", "correct horse", false)]);
     assert_eq!(send(&s, "GET", &format!("/?key={}", s.handle.key), &[], "").code, 403);

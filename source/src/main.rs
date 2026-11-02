@@ -24,7 +24,7 @@ fn main() -> eframe::Result<()> {
         std::process::exit(background::run());
     }
     // A download server for a team: no window, several people sign in through the web interface.
-    if args.iter().skip(1).any(|a| matches!(a.as_str(), "--server" | "--add-user" | "--remove-user" | "--list-users")) {
+    if args.iter().skip(1).any(|a| matches!(a.as_str(), "--server" | "--add-user" | "--remove-user" | "--list-users" | "--healthcheck")) {
         std::process::exit(serve::run(&args[1..]));
     }
     // MCP server for AI assistants: talks over stdin/stdout, no window.

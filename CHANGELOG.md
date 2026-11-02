@@ -3,6 +3,31 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.0-beta.1] - 2026-11-02
+
+**Pre-release.** The stable version stays 1.4.0; 1.5.0-beta.1 (several networks at once) is included.
+
+### Use it from a web browser
+- Options > Web interface: turn it on and open the link (it carries a secret key that is swapped for a session cookie). Only this computer can reach it
+  (`127.0.0.1`, port 9615 by default). Add links, pause, resume, remove and download finished files from any browser, in light or dark, on a phone or a desktop
+- The page is one self-contained file that loads nothing from other sites; everything shown is put on the page as plain text
+- It also works while the program runs in the background with only a tray icon
+
+### Run it for your organisation
+- `swift_download_manager --server` runs with no window: several people sign in with their own accounts, add links, watch them download **on the server**
+  and fetch the finished files through the web address. Each person sees only their own downloads and gets a folder of their own; administrators see everybody's
+- Accounts are made with `--add-user NAME [--admin]` (the password comes from `SDM_PASSWORD` or the keyboard), `--remove-user NAME` and `--list-users`.
+  Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes; five wrong passwords block an address for a few minutes
+- Links that lead to private or local addresses (the office network, `localhost`, the cloud metadata address) are **refused by default**, including after redirects;
+  `--allow-private` turns that off
+- Finished files are sent in pieces on request, so a broken transfer can carry on
+- A **Docker image** is published to `ghcr.io/namitjain07/swift-download-manager` (pre-releases get the `beta` tag, never `latest`); see the README
+- Put it behind an HTTPS reverse proxy before it leaves a trusted network: it speaks plain HTTP itself
+
+### Under the hood
+- Downloads have an owner; an AI assistant (MCP) and the personal web page are not tied to a person
+- Fixed: the .deb of a pre-release now has a file name GitHub keeps as it is
+
 ## [1.5.0-beta.1] - 2026-11-02
 
 **Pre-release.** Try it, and tell us what you find; the stable version stays 1.4.0.
