@@ -1,0 +1,63 @@
+# Publishes a GitHub release when a version tag is pushed.
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+#
+# The tag must match the version in source/Cargo.toml. The release gets the ready-made
+# programs that are kept in this repository, a SHA256SUMS file, and the notes written
+# for that version in CHANGELOG.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches the app version
+        run: |
+          version=$(grep -m1 '^version' source/Cargo.toml | cut -d'"' -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version $version in source/Cargo.toml" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Collect the files
+        run: |
+          mkdir release-assets
+          cp linux/swift-download-manager_${VERSION}_amd64.deb \
+             windows/SwiftDownloadManager.exe \
+             windows/SwiftDownloadManager-${VERSION}-windows-x64.zip \
+             browser-extension/SwiftDownloadManager-Helper-${VERSION}-chrome.zip \
+             browser-extension/SwiftDownloadManager-Helper-${VERSION}-firefox.xpi \
+             SwiftDownloadManager-${VERSION}-source.zip \
+             release-assets/
+          (cd release-assets && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+
+      - name: Take this version's notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '
+            /^## \[/ { if (found) exit; found = index($0, "[" v "]") > 0; next }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No section for $VERSION in CHANGELOG.md" >&2
+            exit 1
+          fi
+          cat release-notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --verify-tag \
+            --title "Swift Download Manager $VERSION" \
+            --notes-file release-notes.md
