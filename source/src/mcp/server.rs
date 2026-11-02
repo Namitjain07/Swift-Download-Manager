@@ -79,6 +79,33 @@ impl Engine {
         Engine { dir, local: None, busy_wait: BUSY_WAIT, yield_grace: YIELD_GRACE, yielded: None }
     }
 
+    /// Become the owner of the downloads, waiting up to `wait` for a window that is closing to let
+    /// go of them. An error means somebody else owns them (a window or another engine is running).
+    pub fn ensure_local(&mut self, wait: Duration) -> Result<(), String> {
+        let started = Instant::now();
+        while self.local.is_none() {
+            match StateLock::try_acquire(&self.dir) {
+                Ok(Some(lock)) => return self.start_local(lock),
+                Ok(None) => {
+                    if control::read_info(&self.dir).is_some() {
+                        return Err("another copy of Swift Download Manager is already running the downloads".into());
+                    }
+                    if started.elapsed() >= wait {
+                        return Err("the download list stayed busy".into());
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => return Err(format!("could not use the download list: {e}")),
+            }
+        }
+        Ok(())
+    }
+
+    /// The app that runs the downloads, while this engine owns them.
+    pub fn app_mut(&mut self) -> Option<&mut App> {
+        self.local.as_mut().map(|l| &mut l.app)
+    }
+
     /// Pause everything and save, so the next owner finds the downloads where they were.
     pub fn shutdown(&mut self) {
         if let Some(mut local) = self.local.take() {

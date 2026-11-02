@@ -3,6 +3,30 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.0] - 2026-11-02
+
+### A responsive window with cards
+- Downloads are shown as **cards** in a grid that gains columns as the window widens: file tile, name, state chip, progress, speed and time left, and
+  pause/resume, open, folder and remove buttons on each card. The classic table is one click away (View > Show downloads as)
+- Summary tiles for speed, active, queued and finished downloads, and a proper empty state with a button
+- The window adapts to its width: the sidebar becomes an icon rail and then a drawer, the toolbar goes from labelled tiles to icon tiles to a few
+  essentials plus an overflow menu, the status bar sheds details, dialogs never grow past the window. Smaller minimum window size
+- New reusable components (icon buttons, stat tiles, empty state, an icon-only segmented control) and ten new line icons
+
+### Runs in the background
+- Closing the window while downloads run asks whether to **keep downloading in the background**; remember the answer under Options > Background
+- The background process shows an icon in the system tray (Windows, macOS, Linux): click to open the window again (it takes the downloads over without
+  interrupting them), pause or resume everything, or quit. Queues, schedules and the browser add-on keep working with no window
+- Optional **start with the system**, in the background
+- Tasks > Keep running in the background; Tasks > Exit always quits
+
+### Downloads in this release
+- Windows 10/11 (64-bit): `SwiftDownloadManager.exe`, signed, and a `.zip` that also holds the browser add-on
+- Ubuntu 22.04+, Debian 12+, Mint 21+ (64-bit): `.deb` installer
+- Browser add-on packages and the source code as a `.zip`
+- `SHA256SUMS` to check the files
+- The Mac app has to be built on a Mac; see `mac/HOW TO GET THE MAC VERSION.txt`
+
 ## [1.3.0] - 2026-11-02
 
 ### Two designs: Drishti (new default) and iOS
@@ -78,5 +102,6 @@ First release published on GitHub.
 - `SHA256SUMS` to check the files
 - The Mac app has to be built on a Mac; see `mac/HOW TO GET THE MAC VERSION.txt`
 
+[1.4.0]: https://github.com/Namitjain07/Swift-Download-Manager/releases/tag/v1.4.0
 [1.3.0]: https://github.com/Namitjain07/Swift-Download-Manager/releases/tag/v1.3.0
 [1.2.0]: https://github.com/Namitjain07/Swift-Download-Manager/releases/tag/v1.2.0

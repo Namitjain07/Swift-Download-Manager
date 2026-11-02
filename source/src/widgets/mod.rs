@@ -4,6 +4,7 @@
 pub mod anim;
 pub mod button;
 pub mod card;
+pub mod components;
 pub mod dialog;
 pub mod progress;
 pub mod segmented;
@@ -13,7 +14,8 @@ pub mod wheel;
 
 pub use button::{button, ButtonKind};
 pub use card::{card, card_row, card_row_h};
-pub use dialog::{button_row, dialog_window, group_title, plain_button, primary_button, tinted_button, toggle, toggle_row};
+pub use components::{empty_state, icon_button, icon_button_at, icon_segmented, stat_tile};
+pub use dialog::{button_row, dialog_window, fit_field, fit_width, group_title, plain_button, primary_button, tinted_button, toggle, toggle_row};
 pub use progress::{capsule_bar, segment_bar};
 pub use spinner::spinner;
 pub use segmented::segmented;
@@ -25,7 +27,7 @@ use crate::theme::{self, ThemeStyle};
 use eframe::egui::{self, Color32, CornerRadius, Sense, Stroke};
 
 pub fn tool_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, tip: &str) -> bool {
-    let size = egui::vec2(72.0, 58.0);
+    let size = egui::vec2(70.0, 58.0);
     let (rect, resp) = ui.allocate_exact_size(size, if enabled { Sense::click() } else { Sense::hover() });
     let ctx = ui.ctx().clone();
     let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
@@ -49,6 +51,22 @@ pub fn tool_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, ti
     clicked && enabled
 }
 
+/// The toolbar tile without its label, for medium-width windows (the tooltip says what it does).
+pub fn tool_button_icon(ui: &mut egui::Ui, icon: Icon, enabled: bool, tip: &str) -> bool {
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(40.0, 40.0), if enabled { Sense::click() } else { Sense::hover() });
+    let ctx = ui.ctx().clone();
+    let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
+    let hover = anim::fade(&ctx, resp.id.with("hover"), enabled && resp.hovered(), 0.15);
+    let press = anim::fade(&ctx, resp.id.with("press"), enabled && resp.is_pointer_button_down_on(), 0.08);
+    let rect = rect.shrink2(rect.size() * (0.02 * press));
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same(d.radius_md), pal.hover.gamma_multiply(hover + 0.8 * press));
+    icons::draw(p, egui::Rect::from_center_size(rect.center(), egui::vec2(24.0, 24.0)), icon, icons::tint(icon, &pal), enabled);
+    let clicked = resp.clicked();
+    resp.on_hover_text(tip);
+    clicked && enabled
+}
+
 pub fn toolbar_sep(ui: &mut egui::Ui) {
     let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 50.0), Sense::hover());
     let col = theme::hairline(ui.ctx());
@@ -64,10 +82,6 @@ pub enum RowIcon {
 
 fn pill_target_id() -> egui::Id {
     egui::Id::unique("sdm_sidebar_pill_target")
-}
-
-pub fn cat_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, col: Color32, selected: bool) -> egui::Response {
-    sidebar_row(ui, label, count, indent, RowIcon::Folder, col, selected)
 }
 
 /// One row of the sidebar source list. The selection pill is not drawn here: the selected
@@ -103,6 +117,26 @@ pub fn sidebar_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, ic
     resp
 }
 
+/// A sidebar row in the narrow icon rail: just the glyph, with the name and count in a tooltip.
+pub fn rail_row(ui: &mut egui::Ui, label: &str, count: usize, icon: RowIcon, col: Color32, selected: bool) -> egui::Response {
+    let ctx = ui.ctx().clone();
+    let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), d.nav_h + 4.0), Sense::click());
+    if selected {
+        ctx.data_mut(|data| data.insert_temp(pill_target_id(), (rect.top(), rect.left(), rect.width(), d.nav_h + 4.0)));
+    }
+    let hover = anim::fade(&ctx, resp.id.with("hover"), resp.hovered() && !selected, 0.15);
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same(d.radius_md), pal.hover.gamma_multiply(hover));
+    match icon {
+        RowIcon::Folder => icons::folder(p, egui::Rect::from_center_size(rect.center(), egui::vec2(18.0, 15.0)), col),
+        RowIcon::Dot => {
+            p.circle_filled(rect.center(), 4.5, col);
+        }
+    }
+    resp.on_hover_text(if count > 0 { format!("{label} ({count})") } else { label.to_string() })
+}
+
 /// Paints the selection pill behind the sidebar rows. Call it first, before the rows; it
 /// glides to wherever the selected row was last frame.
 pub fn sidebar_pill(ui: &mut egui::Ui) {
@@ -134,6 +168,24 @@ pub enum Hue {
     Orange,
     Red,
     Neutral,
+}
+
+/// Paints a state chip with its top-right corner at `right_top` and returns its width.
+pub fn paint_state_chip(p: &egui::Painter, right_top: egui::Pos2, pal: &theme::Palette, d: &theme::Design, hue: Hue, text: &str) -> f32 {
+    let (fill, dot, ink) = match hue {
+        Hue::Blue => (pal.blue_tint, pal.blue, pal.blue_ink),
+        Hue::Green => (pal.green_tint, pal.green, pal.green_ink),
+        Hue::Orange => (pal.orange_tint, pal.orange, pal.orange_ink),
+        Hue::Red => (pal.red_tint, pal.red, pal.red_ink),
+        Hue::Neutral => (pal.surface2, pal.tertiary, pal.secondary),
+    };
+    let galley = p.layout_no_wrap(text.to_owned(), egui::FontId::proportional(d.caption), ink);
+    let w = 12.0 + 9.0 + galley.size().x + 8.0;
+    let rect = egui::Rect::from_min_size(egui::pos2(right_top.x - w, right_top.y), egui::vec2(w, 22.0));
+    p.rect_filled(rect, CornerRadius::same(11), fill);
+    p.circle_filled(egui::pos2(rect.left() + 12.0, rect.center().y), 3.0, dot);
+    p.galley(egui::pos2(rect.left() + 21.0, rect.center().y - galley.size().y / 2.0), galley, ink);
+    w
 }
 
 /// Drishti's state chip: a 22 px capsule with a tinted fill, a dot in the hue and the word in its ink

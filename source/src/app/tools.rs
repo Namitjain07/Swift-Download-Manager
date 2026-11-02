@@ -48,14 +48,14 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(560.0)
+            .default_width(crate::widgets::fit_width(ctx, 560.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 segmented(ui, &[(false, "A list of links"), (true, "Numbered links (pattern)")], &mut b.pattern_mode);
                 ui.add_space(8.0);
                 if b.pattern_mode {
                     ui.label("Address with a * where the number goes:");
-                    ui.add(egui::TextEdit::singleline(&mut b.pattern).desired_width(520.0));
+                    ui.add(egui::TextEdit::singleline(&mut b.pattern).desired_width(crate::widgets::fit_field(ui, 520.0)));
                     ui.horizontal(|ui| {
                         ui.label("From");
                         ui.add(egui::DragValue::new(&mut b.from).range(0..=1_000_000));
@@ -67,12 +67,12 @@ impl App {
                 } else {
                     ui.label("Paste links, one per line:");
                     egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-                        ui.add(egui::TextEdit::multiline(&mut b.links).desired_rows(8).desired_width(520.0).hint_text("https://example.com/file1.zip\nhttps://example.com/file2.zip"));
+                        ui.add(egui::TextEdit::multiline(&mut b.links).desired_rows(8).desired_width(crate::widgets::fit_field(ui, 520.0)).hint_text("https://example.com/file1.zip\nhttps://example.com/file2.zip"));
                     });
                 }
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("Save to:");
-                    ui.add(egui::TextEdit::singleline(&mut b.folder).desired_width(300.0));
+                    ui.add(egui::TextEdit::singleline(&mut b.folder).desired_width(crate::widgets::fit_field(ui, 300.0)));
                     if tinted_button(ui, "Browse…").clicked() {
                         if let Some(p) = rfd::FileDialog::new().pick_folder() {
                             b.folder = p.display().to_string();
@@ -149,7 +149,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(440.0)
+            .default_width(crate::widgets::fit_width(ctx, 440.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -248,7 +248,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(460.0)
+            .default_width(crate::widgets::fit_width(ctx, 460.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 ui.label("Each queue downloads its files a few at a time (the slider sets how many at once) and can have its own schedule.");
@@ -353,13 +353,13 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(520.0)
+            .default_width(crate::widgets::fit_width(ctx, 520.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 ui.label(RichText::new(&name).strong());
                 ui.label("If the link stopped working (many sites give links that expire), open the download page again, copy a fresh link to the same file and paste it here. The download carries on where it stopped.");
                 ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut r.url).desired_width(500.0));
+                ui.add(egui::TextEdit::singleline(&mut r.url).desired_width(crate::widgets::fit_field(ui, 500.0)));
                 if let Some(e) = &r.error {
                     ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
                 }
@@ -404,7 +404,7 @@ impl App {
                 .open(&mut open)
                 .collapsible(false)
                 .resizable(false)
-                .default_width(440.0)
+                .default_width(crate::widgets::fit_width(ctx, 440.0))
                 .default_pos(egui::pos2(360.0 + (id % 4) as f32 * 20.0, 200.0 + (id % 4) as f32 * 20.0))
                 .show(ctx, |ui| {
                     ui.horizontal(|ui| {
@@ -457,7 +457,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(480.0)
+            .default_width(crate::widgets::fit_width(ctx, 480.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 match (&self.listener, self.settings.browser_listen) {
@@ -509,7 +509,7 @@ impl App {
         let mut open = true;
         dialog_window(ctx, "AI assistants (MCP)")
             .open(&mut open)
-            .default_width(540.0)
+            .default_width(crate::widgets::fit_width(ctx, 540.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 let pal = crate::theme::current(ui.ctx());

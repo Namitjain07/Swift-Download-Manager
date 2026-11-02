@@ -13,14 +13,14 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
-  <img src="docs/images/screenshot.png" alt="Swift Download Manager in its default Drishti design: a sidebar rail with categories and queues, and a rounded list of downloads with state chips, thin progress bars and a toolbar of line icons on top" width="900">
+  <img src="docs/images/screenshot.png" alt="Swift Download Manager in the Drishti design: a sidebar rail with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with progress, state chips and actions" width="900">
 </picture>
 
-<sub>The main window in the default **Drishti** design, light and dark (it follows your system). Shown with the app's built-in sample data (<code>--demo</code> mode).</sub>
+<sub>The main window in the default **Drishti** design, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
 
-<img src="docs/images/screenshot-ios.png" alt="The same window in the iOS design: capsule buttons, a bordered card list and compact rows" width="440"> <img src="docs/images/scheduler-dark.png" alt="The scheduler window in the Drishti design, dark, with a wheel picker for the start time" width="300">
+<img src="docs/images/responsive-medium.png" alt="The same window at a medium width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="The window at a narrow width: tools in an overflow menu and one column of cards" width="230"> <img src="docs/images/screenshot-ios.png" alt="The optional iOS design" width="300">
 
-<sub>Left: the optional **iOS** design. Right: the scheduler in Drishti dark.</sub>
+<sub>It adapts to the window: full layout, an icon rail at medium widths, a drawer and overflow menu when narrow. Right: the optional iOS design.</sub>
 
 </div>
 
@@ -38,9 +38,13 @@ sooner and a broken connection never means starting over.
 - **SHA-256 checksum** check, plus refreshing a link that has expired
 
 **A calm, native-feeling window**
-- Two designs, switchable under **View → Appearance** (or in **Options**): **Drishti** (the default), built from the Drishti design system with a dark-first palette, 36 px rounded controls, a sidebar rail, a list on its own surface and state chips that always carry a word, and the flat **iOS** look with capsule buttons and grouped cards. Both come in light and dark and follow your system
-- Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in
-- Switches, wheel pickers for times, and spinner wheels while something is loading. The window stays idle when nothing moves
+- **Responsive**: downloads are cards in a grid that gains columns as the window widens (or the classic table, one click away); the sidebar becomes an icon rail and then a drawer, and the toolbar collapses to icons and an overflow menu on narrow windows
+- Two designs, switchable under **View → Appearance** (or in **Options**): **Drishti** (the default), built from the Drishti design system with a dark-first palette, 36 px rounded controls, a sidebar rail and state chips that always carry a word, and the flat **iOS** look with capsule buttons and grouped cards. Both come in light and dark and follow your system
+- Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in. The window stays idle when nothing moves
+
+**Runs in the background**
+- Close the window and **keep downloading**: an icon in the system tray (Windows notification area, macOS menu bar, Linux tray) shows what is going on, pauses and resumes everything, and opens the window again
+- Queues, schedules and the browser add-on keep working with no window open; optionally **start with the system**, in the background
 
 **Organised**
 - **Queues** with their own schedules (start and stop times, daily or once, close the app when done)
@@ -63,6 +67,21 @@ sooner and a broken connection never means starting over.
 - Passes your browser login (cookies) along, so downloads behind a login work
 - Adds **Download with Swift Download Manager** to the right-click menu
 - Spots videos and sounds that a page plays
+
+## Run it in the background
+
+By default, closing the window while downloads are running asks whether to **keep downloading in the background**; you can remember the answer
+(**Options → Background**) or use **Tasks → Keep running in the background** at any time. The program then carries on without a window, with an icon in the
+system tray:
+
+- **Click the icon** (or choose *Open Swift Download Manager*) to bring the window back; it takes the downloads over without interrupting them
+- *Pause all downloads* and *Resume downloads* from the icon's menu; the tooltip shows how many downloads run and how fast
+- *Quit* stops everything and exits. **Tasks → Exit** in the window always quits
+- Links from the browser add-on are added and started straight away while there is no window
+- **Options → Background → Start with the system** starts it at login, in the background (a launch entry on Linux and macOS, a `Run` key on Windows)
+
+On Linux the icon needs a desktop that shows tray icons (KDE, Xfce, Cinnamon, MATE, or GNOME with the AppIndicator extension). Without one, the program still
+runs in the background; start it again to open the window.
 
 ## Use it from an AI assistant (MCP)
 
@@ -205,6 +224,7 @@ On a machine without a screen, put `xvfb-run -a` in front of the program.
 | [`source/`](source/) | The Rust source code and the installer scripts |
 | [`source/src/engine.rs`](source/src/engine.rs) | The download engine: connections, splitting, resume, retries, speed limits |
 | [`source/src/bridge.rs`](source/src/bridge.rs) | The local link listener for the browser add-on, and clipboard watching |
+| [`source/src/background.rs`](source/src/background.rs), [`source/src/background/`](source/src/background/) | Running without a window: the tray icon and the loop behind it |
 | [`source/src/mcp/`](source/src/mcp/) | The MCP server for AI assistants: protocol, the private control door, the lock and hand-over |
 | [`source/src/app.rs`](source/src/app.rs), [`source/src/app/`](source/src/app/) | The window, dialogs, queues, scheduler and link grabber |
 | [`source/src/theme/`](source/src/theme/), [`source/src/widgets/`](source/src/widgets/) | The two designs (Drishti and iOS) in light and dark, and the widget kit (buttons, switch, wheel picker, progress bars) |
