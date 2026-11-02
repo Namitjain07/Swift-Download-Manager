@@ -29,6 +29,12 @@ pub fn tinted_button(ui: &mut Ui, label: &str) -> Response {
     button(ui, ButtonKind::Tinted, tint, label)
 }
 
+/// The quietest action, such as Cancel: coloured text, a faint wash on hover.
+pub fn plain_button(ui: &mut Ui, label: &str) -> Response {
+    let tint = theme::current(ui.ctx()).blue;
+    button(ui, ButtonKind::Plain, tint, label)
+}
+
 /// Switch followed by its label, for use inside a row.
 pub fn toggle(ui: &mut Ui, on: &mut bool, label: impl Into<WidgetText>) -> Response {
     ui.horizontal(|ui| {
@@ -53,4 +59,11 @@ pub fn group_title(ui: &mut Ui, text: &str) {
     ui.add_space(8.0);
     ui.label(RichText::new(text.to_uppercase()).size(11.0).color(pal.secondary));
     ui.add_space(2.0);
+}
+
+/// A row of right-aligned actions at the bottom of a dialog. Its height is fixed, so the row
+/// cannot stretch to fill the window the way a bare right-to-left layout does.
+pub fn button_row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let w = ui.available_width();
+    ui.allocate_ui_with_layout(egui::vec2(w, 32.0), Layout::right_to_left(Align::Center), add).inner
 }

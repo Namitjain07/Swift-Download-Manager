@@ -3,7 +3,7 @@
 use super::*;
 use crate::engine;
 use crate::widgets::segment_bar;
-use crate::widgets::{card, dialog_window, group_title, primary_button, spinner, tinted_button, toggle, toggle_row};
+use crate::widgets::{button_row, plain_button, card, dialog_window, group_title, primary_button, spinner, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
 
 fn browse_folder(current: &mut String) {
@@ -92,8 +92,8 @@ impl App {
                     ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                 }
                 ui.add_space(6.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if tinted_button(ui, "Cancel").clicked() {
+                button_row(ui, |ui| {
+                    if plain_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
                     egui::ComboBox::from_id_salt("add_q").selected_text(d.queue.clone()).width(110.0).show_ui(ui, |ui| {
@@ -199,8 +199,8 @@ impl App {
                             if tinted_button(ui, if details { "<< Hide details" } else { "Show details >>" }).clicked() {
                                 details = !details;
                             }
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if tinted_button(ui, "Cancel").on_hover_text("Stop and close").clicked() {
+                            button_row(ui, |ui| {
+                                if plain_button(ui, "Cancel").on_hover_text("Stop and close").clicked() {
                                     act = Some("cancel");
                                 }
                                 if st.is_active() {
@@ -327,8 +327,8 @@ impl App {
                     toggle(ui, &mut d.delete_files, "Also delete the downloaded files from disk");
                 }
                 ui.add_space(6.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if tinted_button(ui, "Cancel").clicked() {
+                button_row(ui, |ui| {
+                    if plain_button(ui, "Cancel").clicked() {
                         result = Some(false);
                     }
                     if primary_button(ui, "Remove").clicked() {
@@ -416,7 +416,7 @@ impl App {
                     ui.end_row();
                 });
                 ui.add_space(6.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                button_row(ui, |ui| {
                     if tinted_button(ui, "Close").clicked() {
                         close = true;
                     }
@@ -552,8 +552,8 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             }
         });
         ui.add_space(8.0);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if tinted_button(ui, "Cancel").clicked() {
+        button_row(ui, |ui| {
+            if plain_button(ui, "Cancel").clicked() {
                 *result = Some(false);
             }
             if primary_button(ui, "OK").clicked() {

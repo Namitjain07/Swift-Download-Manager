@@ -3,7 +3,7 @@
 use super::actions::{expand_pattern, normalize_time};
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{card, card_row, card_row_h, dialog_window, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
+use crate::widgets::{button_row, plain_button, card, card_row, card_row_h, dialog_window, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
 use eframe::egui::{RichText, Sense};
 
 const ADDON_FILES: [(&str, &[u8]); 9] = [
@@ -107,8 +107,8 @@ impl App {
                 }
                 ui.add_space(6.0);
                 let ok = urls.as_ref().is_ok_and(|l| !l.is_empty());
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if tinted_button(ui, "Cancel").clicked() {
+                button_row(ui, |ui| {
+                    if plain_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
                     if ui.add_enabled(ok, egui::Button::new("Add to queue")).clicked() {
@@ -182,7 +182,7 @@ impl App {
                     });
                     card_row(ui, true, |ui| {
                         ui.label("When the queue is done");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        button_row(ui, |ui| {
                             segmented(ui, &[(WhenDone::Nothing, "Do nothing"), (WhenDone::ExitApp, "Close the app")], &mut s.when_done)
                         });
                     });
@@ -193,8 +193,8 @@ impl App {
                 }
                 ui.label(RichText::new(format!("Time now: {}", chrono::Local::now().format("%H:%M"))).color(crate::theme::current(ui.ctx()).secondary));
                 ui.add_space(6.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if tinted_button(ui, "Cancel").clicked() {
+                button_row(ui, |ui| {
+                    if plain_button(ui, "Cancel").clicked() {
                         result = Some(false);
                     }
                     if ui.add_enabled_ui(!bad, |ui| primary_button(ui, "Save")).inner.clicked() {
@@ -250,35 +250,34 @@ impl App {
             .default_width(460.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
-                ui.label("Each queue downloads its files a few at a time and can have its own schedule.");
+                ui.label("Each queue downloads its files a few at a time (the slider sets how many at once) and can have its own schedule.");
                 ui.add_space(4.0);
-                egui::Grid::new("queues").num_columns(4).spacing([10.0, 6.0]).show(ui, |ui| {
-                    ui.label(RichText::new("Name").strong());
-                    ui.label(RichText::new("At once").strong());
-                    ui.label("");
-                    ui.label("");
-                    ui.end_row();
+                card(ui, |ui| {
+                    let count = self.settings.queues.len();
                     for (k, q) in self.settings.queues.iter_mut().enumerate() {
-                        let main = q.name == MAIN_QUEUE;
-                        let mut name = q.name.clone();
-                        let r = ui.add_enabled(!main, egui::TextEdit::singleline(&mut name).desired_width(170.0));
-                        if r.changed() {
-                            renames.push((q.name.clone(), name.clone()));
-                        }
-                        changed |= ui.add(egui::Slider::new(&mut q.max_parallel, 1..=8)).changed();
-                        if ui.small_button("Scheduler…").clicked() {
-                            sched = Some(q.name.clone());
-                        }
-                        if ui.add_enabled(!main, egui::Button::new("✕").small()).on_hover_text("Remove (its downloads stay in the list)").clicked() {
-                            remove = Some(k);
-                        }
-                        ui.end_row();
+                        card_row(ui, k + 1 == count, |ui| {
+                            let main = q.name == MAIN_QUEUE;
+                            let mut name = q.name.clone();
+                            if ui.add_enabled(!main, egui::TextEdit::singleline(&mut name).desired_width(104.0)).changed() {
+                                renames.push((q.name.clone(), name.clone()));
+                            }
+                            ui.spacing_mut().slider_width = 64.0;
+                            changed |= ui.add(egui::Slider::new(&mut q.max_parallel, 1..=8)).on_hover_text("How many downloads this queue runs at once").changed();
+                            button_row(ui, |ui| {
+                                if ui.add_enabled(!main, egui::Button::new("✕").small()).on_hover_text("Remove (its downloads stay in the list)").clicked() {
+                                    remove = Some(k);
+                                }
+                                if tinted_button(ui, "Scheduler…").clicked() {
+                                    sched = Some(q.name.clone());
+                                }
+                            });
+                        });
                     }
                 });
-                ui.separator();
+                ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut new_name).hint_text("New queue name").desired_width(200.0));
-                    if ui.add_enabled(!new_name.trim().is_empty(), egui::Button::new("+ Add queue")).clicked() {
+                    if ui.add_enabled_ui(!new_name.trim().is_empty(), |ui| tinted_button(ui, "Add queue")).inner.clicked() {
                         add = true;
                     }
                 });
@@ -364,8 +363,8 @@ impl App {
                     ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                 }
                 ui.add_space(4.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if tinted_button(ui, "Cancel").clicked() {
+                button_row(ui, |ui| {
+                    if plain_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
                     if primary_button(ui, "Use this link").clicked() {
@@ -421,7 +420,7 @@ impl App {
                     }
                     ui.add_space(4.0);
                     toggle(ui, &mut dont_show, "Don't show this window again");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    button_row(ui, |ui| {
                         if tinted_button(ui, "Close").clicked() {
                             act = Some("close");
                         }

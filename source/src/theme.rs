@@ -1,6 +1,4 @@
 //! Flat iOS-style colours for light and dark mode.
-// Palette helpers are wired into the UI in the next commits.
-#![allow(dead_code)]
 
 use eframe::egui::{self, Color32, Id, Stroke, Theme, ThemePreference};
 use serde::{Deserialize, Serialize};
@@ -78,6 +76,7 @@ impl Palette {
     }
 }
 
+#[cfg(test)]
 fn luminance(c: Color32) -> f32 {
     let lin = |v: u8| {
         let v = v as f32 / 255.0;
@@ -86,7 +85,8 @@ fn luminance(c: Color32) -> f32 {
     0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
 }
 
-/// WCAG contrast ratio between two colours (1 to 21).
+/// WCAG contrast ratio between two colours (1 to 21). Used by the tests.
+#[cfg(test)]
 pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
     let (la, lb) = (luminance(a), luminance(b));
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)

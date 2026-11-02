@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::bridge::DOWNLOAD_EXTS;
-use crate::widgets::{dialog_window, primary_button, spinner, toggle};
+use crate::widgets::{button_row, dialog_window, primary_button, spinner, toggle};
 use eframe::egui::RichText;
 use std::io::Read;
 
@@ -256,7 +256,7 @@ impl App {
                     });
                 });
                 ui.add_space(4.0);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                button_row(ui, |ui| {
                     if ui.add_enabled(picked > 0, egui::Button::new("Add to queue")).clicked() {
                         add = Some(false);
                     }

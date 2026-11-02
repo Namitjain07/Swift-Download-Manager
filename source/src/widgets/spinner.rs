@@ -1,7 +1,7 @@
 //! Spinner wheel: 12 spokes whose brightness trails behind a turning leader.
 
 use crate::theme;
-use eframe::egui::{self, pos2, vec2, Sense, Stroke, Ui};
+use eframe::egui::{pos2, vec2, Sense, Stroke, Ui};
 use std::time::Duration;
 
 const SPOKES: usize = 12;

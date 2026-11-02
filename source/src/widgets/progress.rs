@@ -37,13 +37,6 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
     }
 }
 
-/// Bar with a percentage inside, as shown in the download list.
-pub fn mini_bar(ui: &mut Ui, frac: f32, col: Color32, text: &str) {
-    let id = ui.next_auto_id();
-    let w = ui.available_width().min(110.0);
-    ui.allocate_ui(egui::vec2(w, 16.0), |ui| capsule_bar(ui, id, frac, col, 16.0, Some(text)));
-}
-
 /// Overall progress plus a strip showing what each connection has fetched.
 pub fn segment_bar(ui: &mut Ui, frac: f32, total: u64, segs: &[Segment]) {
     let id = ui.next_auto_id();

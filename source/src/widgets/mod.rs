@@ -1,7 +1,5 @@
 //! Small custom widgets: the iOS-style kit (buttons, switch, ...) plus toolbar buttons,
 //! category rows and progress bars.
-// The kit is wired into the windows step by step.
-#![allow(dead_code, unused_imports)]
 
 pub mod anim;
 pub mod button;
@@ -15,17 +13,16 @@ pub mod wheel;
 
 pub use button::{button, ButtonKind};
 pub use card::{card, card_row, card_row_h};
-pub use dialog::{dialog_window, group_title, primary_button, tinted_button, toggle, toggle_row};
-pub use progress::{capsule_bar, mini_bar, segment_bar};
+pub use dialog::{button_row, dialog_window, group_title, plain_button, primary_button, tinted_button, toggle, toggle_row};
+pub use progress::{capsule_bar, segment_bar};
 pub use spinner::spinner;
 pub use segmented::segmented;
 pub use switch::switch;
-pub use wheel::{time_wheels, wheel};
+pub use wheel::time_wheels;
 
-use crate::engine::Segment;
 use crate::icons::{self, Icon};
 use crate::theme;
-use eframe::egui::{self, Color32, CornerRadius, Sense, Stroke, StrokeKind};
+use eframe::egui::{self, Color32, CornerRadius, Sense, Stroke};
 
 pub fn tool_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, tip: &str) -> bool {
     let size = egui::vec2(72.0, 58.0);
