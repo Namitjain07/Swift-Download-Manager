@@ -499,6 +499,14 @@ impl App {
 
     /// Links from the browser, the clipboard or a second copy of the app.
     fn take_incoming(&mut self) {
+        if self.headless {
+            // No window to ask in: links from the browser add-on start straight away.
+            let all: Vec<Incoming> = std::mem::take(&mut *self.inbox.lock().unwrap());
+            for inc in all.into_iter().filter(|i| i.source != Source::Clipboard) {
+                self.add_incoming_now(inc);
+            }
+            return;
+        }
         if self.add.is_some() {
             return;
         }
@@ -508,20 +516,30 @@ impl App {
         };
         let Some(inc) = next else { return };
         if inc.source == Source::Browser && self.settings.browser_start_now {
-            let mut d = AddDialog::default();
-            d.name = if inc.name.is_empty() { engine::file_name_from_url(&inc.url) } else { engine::sanitize(&inc.name) };
-            d.category = self.cat_of(&d.name);
-            d.folder = self.folder_for(&d.category).display().to_string();
-            d.url = inc.url;
-            d.referer = inc.referer;
-            d.cookies = inc.cookies;
-            d.user_agent = inc.user_agent;
-            if let Err(e) = self.add_download(&d, true) {
-                self.toast(e);
-            }
+            self.add_incoming_now(inc);
         } else {
             self.open_add_dialog(Some(inc));
             self.ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+    }
+
+    /// Add a link that arrived from outside and start it at once.
+    fn add_incoming_now(&mut self, inc: Incoming) {
+        let mut d = AddDialog::default();
+        d.name = if inc.name.is_empty() { engine::file_name_from_url(&inc.url) } else { engine::sanitize(&inc.name) };
+        d.category = self.cat_of(&d.name);
+        d.folder = self.folder_for(&d.category).display().to_string();
+        d.url = inc.url;
+        d.referer = inc.referer;
+        d.cookies = inc.cookies;
+        d.user_agent = inc.user_agent;
+        match self.add_download(&d, true) {
+            Ok(id) => {
+                if self.headless {
+                    self.progress_open.remove(&id);
+                }
+            }
+            Err(e) => self.toast(e),
         }
     }
 

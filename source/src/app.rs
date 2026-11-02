@@ -4,6 +4,7 @@
 mod actions;
 mod dialogs;
 mod cards;
+pub(crate) mod closing;
 mod grabber;
 pub(crate) mod layout;
 pub(crate) mod mcp_cmds;
@@ -214,6 +215,10 @@ pub struct Settings {
     pub theme_style: ThemeStyle,
     /// Cards or the classic table (View > Show downloads as).
     pub view: layout::ViewMode,
+    /// What closing the window does (Options > Background).
+    pub background: closing::BackgroundMode,
+    /// Start with the system, in the background (Options > Background).
+    pub launch_at_login: bool,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
 }
@@ -242,6 +247,8 @@ impl Default for Settings {
             theme: ThemeMode::Dark,
             theme_style: ThemeStyle::Drishti,
             view: layout::ViewMode::Cards,
+            background: closing::BackgroundMode::Ask,
+            launch_at_login: false,
             mcp_enabled: true,
         }
     }
@@ -558,6 +565,11 @@ pub struct App {
     /// When an AI assistant last used this app (for the status bar).
     last_ai_call: Option<Instant>,
     ai_open: bool,
+    /// The window is really closing (not going to the background or asking).
+    quitting: bool,
+    /// The "keep downloading?" question is showing.
+    ask_close: bool,
+    remember_close: bool,
     ctx: egui::Context,
 }
 
@@ -600,6 +612,9 @@ impl App {
             about_open: false,
             about_icon: None,
             drawer_open: false,
+            quitting: false,
+            ask_close: false,
+            remember_close: false,
             browser_open: false,
             show_categories: true,
             running: BTreeSet::new(),
@@ -633,6 +648,9 @@ impl App {
                 app.take_state_lock();
             }
             app.load();
+            if !headless {
+                app.settings.launch_at_login = crate::autostart::is_enabled();
+            }
             app.resume_handed_over();
             if !headless {
                 if app.state_lock.is_some() {
@@ -680,6 +698,7 @@ impl App {
             "browser" => self.browser_open = true,
             "ai" => self.ai_open = true,
             "drawer" => self.drawer_open = true,
+            "close" => self.ask_close = true,
             "table" => self.settings.view = layout::ViewMode::Table,
             "grabber" => self.open_grabber(),
             other => eprintln!("unknown window: {other}"),

@@ -3,6 +3,7 @@
 use super::*;
 use crate::engine;
 use crate::widgets::segment_bar;
+use super::closing::BackgroundMode;
 use crate::theme::{ThemeMode, ThemeStyle};
 use crate::widgets::{button_row, card, card_row, dialog_window, group_title, plain_button, primary_button, segmented, spinner, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
@@ -303,6 +304,13 @@ impl App {
                     }
                     seen.push(c.name.clone());
                 }
+                if s.launch_at_login != self.settings.launch_at_login {
+                    let done = if s.launch_at_login { crate::autostart::enable() } else { crate::autostart::disable() };
+                    if let Err(e) = done {
+                        self.toast(format!("Could not change starting with the system: {e}"));
+                        s.launch_at_login = self.settings.launch_at_login;
+                    }
+                }
                 self.settings = s;
                 self.fix_settings();
                 self.apply_settings();
@@ -502,6 +510,17 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
                 button_row(ui, |ui| segmented(ui, &[(ThemeMode::System, "Automatic"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")], &mut s.theme));
             });
         });
+        group_title(ui, "Background");
+        card(ui, |ui| {
+            card_row(ui, false, |ui| {
+                ui.label("When the window is closed");
+                button_row(ui, |ui| {
+                    segmented(ui, &[(BackgroundMode::Ask, "Ask"), (BackgroundMode::Keep, "Keep running"), (BackgroundMode::Quit, "Quit")], &mut s.background)
+                });
+            });
+            toggle_row(ui, "Start with the system, in the background", &mut s.launch_at_login, true);
+        });
+        ui.label(RichText::new("Running in the background keeps downloads, queues and the browser add-on going, with an icon in the tray.").size(11.0).color(crate::theme::current(ui.ctx()).tertiary));
         group_title(ui, "AI assistants");
         card(ui, |ui| {
             toggle_row(ui, "Let AI assistants add, pause and remove downloads (MCP)", &mut s.mcp_enabled, true);

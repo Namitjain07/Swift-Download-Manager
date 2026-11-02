@@ -22,6 +22,9 @@ impl eframe::App for App {
         self.frame += 1;
         let ctx = ui.ctx().clone();
         theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme), self.style_override.unwrap_or(self.settings.theme_style));
+        if !self.demo && !self.quitting && ctx.input(|i| i.viewport().close_requested()) {
+            self.on_close_requested(&ctx);
+        }
         self.tick();
         self.handle_screenshot(&ctx);
         self.shortcuts(&ctx);
@@ -66,6 +69,7 @@ impl eframe::App for App {
         self.browser_window(&ctx);
         self.ai_window(&ctx);
         self.about_window(&ctx);
+        self.close_window(&ctx);
         self.toast_area(&ctx);
         self.drop_files(&ctx);
     }
@@ -194,8 +198,14 @@ impl App {
                         self.export_links();
                     }
                     ui.separator();
+                    if ui.button("Keep running in the background").on_hover_text("Close the window and carry on downloading; open it again from the tray icon").clicked() {
+                        let ctx = ui.ctx().clone();
+                        self.go_background(&ctx);
+                    }
                     if ui.button("Exit").clicked() {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        // Exit really quits, whatever the setting for the close button says.
+                        let ctx = ui.ctx().clone();
+                        self.quit_now(&ctx);
                     }
                 });
                 ui.menu_button("File", |ui| {

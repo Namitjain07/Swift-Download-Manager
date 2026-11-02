@@ -3,6 +3,8 @@
 
 mod app;
 mod appicon;
+mod autostart;
+mod background;
 mod bridge;
 mod engine;
 mod icons;
@@ -14,6 +16,10 @@ use std::path::PathBuf;
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    // Keep downloading with no window, with an icon in the tray (started by "keep running in the background").
+    if args.iter().skip(1).any(|a| a == "--background") {
+        std::process::exit(background::run());
+    }
     // MCP server for AI assistants: talks over stdin/stdout, no window.
     if args.iter().skip(1).any(|a| a == "--mcp") {
         std::process::exit(mcp::server::run_stdio());
