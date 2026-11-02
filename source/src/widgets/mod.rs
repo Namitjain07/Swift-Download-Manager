@@ -1,4 +1,14 @@
-//! Small custom widgets: toolbar buttons, category rows and progress bars.
+//! Small custom widgets: the iOS-style kit (buttons, switch, ...) plus toolbar buttons,
+//! category rows and progress bars.
+// The kit is wired into the windows step by step.
+#![allow(dead_code, unused_imports)]
+
+pub mod anim;
+pub mod button;
+pub mod switch;
+
+pub use button::{button, ButtonKind};
+pub use switch::switch;
 
 use crate::engine::Segment;
 use crate::icons::{self, Icon};
