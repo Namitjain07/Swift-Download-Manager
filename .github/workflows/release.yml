@@ -1,46 +1,226 @@
-# Publishes a GitHub release when a version tag is pushed.
+# Builds every file of a release on GitHub's own computers and publishes it.
 #
-#   git tag v1.2.0 && git push origin v1.2.0
+#   git tag v1.3.0 && git push origin v1.3.0      # builds, signs and publishes a release
+#   Actions > Release > Run workflow              # a dry run: builds and signs, publishes nothing
 #
-# The tag must match the version in source/Cargo.toml. The release gets the ready-made
-# programs that are kept in this repository, a SHA256SUMS file, and the notes written
-# for that version in CHANGELOG.md.
+# The tag must match the version in source/Cargo.toml. The release gets the Windows program (built with
+# the native Microsoft toolchain and signed), the Linux .deb, the browser add-ons, the source code,
+# a SHA256SUMS file, and the notes written for that version in CHANGELOG.md.
+#
+# Signing: the Windows exe is signed with the project's own code-signing key. The private key is NOT in
+# this repository; it is stored only in the repository secrets WINDOWS_SIGNING_PFX_BASE64 and
+# WINDOWS_SIGNING_PFX_PASSWORD. The matching public certificate is committed at
+# source/packaging/windows/swift-download-manager-codesign.cer. Without those secrets (for example in a
+# fork) the exe is built but left unsigned.
+#
+# Actions from outside GitHub are pinned to a full commit SHA (the version is in the comment), so a moved
+# tag cannot change what runs here. Dependabot keeps the pins up to date (see dependabot.yml).
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  version:
+    name: Check the version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check that the tag matches the app version
+      - id: v
         run: |
           version=$(grep -m1 '^version' source/Cargo.toml | cut -d'"' -f2)
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "Tag $GITHUB_REF_NAME does not match version $version in source/Cargo.toml" >&2
             exit 1
           fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "Building version $version"
 
-      - name: Collect the files
+  windows:
+    name: Windows program (built and signed)
+    needs: version
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      HAVE_KEY: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 != '' }}
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: source
+      - name: Build (native Microsoft toolchain, C runtime linked in)
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Stage the program
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/x86_64-pc-windows-msvc/release/swift_download_manager.exe dist/SwiftDownloadManager.exe
+
+      - name: Sign the program
+        if: env.HAVE_KEY == 'true'
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'sdm-codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe was not found on this runner' }
+          $signed = $false
+          foreach ($ts in 'http://timestamp.digicert.com', 'http://timestamp.sectigo.com', 'http://timestamp.globalsign.com/tsa/r6advanced1') {
+            & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:PFX_PASSWORD /tr $ts /td SHA256 `
+              /d 'Swift Download Manager' /du 'https://github.com/Namitjain07/Swift-Download-Manager' dist/SwiftDownloadManager.exe
+            if ($LASTEXITCODE -eq 0) { $signed = $true; break }
+            Write-Warning "Signing with timestamp server $ts failed, trying the next one"
+          }
+          Remove-Item $pfx -Force
+          if (-not $signed) { throw 'The program could not be signed' }
+
+      - name: Check the result
+        shell: pwsh
+        run: |
+          $exe = 'dist/SwiftDownloadManager.exe'
+          $info = (Get-Item $exe).VersionInfo
+          "Product:      $($info.ProductName)"
+          "Description:  $($info.FileDescription)"
+          "File version: $($info.FileVersion)"
+          if ($info.ProductName -ne 'Swift Download Manager') { throw 'The version information is missing from the program' }
+          if ($info.FileVersion -notlike "$env:VERSION*") { throw "The program says version $($info.FileVersion), expected $env:VERSION" }
+          $sig = Get-AuthenticodeSignature $exe
+          "Signature:    $($sig.Status) ($($sig.StatusMessage))"
+          if ($env:HAVE_KEY -eq 'true') {
+            $expected = (Get-PfxCertificate -FilePath packaging/windows/swift-download-manager-codesign.cer).Thumbprint
+            "Signed by:    $($sig.SignerCertificate.Subject)"
+            "Thumbprint:   $($sig.SignerCertificate.Thumbprint)"
+            if ($sig.SignerCertificate.Thumbprint -ne $expected) { throw 'The program is signed with an unexpected certificate' }
+            if ($null -eq $sig.TimeStamperCertificate) { throw 'The signature has no timestamp' }
+          } else {
+            Write-Warning 'No signing key available: the program is NOT signed.'
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = "dist/SwiftDownloadManager-$env:VERSION-windows-x64"
+          New-Item -ItemType Directory -Force "$out/browser-extension" | Out-Null
+          Copy-Item dist/SwiftDownloadManager.exe "$out/SwiftDownloadManager.exe"
+          Copy-Item browser-extension/* "$out/browser-extension/" -Recurse
+          Copy-Item README.md "$out/README.md"
+          Copy-Item packaging/windows/swift-download-manager-codesign.cer "$out/swift-download-manager-codesign.cer"
+          @'
+          Swift Download Manager for Windows
+
+          1. Double-click SwiftDownloadManager.exe to start it (no installing needed).
+             Windows may say the publisher is unknown: the program is signed with the project's own
+             certificate (swift-download-manager-codesign.cer), not one from a paid authority.
+             Click "More info", then "Run anyway".
+          2. To catch downloads from your browser, see browser-extension\README.txt.
+          '@ | Set-Content -Encoding utf8 "$out/START HERE.txt"
+          Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          if-no-files-found: error
+          path: |
+            source/dist/SwiftDownloadManager.exe
+            source/dist/*.zip
+
+  linux:
+    name: Linux installer (.deb)
+    needs: version
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: source
+      - run: bash packaging/linux/build-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          if-no-files-found: error
+          path: source/dist/*.deb
+
+  addon:
+    name: Browser add-ons
+    needs: version
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: source
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 packaging/browser/build_extension.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: addon
+          if-no-files-found: error
+          path: |
+            source/dist/browser/*.zip
+            source/dist/browser/*.xpi
+
+  source:
+    name: Source code
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          version="${{ needs.version.outputs.version }}"
+          mkdir dist
+          git archive --format=zip --prefix="SwiftDownloadManager-$version-source/" -o "dist/SwiftDownloadManager-$version-source.zip" HEAD:source
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          if-no-files-found: error
+          path: dist/*.zip
+
+  release:
+    name: Collect the files and publish
+    needs: [version, windows, linux, addon, source]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+      - name: Collect the files and write SHA256SUMS
         run: |
           mkdir release-assets
-          cp linux/swift-download-manager_${VERSION}_amd64.deb \
-             windows/SwiftDownloadManager.exe \
-             windows/SwiftDownloadManager-${VERSION}-windows-x64.zip \
-             browser-extension/SwiftDownloadManager-Helper-${VERSION}-chrome.zip \
-             browser-extension/SwiftDownloadManager-Helper-${VERSION}-firefox.xpi \
-             SwiftDownloadManager-${VERSION}-source.zip \
-             release-assets/
+          find parts -type f -exec cp {} release-assets/ \;
           (cd release-assets && sha256sum * > SHA256SUMS && cat SHA256SUMS)
-
       - name: Take this version's notes from CHANGELOG.md
         run: |
           awk -v v="$VERSION" '
@@ -51,9 +231,22 @@ jobs:
             echo "No section for $VERSION in CHANGELOG.md" >&2
             exit 1
           fi
+          thumb=$(openssl x509 -inform der -in source/packaging/windows/swift-download-manager-codesign.cer -noout -fingerprint -sha256 | cut -d= -f2)
+          {
+            echo
+            echo "### Checking the Windows program"
+            echo "The Windows exe is signed with this project's own certificate (SHA-256 fingerprint \`$thumb\`,"
+            echo "public certificate in the zip and in the repository). Compare the file's SHA-256 with \`SHA256SUMS\`."
+          } >> release-notes.md
           cat release-notes.md
-
-      - name: Publish the release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            release-assets/*
+            release-notes.md
+      - name: Publish the release (tags only)
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
