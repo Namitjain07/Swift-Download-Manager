@@ -23,7 +23,7 @@ jobs:
           toolchain: stable
       - run: bash packaging/linux/build-deb.sh
         working-directory: source
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-deb
           path: source/dist/*.deb
@@ -48,7 +48,7 @@ jobs:
           Copy-Item browser-extension/* "$out/browser-extension/" -Recurse
           Copy-Item README.md "$out/"
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-zip
           path: source/dist/*.zip
@@ -62,7 +62,7 @@ jobs:
           toolchain: stable
       - run: bash packaging/macos/build-mac.sh
         working-directory: source
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mac-dmg
           path: source/dist/*.dmg
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v7
       - run: python3 packaging/browser/build_extension.py
         working-directory: source
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: browser-addon
           path: |
