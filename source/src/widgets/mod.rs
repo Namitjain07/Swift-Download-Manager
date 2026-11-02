@@ -22,25 +22,28 @@ pub use wheel::{time_wheels, wheel};
 
 use crate::engine::Segment;
 use crate::icons::{self, Icon};
+use crate::theme;
 use eframe::egui::{self, Color32, CornerRadius, Sense, Stroke, StrokeKind};
 
 pub fn tool_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, tip: &str) -> bool {
     let size = egui::vec2(72.0, 58.0);
     let (rect, resp) = ui.allocate_exact_size(size, if enabled { Sense::click() } else { Sense::hover() });
+    let ctx = ui.ctx().clone();
+    let pal = theme::current(&ctx);
+    let hover = anim::fade(&ctx, resp.id.with("hover"), enabled && resp.hovered(), 0.12);
+    let press = anim::fade(&ctx, resp.id.with("press"), enabled && resp.is_pointer_button_down_on(), 0.08);
+    // Pressed tiles shrink to 97%.
+    let rect = rect.shrink2(rect.size() * (0.015 * press));
     let p = ui.painter();
-    if enabled && resp.hovered() {
-        let fill = if resp.is_pointer_button_down_on() { Color32::from_rgb(196, 220, 242) } else { Color32::from_rgb(225, 238, 250) };
-        p.rect_filled(rect, CornerRadius::same(4), fill);
-        p.rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, Color32::from_rgb(160, 196, 230)), StrokeKind::Inside);
-    }
+    p.rect_filled(rect, CornerRadius::same(10), pal.separator.gamma_multiply(0.30 * hover + 0.25 * press));
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 20.0), egui::vec2(30.0, 30.0));
-    icons::draw(p, icon_rect, icon, icons::tint(icon, &crate::theme::current(ui.ctx())), enabled);
+    icons::draw(p, icon_rect, icon, icons::tint(icon, &pal), enabled);
     p.text(
         egui::pos2(rect.center().x, rect.bottom() - 9.0),
         egui::Align2::CENTER_CENTER,
         label,
-        egui::FontId::proportional(12.0),
-        if enabled { Color32::from_rgb(40, 46, 56) } else { Color32::from_gray(165) },
+        egui::FontId::proportional(11.0),
+        if enabled { pal.label } else { pal.secondary.gamma_multiply(0.6) },
     );
     let clicked = resp.clicked();
     resp.on_hover_text(tip);
@@ -49,10 +52,8 @@ pub fn tool_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, ti
 
 pub fn toolbar_sep(ui: &mut egui::Ui) {
     let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 50.0), Sense::hover());
-    ui.painter().line_segment(
-        [egui::pos2(r.center().x, r.top() + 4.0), egui::pos2(r.center().x, r.bottom() - 4.0)],
-        Stroke::new(1.0, Color32::from_rgb(210, 214, 220)),
-    );
+    let col = theme::current(ui.ctx()).separator;
+    ui.painter().line_segment([egui::pos2(r.center().x, r.top() + 8.0), egui::pos2(r.center().x, r.bottom() - 8.0)], Stroke::new(1.0, col));
 }
 
 pub fn cat_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, col: Color32, selected: bool) -> egui::Response {
@@ -82,5 +83,18 @@ pub fn cat_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, col: C
             Color32::from_gray(120),
         );
     }
+    resp
+}
+
+/// A small status-bar entry: optional coloured dot, then caption text. Clickable. It paints
+/// its own layout, so it reads the same in left-to-right and right-to-left rows.
+pub fn status_chip(ui: &mut egui::Ui, dot: Option<Color32>, text: &str, col: Color32) -> egui::Response {
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), egui::FontId::proportional(11.0), col);
+    let dot_w = if dot.is_some() { 13.0 } else { 0.0 };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(dot_w + galley.size().x, 14.0), Sense::click());
+    if let Some(d) = dot {
+        ui.painter().circle_filled(egui::pos2(rect.left() + 3.5, rect.center().y), 3.5, d);
+    }
+    ui.painter().galley(egui::pos2(rect.left() + dot_w, rect.center().y - galley.size().y / 2.0), galley, col);
     resp
 }

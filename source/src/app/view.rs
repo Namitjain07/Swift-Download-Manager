@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{cat_row, mini_bar, tool_button, toolbar_sep};
+use crate::widgets::{cat_row, mini_bar, status_chip, tool_button, toolbar_sep};
 use eframe::egui::{RichText, Sense};
 use egui_extras::{Column, TableBuilder};
 
@@ -276,16 +276,12 @@ impl App {
         let cq0 = self.current_queue();
         let any_queued = self.items.iter().any(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(cq0.as_str()));
 
+        let pal = theme::current(ui.ctx());
         egui::Panel::top("toolbar")
-            .frame(
-                egui::Frame::NONE
-                    .fill(Color32::from_rgb(250, 251, 253))
-                    .inner_margin(egui::Margin::symmetric(8, 6))
-                    .stroke(Stroke::new(1.0, Color32::from_rgb(214, 218, 224))),
-            )
+            .frame(egui::Frame::NONE.fill(pal.card).inner_margin(egui::Margin::symmetric(10, 6)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 1.0;
+                    ui.spacing_mut().item_spacing.x = 4.0;
                     if tool_button(ui, Icon::AddUrl, "Add URL", true, "Add a new download (Ctrl+N)") {
                         self.open_add_dialog(None);
                     }
@@ -333,58 +329,53 @@ impl App {
                         if !self.search.is_empty() && ui.small_button("✕").on_hover_text("Clear search").clicked() {
                             self.search.clear();
                         }
-                        ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("🔍 Search downloads").desired_width(170.0));
+                        ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Search downloads").desired_width(170.0));
                     });
                 });
             });
     }
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {
+        let pal = theme::current(ui.ctx());
         let active = self.items.iter().filter(|i| i.status().is_active()).count();
         let speed: f64 = self.items.iter().filter(|i| i.status().is_active()).map(|i| i.speed()).sum();
         let queued = self.items.iter().filter(|i| i.status() == Status::Queued).count();
         let scheduled: Option<(String, String)> = self.settings.queues.iter().find(|q| q.schedule.start_on).map(|q| (q.name.clone(), q.schedule.start_time.clone()));
         let running: Vec<String> = self.running.iter().cloned().collect();
         egui::Panel::bottom("status")
-            .frame(egui::Frame::NONE.fill(Color32::from_rgb(232, 235, 239)).inner_margin(egui::Margin::symmetric(10, 4)))
+            .frame(egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::symmetric(14, 5)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(format!("{} downloads", self.items.len()));
-                    ui.separator();
-                    ui.label(format!("{active} active"));
-                    ui.separator();
-                    ui.label(format!("{queued} queued"));
+                    ui.spacing_mut().item_spacing.x = 16.0;
+                    status_chip(ui, None, &format!("{} downloads", self.items.len()), pal.secondary);
+                    status_chip(ui, (active > 0).then_some(pal.green), &format!("{active} active"), pal.secondary);
+                    status_chip(ui, None, &format!("{queued} queued"), pal.secondary);
                     if !running.is_empty() {
-                        ui.separator();
-                        ui.colored_label(Color32::from_rgb(46, 140, 70), format!("Running: {}", running.join(", ")));
+                        status_chip(ui, Some(pal.green), &format!("Running: {}", running.join(", ")), pal.green);
                     }
                     if let Some((q, t)) = &scheduled {
-                        ui.separator();
-                        ui.colored_label(Color32::from_rgb(33, 100, 190), format!("⏰ {q} starts at {t}"));
+                        status_chip(ui, Some(pal.blue), &format!("{q} starts at {t}"), pal.blue);
                     }
                     if self.settings.limit_on {
-                        ui.separator();
-                        ui.colored_label(Color32::from_rgb(190, 110, 20), format!("Speed limit {} KB/s", self.settings.limit_kbps));
+                        status_chip(ui, Some(pal.orange), &format!("Speed limit {} KB/s", self.settings.limit_kbps), pal.orange);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let s = if speed > 0.0 { human_speed(speed) } else { "0 B/s".into() };
-                        ui.label(RichText::new(format!("↓ {s}")).strong());
-                        ui.separator();
+                        ui.label(RichText::new(format!("↓ {s}")).size(11.0).color(pal.label));
                         if !self.demo {
-                            let (txt, col) = match &self.listener {
-                                Ok(()) => ("Browser: connected", Color32::from_rgb(46, 140, 70)),
-                                Err(_) if !self.settings.browser_listen => ("Browser: off", Color32::from_gray(120)),
-                                Err(_) => ("Browser: unavailable", Color32::from_rgb(190, 60, 40)),
+                            let (txt, dot, col) = match &self.listener {
+                                Ok(()) => ("Browser: connected", Some(pal.green), pal.secondary),
+                                Err(_) if !self.settings.browser_listen => ("Browser: off", None, pal.secondary),
+                                Err(_) => ("Browser: unavailable", Some(pal.red), pal.red),
                             };
-                            if ui.add(egui::Label::new(RichText::new(txt).color(col)).sense(Sense::click())).on_hover_text("Browser integration…").clicked() {
+                            if status_chip(ui, dot, txt, col).on_hover_text("Browser integration…").clicked() {
                                 self.browser_open = true;
                             }
                         } else {
-                            ui.colored_label(Color32::from_rgb(46, 140, 70), "Browser: connected");
+                            status_chip(ui, Some(pal.green), "Browser: connected", pal.secondary);
                         }
                         if self.settings.watch_clipboard {
-                            ui.separator();
-                            ui.label(RichText::new("Clipboard: watching").color(Color32::from_gray(100)));
+                            status_chip(ui, None, "Clipboard: watching", pal.secondary);
                         }
                     });
                 });
