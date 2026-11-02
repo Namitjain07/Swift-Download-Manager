@@ -106,7 +106,7 @@ fn fetch_page(url: &str, proxy: Option<&str>) -> Result<String, String> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .proxy(proxy)
         .timeout_global(Some(std::time::Duration::from_secs(30)))
-        .user_agent("Mozilla/5.0 (compatible; SwiftDownloadManager/1.2)")
+        .user_agent(concat!("Mozilla/5.0 (compatible; SwiftDownloadManager/", env!("CARGO_PKG_VERSION"), ")"))
         .build()
         .into();
     let resp = agent.get(url).call().map_err(|e| format!("Could not open the page: {e}"))?;

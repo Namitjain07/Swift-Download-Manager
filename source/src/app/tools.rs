@@ -501,7 +501,8 @@ impl App {
         if !self.ai_open {
             return;
         }
-        let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "swift_download_manager".into());
+        // The sample window (--demo, screenshots) shows a placeholder instead of this machine's path.
+        let exe = if self.demo { "/path/to/swift_download_manager".to_string() } else { std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "swift_download_manager".into()) };
         let (state, mut on) = (self.ai_state(), self.settings.mcp_enabled);
         let (code, desktop) = (crate::mcp::setup::claude_code_command(&exe), crate::mcp::setup::desktop_config(&exe));
         let mut copied = None;
@@ -563,7 +564,7 @@ impl App {
                     let (r, _) = ui.allocate_exact_size(egui::vec2(48.0, 48.0), Sense::hover());
                     icons::draw(ui.painter(), r, Icon::Grabber, icons::tint(Icon::Grabber, &crate::theme::current(ui.ctx())), true);
                     ui.heading(APP_NAME);
-                    ui.label("Version 1.2, written in Rust");
+                    ui.label(format!("Version {}, written in Rust", env!("CARGO_PKG_VERSION")));
                     ui.label("Splits each download into several connections, re-splits as parts finish,\nretries broken connections, pauses and resumes, keeps a scheduled queue\nand works with your browser and clipboard.");
                 });
             });
