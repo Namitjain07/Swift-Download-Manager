@@ -507,7 +507,7 @@ impl App {
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     let (r, _) = ui.allocate_exact_size(egui::vec2(48.0, 48.0), Sense::hover());
-                    icons::draw(ui.painter(), r, Icon::Grabber, true);
+                    icons::draw(ui.painter(), r, Icon::Grabber, icons::tint(Icon::Grabber, &crate::theme::current(ui.ctx())), true);
                     ui.heading(APP_NAME);
                     ui.label("Version 1.2, written in Rust");
                     ui.label("Splits each download into several connections, re-splits as parts finish,\nretries broken connections, pauses and resumes, keeps a scheduled queue\nand works with your browser and clipboard.");

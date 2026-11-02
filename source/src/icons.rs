@@ -1,6 +1,8 @@
-//! Simple drawn icons (no images are bundled).
+//! Monoline icons (1.5 px strokes, no images bundled). They take a tint, so they work in
+//! light and dark mode.
 
-use eframe::egui::{self, pos2, vec2, Color32, CornerRadius, Painter, Pos2, Rect, Stroke, StrokeKind};
+use crate::theme::Palette;
+use eframe::egui::{pos2, vec2, Color32, CornerRadius, Painter, Pos2, Rect, Shape, Stroke, StrokeKind};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Icon {
@@ -18,142 +20,136 @@ pub enum Icon {
     Scheduler,
 }
 
-fn arrow_down(p: &Painter, c: Pos2, s: f32, col: Color32) {
-    let w = s * 0.22;
-    let body = Rect::from_min_max(pos2(c.x - w, c.y - s * 0.45), pos2(c.x + w, c.y + s * 0.02));
-    p.rect_filled(body, CornerRadius::same(2), col);
-    p.add(egui::Shape::convex_polygon(
-        vec![pos2(c.x - s * 0.45, c.y), pos2(c.x + s * 0.45, c.y), pos2(c.x, c.y + s * 0.48)],
-        col,
-        Stroke::NONE,
-    ));
+/// The tint a toolbar button gives each icon: blue to add, green to go, red to stop or remove.
+pub fn tint(icon: Icon, pal: &Palette) -> Color32 {
+    match icon {
+        Icon::AddUrl | Icon::Batch | Icon::Grabber | Icon::Scheduler => pal.blue,
+        Icon::Resume | Icon::StartQueue => pal.green,
+        Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red,
+        Icon::Options => pal.secondary,
+    }
 }
 
-pub fn draw(p: &Painter, rect: Rect, icon: Icon, enabled: bool) {
+/// Disabled icons are drawn at about a third of their strength.
+fn dim_for(tint: Color32, enabled: bool) -> Color32 {
+    if enabled { tint } else { tint.gamma_multiply(0.35) }
+}
+
+fn line(p: &Painter, pts: Vec<Pos2>, s: Stroke) {
+    p.add(Shape::line(pts, s));
+}
+
+fn closed(p: &Painter, pts: Vec<Pos2>, s: Stroke) {
+    p.add(Shape::closed_line(pts, s));
+}
+
+fn trash(p: &Painter, c: Pos2, s: f32, st: Stroke) {
+    let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
+    line(p, vec![pt(-0.38, -0.26), pt(0.38, -0.26)], st);
+    line(p, vec![pt(-0.12, -0.26), pt(-0.12, -0.40), pt(0.12, -0.40), pt(0.12, -0.26)], st);
+    line(p, vec![pt(-0.28, -0.26), pt(-0.24, 0.42), pt(0.24, 0.42), pt(0.28, -0.26)], st);
+    for x in [-0.09, 0.09] {
+        line(p, vec![pt(x, -0.12), pt(x, 0.28)], st);
+    }
+}
+
+fn arrow_down(p: &Painter, c: Pos2, s: f32, st: Stroke) {
+    let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
+    line(p, vec![pt(0.0, -0.40), pt(0.0, 0.14)], st);
+    line(p, vec![pt(-0.2, -0.06), pt(0.0, 0.14), pt(0.2, -0.06)], st);
+}
+
+fn queue_lines(p: &Painter, c: Pos2, s: f32, st: Stroke) {
+    for y in [-0.28, 0.0, 0.28] {
+        line(p, vec![pos2(c.x - 0.42 * s, c.y + y * s), pos2(c.x + 0.02 * s, c.y + y * s)], st);
+    }
+}
+
+pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
     let c = rect.center();
     let s = rect.width().min(rect.height());
-    let dim = |col: Color32| if enabled { col } else { Color32::from_gray(185) };
-    let blue = dim(Color32::from_rgb(33, 118, 214));
-    let green = dim(Color32::from_rgb(46, 164, 79));
-    let red = dim(Color32::from_rgb(214, 59, 50));
-    let gray = dim(Color32::from_rgb(110, 118, 128));
-    let orange = dim(Color32::from_rgb(232, 145, 38));
-    let white = Color32::WHITE;
+    let st = Stroke::new(1.5, dim_for(tint, enabled));
+    let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
     match icon {
         Icon::AddUrl => {
-            p.circle_filled(c, s * 0.42, blue);
-            let st = Stroke::new(1.4, Color32::from_rgba_unmultiplied(255, 255, 255, 170));
-            p.circle_stroke(c, s * 0.42, Stroke::new(1.0, blue));
-            p.line_segment([pos2(c.x - s * 0.42, c.y), pos2(c.x + s * 0.42, c.y)], st);
-            p.line_segment([pos2(c.x, c.y - s * 0.42), pos2(c.x, c.y + s * 0.42)], st);
-            let e = Rect::from_center_size(c, vec2(s * 0.42, s * 0.84));
-            p.add(egui::Shape::ellipse_stroke(e.center(), e.size() / 2.0, st));
-            let pc = pos2(c.x + s * 0.3, c.y + s * 0.3);
-            p.circle_filled(pc, s * 0.2, green);
-            let ps = Stroke::new(2.4, white);
-            p.line_segment([pos2(pc.x - s * 0.11, pc.y), pos2(pc.x + s * 0.11, pc.y)], ps);
-            p.line_segment([pos2(pc.x, pc.y - s * 0.11), pos2(pc.x, pc.y + s * 0.11)], ps);
+            let g = pt(-0.06, -0.06);
+            let r = 0.34 * s;
+            p.circle_stroke(g, r, st);
+            line(p, vec![pos2(g.x - r, g.y), pos2(g.x + r, g.y)], st);
+            p.add(Shape::ellipse_stroke(g, vec2(r * 0.45, r), st));
+            line(p, vec![pt(0.20, 0.30), pt(0.44, 0.30)], st);
+            line(p, vec![pt(0.32, 0.18), pt(0.32, 0.42)], st);
         }
         Icon::Resume => {
-            arrow_down(p, c, s, green);
-            p.line_segment([pos2(c.x - s * 0.4, c.y + s * 0.47), pos2(c.x + s * 0.4, c.y + s * 0.47)], Stroke::new(2.5, green));
+            arrow_down(p, c, s, st);
+            line(p, vec![pt(-0.38, 0.20), pt(-0.38, 0.40), pt(0.38, 0.40), pt(0.38, 0.20)], st);
         }
         Icon::Stop => {
-            let r = Rect::from_center_size(c, vec2(s * 0.7, s * 0.7));
-            p.rect_filled(r, CornerRadius::same(4), red);
-            p.rect_filled(Rect::from_center_size(c, vec2(s * 0.3, s * 0.3)), CornerRadius::same(1), white);
+            p.circle_stroke(c, 0.42 * s, st);
+            p.rect_stroke(Rect::from_center_size(c, vec2(0.28 * s, 0.28 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
         }
         Icon::StopAll => {
-            for (dx, dy) in [(-0.14, -0.14), (0.14, 0.14)] {
-                let r = Rect::from_center_size(pos2(c.x + s * dx, c.y + s * dy), vec2(s * 0.56, s * 0.56));
-                p.rect_filled(r, CornerRadius::same(4), red);
-                p.rect_stroke(r, CornerRadius::same(4), Stroke::new(1.5, white), StrokeKind::Inside);
-            }
+            line(p, vec![pt(-0.10, 0.10), pt(-0.40, 0.10), pt(-0.40, -0.40), pt(0.10, -0.40), pt(0.10, -0.10)], st);
+            p.rect_stroke(Rect::from_center_size(pt(0.15, 0.15), vec2(0.5 * s, 0.5 * s)), CornerRadius::same(3), st, StrokeKind::Middle);
         }
-        Icon::Delete => {
-            let body = Rect::from_min_max(pos2(c.x - s * 0.3, c.y - s * 0.25), pos2(c.x + s * 0.3, c.y + s * 0.45));
-            p.rect_filled(body, CornerRadius::same(3), gray);
-            p.rect_filled(Rect::from_center_size(pos2(c.x, c.y - s * 0.35), vec2(s * 0.8, s * 0.1)), CornerRadius::same(2), gray);
-            p.rect_filled(Rect::from_center_size(pos2(c.x, c.y - s * 0.44), vec2(s * 0.25, s * 0.08)), CornerRadius::same(1), gray);
-            for dx in [-0.13, 0.0, 0.13] {
-                p.line_segment([pos2(c.x + s * dx, c.y - s * 0.15), pos2(c.x + s * dx, c.y + s * 0.35)], Stroke::new(1.5, white));
-            }
-        }
+        Icon::Delete => trash(p, c, s, st),
         Icon::DeleteDone => {
-            draw(p, Rect::from_center_size(pos2(c.x - s * 0.1, c.y), vec2(s * 0.85, s * 0.85)), Icon::Delete, enabled);
-            let pc = pos2(c.x + s * 0.28, c.y + s * 0.28);
-            p.circle_filled(pc, s * 0.2, green);
-            p.line_segment([pos2(pc.x - s * 0.1, pc.y), pos2(pc.x - s * 0.02, pc.y + s * 0.08)], Stroke::new(2.0, white));
-            p.line_segment([pos2(pc.x - s * 0.02, pc.y + s * 0.08), pos2(pc.x + s * 0.11, pc.y - s * 0.08)], Stroke::new(2.0, white));
+            trash(p, pt(-0.12, -0.04), s * 0.82, st);
+            line(p, vec![pt(0.14, 0.28), pt(0.24, 0.38), pt(0.42, 0.14)], st);
         }
         Icon::Options => {
-            let teeth = 8;
             let mut pts = Vec::new();
-            for i in 0..teeth * 2 {
-                let a = i as f32 / (teeth * 2) as f32 * std::f32::consts::TAU;
-                let r = if i % 2 == 0 { s * 0.45 } else { s * 0.34 };
-                pts.push(pos2(c.x + a.cos() * r, c.y + a.sin() * r));
+            for k in 0..8 {
+                let a = k as f32 / 8.0 * std::f32::consts::TAU;
+                for (da, r) in [(-0.30, 0.33), (-0.14, 0.45), (0.14, 0.45), (0.30, 0.33)] {
+                    pts.push(pos2(c.x + (a + da).cos() * r * s, c.y + (a + da).sin() * r * s));
+                }
             }
-            p.add(egui::Shape::convex_polygon(pts, gray, Stroke::NONE));
-            p.circle_filled(c, s * 0.3, gray);
-            p.circle_filled(c, s * 0.13, white);
+            closed(p, pts, st);
+            p.circle_stroke(c, 0.14 * s, st);
         }
         Icon::StartQueue => {
-            for (i, dy) in [-0.3f32, 0.0, 0.3].iter().enumerate() {
-                let y = c.y + s * dy;
-                let col = if i == 1 { orange } else { gray };
-                p.rect_filled(Rect::from_min_max(pos2(c.x - s * 0.45, y - s * 0.08), pos2(c.x + s * 0.05, y + s * 0.08)), CornerRadius::same(2), col);
-            }
-            p.add(egui::Shape::convex_polygon(
-                vec![pos2(c.x + s * 0.1, c.y - s * 0.3), pos2(c.x + s * 0.48, c.y), pos2(c.x + s * 0.1, c.y + s * 0.3)],
-                green,
-                Stroke::NONE,
-            ));
+            queue_lines(p, c, s, st);
+            closed(p, vec![pt(0.14, -0.30), pt(0.46, 0.0), pt(0.14, 0.30)], st);
         }
         Icon::StopQueue => {
-            for (i, dy) in [-0.3f32, 0.0, 0.3].iter().enumerate() {
-                let y = c.y + s * dy;
-                let col = if i == 1 { orange } else { gray };
-                p.rect_filled(Rect::from_min_max(pos2(c.x - s * 0.45, y - s * 0.08), pos2(c.x + s * 0.05, y + s * 0.08)), CornerRadius::same(2), col);
-            }
-            p.rect_filled(Rect::from_center_size(pos2(c.x + s * 0.28, c.y), vec2(s * 0.36, s * 0.36)), CornerRadius::same(2), red);
+            queue_lines(p, c, s, st);
+            p.rect_stroke(Rect::from_center_size(pt(0.30, 0.0), vec2(0.32 * s, 0.32 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
         }
         Icon::Grabber => {
-            arrow_down(p, c, s * 0.9, blue);
+            p.rect_stroke(Rect::from_center_size(c, vec2(0.58 * s, 0.80 * s)), CornerRadius::same(4), st, StrokeKind::Middle);
+            arrow_down(p, pt(0.0, 0.04), s * 0.7, st);
         }
         Icon::Batch => {
-            for (k, dy) in [(0, -0.22f32), (1, 0.0), (2, 0.22)] {
-                let r = Rect::from_center_size(pos2(c.x - s * 0.08 + dy * s * 0.5, c.y + dy * s), vec2(s * 0.62, s * 0.36));
-                p.rect_filled(r, CornerRadius::same(3), if k == 2 { blue } else { dim(Color32::from_rgb(150, 185, 228)) });
-                p.rect_stroke(r, CornerRadius::same(3), Stroke::new(1.2, white), StrokeKind::Inside);
+            for (i, y) in [-0.28f32, 0.0, 0.28].iter().enumerate() {
+                let x = (i as f32 - 1.0) * 0.06;
+                p.rect_stroke(Rect::from_center_size(pt(x, *y), vec2(0.64 * s, 0.22 * s)), CornerRadius::same(4), st, StrokeKind::Middle);
             }
-            let pc = pos2(c.x + s * 0.3, c.y + s * 0.3);
-            p.circle_filled(pc, s * 0.18, green);
-            let ps = Stroke::new(2.2, white);
-            p.line_segment([pos2(pc.x - s * 0.1, pc.y), pos2(pc.x + s * 0.1, pc.y)], ps);
-            p.line_segment([pos2(pc.x, pc.y - s * 0.1), pos2(pc.x, pc.y + s * 0.1)], ps);
         }
         Icon::Scheduler => {
-            p.circle_filled(c, s * 0.44, blue);
-            p.circle_filled(c, s * 0.34, white);
-            for k in 0..12 {
-                let a = k as f32 / 12.0 * std::f32::consts::TAU;
-                let (r0, r1) = (s * 0.28, s * 0.33);
-                p.line_segment([pos2(c.x + a.cos() * r0, c.y + a.sin() * r0), pos2(c.x + a.cos() * r1, c.y + a.sin() * r1)], Stroke::new(1.0, gray));
-            }
-            p.line_segment([c, pos2(c.x, c.y - s * 0.24)], Stroke::new(2.2, dim(Color32::from_rgb(40, 46, 56))));
-            p.line_segment([c, pos2(c.x + s * 0.17, c.y + s * 0.06)], Stroke::new(2.2, dim(Color32::from_rgb(40, 46, 56))));
-            p.circle_filled(c, s * 0.04, red);
+            p.circle_stroke(c, 0.42 * s, st);
+            line(p, vec![c, pt(0.0, -0.24)], st);
+            line(p, vec![c, pt(0.17, 0.08)], st);
         }
     }
 }
 
-/// Small folder icon for the categories list.
+/// Small folder outline for the categories list.
 pub fn folder(p: &Painter, rect: Rect, col: Color32) {
-    let r = Rect::from_center_size(rect.center(), vec2(rect.width() * 0.9, rect.height() * 0.7));
-    let tab = Rect::from_min_size(pos2(r.left(), r.top() - 2.0), vec2(r.width() * 0.45, 4.0));
-    p.rect_filled(tab, CornerRadius::same(1), col.gamma_multiply(0.8));
-    p.rect_filled(r, CornerRadius::same(2), col);
+    let r = Rect::from_center_size(rect.center(), vec2(rect.width() * 0.9, rect.height() * 0.72));
+    let tab = r.width() * 0.42;
+    closed(
+        p,
+        vec![
+            pos2(r.left(), r.bottom()),
+            pos2(r.left(), r.top()),
+            pos2(r.left() + tab, r.top()),
+            pos2(r.left() + tab + 2.0, r.top() + 2.5),
+            pos2(r.right(), r.top() + 2.5),
+            pos2(r.right(), r.bottom()),
+        ],
+        Stroke::new(1.3, col),
+    );
 }
 
 /// Colour used for a category / file type.
@@ -179,8 +175,58 @@ pub fn category_color(cat: &str) -> Color32 {
 pub fn file_badge(p: &Painter, rect: Rect, cat: &str) {
     let r = Rect::from_center_size(rect.center(), vec2(rect.height() * 0.7, rect.height() * 0.85));
     let col = category_color(cat);
-    p.rect_filled(r, CornerRadius::same(2), Color32::WHITE);
+    let card = crate::theme::current(p.ctx()).card;
+    p.rect_filled(r, CornerRadius::same(2), card);
     p.rect_stroke(r, CornerRadius::same(2), Stroke::new(1.0, col), StrokeKind::Inside);
     let band = Rect::from_min_max(pos2(r.left(), r.bottom() - r.height() * 0.4), r.max);
     p.rect_filled(band, CornerRadius::same(1), col);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::Palette;
+    use eframe::egui;
+
+    const ALL: [Icon; 12] = [
+        Icon::AddUrl,
+        Icon::Resume,
+        Icon::Stop,
+        Icon::StopAll,
+        Icon::Delete,
+        Icon::DeleteDone,
+        Icon::Options,
+        Icon::StartQueue,
+        Icon::StopQueue,
+        Icon::Grabber,
+        Icon::Batch,
+        Icon::Scheduler,
+    ];
+
+    #[test]
+    fn every_icon_paints_in_both_states_with_finite_geometry() {
+        for icon in ALL {
+            for enabled in [true, false] {
+                let ctx = egui::Context::default();
+                let mut out = ctx.run_ui(Default::default(), |ui| {
+                    let rect = Rect::from_center_size(pos2(40.0, 40.0), vec2(30.0, 30.0));
+                    draw(ui.painter(), rect, icon, tint(icon, &Palette::LIGHT), enabled);
+                });
+                out.textures_delta.clear();
+                assert!(!out.shapes.is_empty(), "icon painted nothing (enabled={enabled})");
+                for s in &out.shapes {
+                    let r = s.shape.visual_bounding_rect();
+                    assert!(r.min.x.is_finite() && r.max.y.is_finite(), "non-finite geometry");
+                    // Stays inside its 30x30 box (plus the stroke width).
+                    assert!(r.width() <= 32.0 && r.height() <= 32.0, "icon spills out of its box: {r:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn disabled_tint_is_dimmer_than_enabled() {
+        let on = tint(Icon::Stop, &Palette::LIGHT);
+        assert!(dim_for(on, false).a() < dim_for(on, true).a());
+    }
 }

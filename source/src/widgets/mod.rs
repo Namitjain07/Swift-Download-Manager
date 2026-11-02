@@ -34,7 +34,7 @@ pub fn tool_button(ui: &mut egui::Ui, icon: Icon, label: &str, enabled: bool, ti
         p.rect_stroke(rect, CornerRadius::same(4), Stroke::new(1.0, Color32::from_rgb(160, 196, 230)), StrokeKind::Inside);
     }
     let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 20.0), egui::vec2(30.0, 30.0));
-    icons::draw(p, icon_rect, icon, enabled);
+    icons::draw(p, icon_rect, icon, icons::tint(icon, &crate::theme::current(ui.ctx())), enabled);
     p.text(
         egui::pos2(rect.center().x, rect.bottom() - 9.0),
         egui::Align2::CENTER_CENTER,
