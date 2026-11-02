@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::bridge::DOWNLOAD_EXTS;
-use crate::widgets::{dialog_window, primary_button, toggle};
+use crate::widgets::{dialog_window, primary_button, spinner, toggle};
 use eframe::egui::RichText;
 use std::io::Read;
 
@@ -219,7 +219,7 @@ impl App {
                 ui.separator();
                 if busy {
                     ui.horizontal(|ui| {
-                        ui.spinner();
+                        spinner(ui, 14.0);
                         ui.label(format!("Reading… {pages} page(s) so far"));
                     });
                 }

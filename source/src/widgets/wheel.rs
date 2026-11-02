@@ -83,14 +83,21 @@ pub fn wheel(ui: &mut Ui, id: Id, items: &[String], index: &mut usize, width: f3
     resp
 }
 
-/// Hour and minute wheels for an "HH:MM" string. True when the person changed it.
+/// Width of `time_wheels`: two 56 px wheels, the colon and the gaps between them.
+pub const TIME_WHEELS_WIDTH: f32 = 128.0;
+
+/// Hour and minute wheels for an "HH:MM" string. True when the person changed it. It takes a
+/// fixed block and lays the wheels out left to right inside it, so it reads the same even in
+/// a right-to-left row.
 pub fn time_wheels(ui: &mut Ui, id: Id, hhmm: &mut String) -> bool {
     let (mut h, mut m) = parse_hhmm(hhmm);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(TIME_WHEELS_WIDTH, ROW * 3.0), Sense::hover());
     let mut changed = false;
-    ui.horizontal(|ui| {
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Min)), |ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         changed |= wheel(ui, id.with("h"), two_digits(24), &mut h, 56.0).changed();
-        ui.label(egui::RichText::new(":").size(19.0));
+        let (colon, _) = ui.allocate_exact_size(egui::vec2(8.0, ROW * 3.0), Sense::hover());
+        ui.painter().text(colon.center(), Align2::CENTER_CENTER, ":", FontId::proportional(19.0), theme::current(ui.ctx()).label);
         changed |= wheel(ui, id.with("m"), two_digits(60), &mut m, 56.0).changed();
     });
     if changed {

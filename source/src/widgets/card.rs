@@ -20,13 +20,17 @@ pub fn card<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
 
 /// One row of a card, at least 44 px tall. `last` hides the hairline under it.
 pub fn card_row<R>(ui: &mut Ui, last: bool, add: impl FnOnce(&mut Ui) -> R) -> R {
+    card_row_h(ui, last, 32.0, add)
+}
+
+/// A card row whose content area is `height` tall (for wheels and other tall controls). The
+/// height is fixed so that centred and right-aligned content cannot stretch the row.
+pub fn card_row_h<R>(ui: &mut Ui, last: bool, height: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
     let pal = theme::current(ui.ctx());
-    let out = egui::Frame::NONE
-        .inner_margin(Margin { left: 14, right: 14, top: 6, bottom: 6 })
-        .show(ui, |ui| {
-            ui.set_min_size(egui::vec2(ui.available_width(), 32.0));
-            ui.with_layout(Layout::left_to_right(Align::Center), add).inner
-        });
+    let out = egui::Frame::NONE.inner_margin(Margin { left: 14, right: 14, top: 6, bottom: 6 }).show(ui, |ui| {
+        let w = ui.available_width();
+        ui.allocate_ui_with_layout(egui::vec2(w, height), Layout::left_to_right(Align::Center), add).inner
+    });
     if !last {
         let r = out.response.rect;
         ui.painter().hline((r.left() + 14.0)..=r.right(), r.bottom() - 0.5, Stroke::new(1.0, pal.separator.gamma_multiply(0.7)));

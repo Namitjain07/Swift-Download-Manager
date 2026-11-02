@@ -14,7 +14,7 @@ pub mod switch;
 pub mod wheel;
 
 pub use button::{button, ButtonKind};
-pub use card::{card, card_row};
+pub use card::{card, card_row, card_row_h};
 pub use dialog::{dialog_window, group_title, primary_button, tinted_button, toggle, toggle_row};
 pub use progress::{capsule_bar, mini_bar, segment_bar};
 pub use spinner::spinner;

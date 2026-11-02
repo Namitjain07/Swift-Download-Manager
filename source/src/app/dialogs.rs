@@ -3,7 +3,7 @@
 use super::*;
 use crate::engine;
 use crate::widgets::segment_bar;
-use crate::widgets::{card, dialog_window, group_title, primary_button, tinted_button, toggle, toggle_row};
+use crate::widgets::{card, dialog_window, group_title, primary_button, spinner, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
 
 fn browse_folder(current: &mut String) {
@@ -400,6 +400,10 @@ impl App {
                         let done = item.status() == Status::Complete;
                         if ui.add_enabled(done && !item.is_checking, egui::Button::new("Check SHA-256")).clicked() {
                             verify = true;
+                        }
+                        if item.is_checking {
+                            spinner(ui, 14.0);
+                            ui.label(RichText::new("Checking…").color(crate::theme::current(ui.ctx()).secondary));
                         }
                         if let Some(c) = &item.check {
                             let col = if c.contains("NOT") { crate::theme::current(ui.ctx()).red } else if c.contains("matches") { crate::theme::current(ui.ctx()).green } else { crate::theme::current(ui.ctx()).secondary };

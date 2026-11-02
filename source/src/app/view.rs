@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{capsule_bar, cat_row, sidebar_pill, sidebar_row, status_chip, tool_button, toolbar_sep, RowIcon};
+use crate::widgets::{anim, capsule_bar, cat_row, sidebar_pill, sidebar_row, spinner, status_chip, tool_button, toolbar_sep, RowIcon};
 use eframe::egui::{RichText, Sense, Stroke};
 use egui_extras::{Column, TableBuilder};
 
@@ -109,10 +109,13 @@ impl App {
     /// Link lists, shortcuts or saved web pages dropped onto the window.
     fn drop_files(&mut self, ctx: &egui::Context) {
         let (hovering, dropped) = ctx.input(|i| (!i.raw.hovered_files.is_empty(), i.raw.dropped_files.clone()));
-        if hovering {
-            egui::Area::new(egui::Id::unique("drop_hint")).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).interactable(false).show(ctx, |ui| {
-                egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(33, 118, 214, 230)).corner_radius(10).inner_margin(egui::Margin::same(24)).show(ui, |ui| {
-                    ui.label(RichText::new("Drop to download the links inside").color(Color32::WHITE).size(18.0));
+        let k = anim::fade(ctx, egui::Id::unique("drop_hint_fade"), hovering, 0.15);
+        if k > 0.0 {
+            let pal = theme::current(ctx);
+            egui::Area::new(egui::Id::unique("drop_hint")).anchor(egui::Align2::CENTER_CENTER, [0.0, (1.0 - k) * 8.0]).interactable(false).show(ctx, |ui| {
+                ui.multiply_opacity(k);
+                egui::Frame::NONE.fill(pal.blue).corner_radius(16).inner_margin(egui::Margin::symmetric(28, 20)).show(ui, |ui| {
+                    ui.label(RichText::new("Drop to download the links inside").color(Color32::WHITE).size(17.0));
                 });
             });
         }
@@ -555,7 +558,14 @@ impl App {
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 4.0;
                             ui.set_max_width(112.0);
-                            status_chip(ui, Some(dot), &item.status_text(), text_col);
+                            if st == Status::Connecting {
+                                ui.horizontal(|ui| {
+                                    spinner(ui, 13.0);
+                                    ui.label(RichText::new(item.status_text()).size(11.0).color(text_col));
+                                });
+                            } else {
+                                status_chip(ui, Some(dot), &item.status_text(), text_col);
+                            }
                             if with_bar {
                                 capsule_bar(ui, egui::Id::unique(("row_bar", item.id)), item.progress(), dot, 5.0, None);
                             }
@@ -672,15 +682,23 @@ impl App {
     }
 
     fn toast_area(&mut self, ctx: &egui::Context) {
-        let Some((msg, _)) = &self.toast else { return };
+        let Some((msg, since)) = &self.toast else { return };
+        // Slides up and fades in over 0.2 s, fades out over the last 0.25 s of its 4 s.
+        let age = since.elapsed().as_secs_f32();
+        let k_in = anim::ease_out(age / 0.2);
+        let k_out = ((4.0 - age) / 0.25).clamp(0.0, 1.0);
+        if age < 0.25 || age > 3.7 {
+            ctx.request_repaint();
+        }
         egui::Area::new(egui::Id::unique("toast"))
-            .anchor(egui::Align2::RIGHT_BOTTOM, [-16.0, -40.0])
+            .anchor(egui::Align2::RIGHT_BOTTOM, [-16.0, -40.0 + (1.0 - k_in) * 12.0])
             .interactable(false)
             .show(ctx, |ui| {
+                ui.multiply_opacity(k_in.min(k_out));
                 egui::Frame::NONE
-                    .fill(Color32::from_rgb(40, 46, 56))
-                    .corner_radius(6)
-                    .inner_margin(egui::Margin::symmetric(14, 10))
+                    .fill(Color32::from_rgb(44, 44, 46))
+                    .corner_radius(18)
+                    .inner_margin(egui::Margin::symmetric(18, 10))
                     .show(ui, |ui| ui.label(RichText::new(msg).color(Color32::WHITE)));
             });
     }

@@ -3,7 +3,7 @@
 use super::actions::{expand_pattern, normalize_time};
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{dialog_window, primary_button, segmented, tinted_button, toggle};
+use crate::widgets::{card, card_row, card_row_h, dialog_window, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
 use eframe::egui::{RichText, Sense};
 
 const ADDON_FILES: [(&str, &[u8]); 9] = [
@@ -162,20 +162,30 @@ impl App {
                     });
                     ui.label(RichText::new(format!("{queued} downloads waiting")).color(crate::theme::current(ui.ctx()).secondary));
                 });
-                ui.add_space(4.0);
-                egui::Grid::new("sched").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                    toggle(ui, &mut s.start_on, "Start the queue at");
-                    ui.add(egui::TextEdit::singleline(&mut s.start_time).desired_width(60.0).hint_text("HH:MM"));
-                    ui.end_row();
-                    toggle(ui, &mut s.stop_on, "Stop the queue at");
-                    ui.add(egui::TextEdit::singleline(&mut s.stop_time).desired_width(60.0).hint_text("HH:MM"));
-                    ui.end_row();
-                    ui.label("Repeat:");
-                    segmented(ui, &[(true, "Every day"), (false, "Once")], &mut s.daily);
-                    ui.end_row();
-                    ui.label("When the queue is done:");
-                    segmented(ui, &[(WhenDone::Nothing, "Do nothing"), (WhenDone::ExitApp, "Close the app")], &mut s.when_done);
-                    ui.end_row();
+                ui.add_space(8.0);
+                card(ui, |ui| {
+                    toggle_row(ui, "Start the queue at", &mut s.start_on, false);
+                    if s.start_on {
+                        card_row_h(ui, false, 96.0, |ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| time_wheels(ui, egui::Id::unique(("sched_start", &qname)), &mut s.start_time));
+                        });
+                    }
+                    toggle_row(ui, "Stop the queue at", &mut s.stop_on, false);
+                    if s.stop_on {
+                        card_row_h(ui, false, 96.0, |ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| time_wheels(ui, egui::Id::unique(("sched_stop", &qname)), &mut s.stop_time));
+                        });
+                    }
+                    card_row(ui, false, |ui| {
+                        ui.label("Repeat");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| segmented(ui, &[(true, "Every day"), (false, "Once")], &mut s.daily));
+                    });
+                    card_row(ui, true, |ui| {
+                        ui.label("When the queue is done");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            segmented(ui, &[(WhenDone::Nothing, "Do nothing"), (WhenDone::ExitApp, "Close the app")], &mut s.when_done)
+                        });
+                    });
                 });
                 let bad = (s.start_on && normalize_time(&s.start_time).is_empty()) || (s.stop_on && normalize_time(&s.stop_time).is_empty());
                 if bad {
