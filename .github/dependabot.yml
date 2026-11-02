@@ -1,0 +1,14 @@
+# Opens pull requests when the GitHub Actions used by the workflows or the Rust crates have new versions.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: cargo
+    directory: /source
+    schedule:
+      interval: monthly
+    groups:
+      rust-crates:
+        patterns: ["*"]
