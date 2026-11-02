@@ -137,6 +137,31 @@ pub fn apply(ctx: &egui::Context, mode: ThemeMode) {
     ctx.all_styles_mut(|style| style_colors(style, &pal, dark_mode));
 }
 
+/// Sizes, radii and type scale shared by both themes. Flat: no shadows, no stripes.
+pub fn setup(ctx: &egui::Context) {
+    use egui::{epaint::Shadow, CornerRadius, FontId, TextStyle};
+    ctx.all_styles_mut(|style| {
+        style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+        style.spacing.button_padding = egui::vec2(14.0, 6.0);
+        style.spacing.interact_size.y = 28.0;
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(6);
+        style.text_styles.insert(TextStyle::Body, FontId::proportional(13.0));
+        style.text_styles.insert(TextStyle::Button, FontId::proportional(13.0));
+        style.text_styles.insert(TextStyle::Small, FontId::proportional(11.0));
+        style.text_styles.insert(TextStyle::Heading, FontId::proportional(17.0));
+        let v = &mut style.visuals;
+        v.window_shadow = Shadow::NONE;
+        v.popup_shadow = Shadow::NONE;
+        v.striped = false;
+        v.window_corner_radius = CornerRadius::same(14);
+        v.menu_corner_radius = CornerRadius::same(10);
+        for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+            w.corner_radius = CornerRadius::same(8);
+        }
+    });
+}
+
 /// Colours of every egui widget from the palette. Sizes and shapes are set in `setup`.
 fn style_colors(style: &mut egui::Style, p: &Palette, dark: bool) {
     let v = &mut style.visuals;
@@ -222,5 +247,21 @@ mod tests {
         let mid = current(&ctx);
         assert_ne!(mid, Palette::LIGHT);
         assert_ne!(mid, Palette::DARK);
+    }
+
+    #[test]
+    fn setup_makes_a_flat_style() {
+        use eframe::egui::{epaint::Shadow, CornerRadius, TextStyle};
+        let ctx = eframe::egui::Context::default();
+        setup(&ctx);
+        let st = ctx.global_style();
+        assert_eq!(st.visuals.window_shadow, Shadow::NONE);
+        assert_eq!(st.visuals.popup_shadow, Shadow::NONE);
+        assert!(!st.visuals.striped);
+        assert_eq!(st.visuals.window_corner_radius, CornerRadius::same(14));
+        assert_eq!(st.visuals.menu_corner_radius, CornerRadius::same(10));
+        assert_eq!(st.text_styles[&TextStyle::Body].size, 13.0);
+        assert_eq!(st.text_styles[&TextStyle::Small].size, 11.0);
+        assert_eq!(st.text_styles[&TextStyle::Heading].size, 17.0);
     }
 }

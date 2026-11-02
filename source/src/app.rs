@@ -510,7 +510,7 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, screenshot: Option<PathBuf>, demo: bool, start_url: Option<String>, theme_override: Option<ThemeMode>) -> Self {
-        setup_style(&cc.egui_ctx);
+        theme::setup(&cc.egui_ctx);
         let mut app = App {
             items: Vec::new(),
             next_id: 1,
@@ -740,21 +740,6 @@ impl App {
         }
         if self.settings.per_category_folders { self.settings.folder.join(category) } else { self.settings.folder.clone() }
     }
-}
-
-fn setup_style(ctx: &egui::Context) {
-    ctx.set_visuals(egui::Visuals::light());
-    ctx.all_styles_mut(|style| {
-        style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        style.spacing.button_padding = egui::vec2(8.0, 3.0);
-        style.visuals.panel_fill = Color32::from_rgb(240, 242, 245);
-        style.visuals.window_fill = Color32::from_rgb(248, 249, 251);
-        style.visuals.selection.bg_fill = Color32::from_rgb(204, 228, 247);
-        style.visuals.selection.stroke = Stroke::new(1.0, Color32::from_rgb(20, 60, 110));
-        style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(214, 218, 224));
-        style.visuals.striped = true;
-        style.visuals.faint_bg_color = Color32::from_rgb(247, 249, 252);
-    });
 }
 
 #[cfg(test)]
