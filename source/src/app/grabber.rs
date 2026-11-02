@@ -224,7 +224,7 @@ impl App {
                     });
                 }
                 if let Some(e) = &g.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
                 }
                 let picked = g.found.iter().filter(|(_, on)| *on).count();
                 ui.horizontal(|ui| {

@@ -1,0 +1,4 @@
+# The Windows program carries its own C runtime, so it starts on a clean Windows 10/11 without the
+# "Visual C++ Redistributable", and has fewer outside dependencies for a scanner to wonder about.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

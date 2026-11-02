@@ -10,7 +10,7 @@ mod view;
 
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
-use crate::theme::{self, ThemeMode};
+use crate::theme::{self, ThemeMode, ThemeStyle};
 use eframe::egui::{self, Color32};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -206,8 +206,10 @@ pub struct Settings {
     pub queues: Vec<QueueDef>,
     pub categories: Vec<CategoryDef>,
     pub site_logins: Vec<SiteLogin>,
-    /// System, Light or Dark (View > Appearance).
+    /// Automatic, Light or Dark (View > Appearance).
     pub theme: ThemeMode,
+    /// Drishti or iOS (View > Appearance).
+    pub theme_style: ThemeStyle,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
 }
@@ -233,7 +235,8 @@ impl Default for Settings {
             queues: vec![QueueDef::default()],
             categories: default_categories(),
             site_logins: Vec::new(),
-            theme: ThemeMode::System,
+            theme: ThemeMode::Dark,
+            theme_style: ThemeStyle::Drishti,
             mcp_enabled: true,
         }
     }
@@ -483,6 +486,8 @@ pub struct Launch {
     pub start_url: Option<String>,
     /// Forces a theme for this run only.
     pub theme: Option<ThemeMode>,
+    /// Forces a design for this run only.
+    pub style: Option<ThemeStyle>,
     /// Opens one window at start-up (screenshots).
     pub show: Option<String>,
     /// No window: the engine runs for an MCP client. No browser listener or clipboard watching.
@@ -515,6 +520,7 @@ pub struct App {
     properties: Option<u64>,
     completed: Vec<u64>,
     about_open: bool,
+    about_icon: Option<egui::TextureHandle>,
     browser_open: bool,
     show_categories: bool,
     /// Queues that are running now.
@@ -532,6 +538,7 @@ pub struct App {
     toast: Option<(String, Instant)>,
     /// Forces a theme for this run only (`--theme`), without touching the saved choice.
     theme_override: Option<ThemeMode>,
+    style_override: Option<ThemeStyle>,
     config_dir: PathBuf,
     /// Running without a window (MCP engine).
     headless: bool,
@@ -551,7 +558,6 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
-        theme::setup(&cc.egui_ctx);
         Self::build(cc.egui_ctx.clone(), launch)
     }
 
@@ -561,7 +567,7 @@ impl App {
     }
 
     pub(crate) fn build(ctx: egui::Context, launch: Launch) -> Self {
-        let Launch { screenshot, demo, start_url, theme: theme_override, show, headless, config_dir } = launch;
+        let Launch { screenshot, demo, start_url, theme: theme_override, style: style_override, show, headless, config_dir } = launch;
         let mut app = App {
             items: Vec::new(),
             next_id: 1,
@@ -585,6 +591,7 @@ impl App {
             properties: None,
             completed: Vec::new(),
             about_open: false,
+            about_icon: None,
             browser_open: false,
             show_categories: true,
             running: BTreeSet::new(),
@@ -600,6 +607,7 @@ impl App {
             listener: Err("off".into()),
             toast: None,
             theme_override,
+            style_override,
             config_dir: config_dir.unwrap_or_else(default_config_dir),
             headless,
             control_rx: None,
@@ -848,9 +856,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn old_settings_without_theme_still_load() {
+    fn old_settings_without_theme_still_load_with_the_new_defaults() {
         let s: Settings = serde_json::from_str(r#"{"connections":4}"#).unwrap();
-        assert_eq!(s.theme, crate::theme::ThemeMode::System);
+        assert_eq!(s.theme, crate::theme::ThemeMode::Dark, "the design system is dark first");
+        assert_eq!(s.theme_style, crate::theme::ThemeStyle::Drishti, "Drishti is the default design");
         assert_eq!(s.connections, 4);
+    }
+
+    #[test]
+    fn a_saved_choice_of_the_ios_design_and_light_mode_is_kept() {
+        let s: Settings = serde_json::from_str(r#"{"theme":"Light","theme_style":"Ios"}"#).unwrap();
+        assert_eq!((s.theme, s.theme_style), (crate::theme::ThemeMode::Light, crate::theme::ThemeStyle::Ios));
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!((back.theme, back.theme_style), (s.theme, s.theme_style));
     }
 }

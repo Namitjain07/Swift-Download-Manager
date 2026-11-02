@@ -1,0 +1,7 @@
+# Signing keys and certificates' private parts must never be committed. The release key lives
+# outside the repository and in GitHub Actions secrets (see SECURITY.md).
+*.pfx
+*.p12
+*.pem
+*.key
+*.jks

@@ -1,38 +1,39 @@
 //! Dialog pieces: the window frame, the primary and secondary actions, switch rows.
 
 use super::{button, card_row, switch, ButtonKind};
-use crate::theme;
+use crate::theme::{self, ThemeStyle};
 use eframe::egui::{self, epaint::Shadow, Align, CornerRadius, Layout, Margin, Response, RichText, Stroke, Ui, WidgetText};
 
-/// A window in the iOS sheet style: radius 14, hairline border, 20 px padding, no shadow.
+/// A window in the sheet style of the design in use: Drishti has 20 px corners, a strong edge and
+/// the design system's sheet shadow; iOS has 14 px corners and a hairline. Padding is 20 px.
 /// egui fades new windows in over its animation time (0.2 s).
 pub fn dialog_window(ctx: &egui::Context, title: impl Into<WidgetText>) -> egui::Window<'static> {
-    let pal = theme::current(ctx);
+    let (pal, d) = (theme::current(ctx), theme::design(ctx));
+    let edge = if d.card_border { pal.separator } else { pal.separator_strong };
+    let shadow = if d.sheet_shadow { ctx.global_style().visuals.window_shadow } else { Shadow::NONE };
     let frame = egui::Frame::NONE
         .fill(pal.raised)
-        .corner_radius(CornerRadius::same(14))
-        .stroke(Stroke::new(1.0, pal.separator))
-        .shadow(Shadow::NONE)
+        .corner_radius(CornerRadius::same(d.radius_xl))
+        .stroke(Stroke::new(1.0, edge))
+        .shadow(shadow)
         .inner_margin(Margin::same(20));
     egui::Window::new(title).frame(frame).collapsible(false).resizable(false).fade_in(true)
 }
 
-/// The main action of a dialog: a filled blue capsule.
+/// The main action of a dialog: solid blue.
 pub fn primary_button(ui: &mut Ui, label: &str) -> Response {
-    let tint = theme::current(ui.ctx()).blue;
-    button(ui, ButtonKind::Filled, tint, label)
+    button(ui, ButtonKind::Primary, label)
 }
 
-/// Any other action: a soft blue capsule.
+/// Any other action: a neutral button in Drishti, a soft blue wash in iOS.
 pub fn tinted_button(ui: &mut Ui, label: &str) -> Response {
-    let tint = theme::current(ui.ctx()).blue;
-    button(ui, ButtonKind::Tinted, tint, label)
+    let kind = if theme::design(ui.ctx()).style == ThemeStyle::Drishti { ButtonKind::Secondary } else { ButtonKind::Tinted };
+    button(ui, kind, label)
 }
 
-/// The quietest action, such as Cancel: coloured text, a faint wash on hover.
+/// The quietest action, such as Cancel: blue text, a faint wash on hover.
 pub fn plain_button(ui: &mut Ui, label: &str) -> Response {
-    let tint = theme::current(ui.ctx()).blue;
-    button(ui, ButtonKind::Plain, tint, label)
+    button(ui, ButtonKind::Plain, label)
 }
 
 /// Switch followed by its label, for use inside a row.
@@ -57,7 +58,7 @@ pub fn toggle_row(ui: &mut Ui, label: &str, on: &mut bool, last: bool) -> Respon
 pub fn group_title(ui: &mut Ui, text: &str) {
     let pal = theme::current(ui.ctx());
     ui.add_space(8.0);
-    ui.label(RichText::new(text.to_uppercase()).size(11.0).color(pal.secondary));
+    ui.label(RichText::new(text.to_uppercase()).size(theme::design(ui.ctx()).overline).color(pal.tertiary));
     ui.add_space(2.0);
 }
 
@@ -65,5 +66,5 @@ pub fn group_title(ui: &mut Ui, text: &str) {
 /// cannot stretch to fill the window the way a bare right-to-left layout does.
 pub fn button_row<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
     let w = ui.available_width();
-    ui.allocate_ui_with_layout(egui::vec2(w, 32.0), Layout::right_to_left(Align::Center), add).inner
+    ui.allocate_ui_with_layout(egui::vec2(w, theme::design(ui.ctx()).control_h + 2.0), Layout::right_to_left(Align::Center), add).inner
 }

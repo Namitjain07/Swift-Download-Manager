@@ -71,7 +71,7 @@ pub fn wheel(ui: &mut Ui, id: Id, items: &[String], index: &mut usize, width: f3
 
     let shown = glide(&ctx, id.with("shown"), target, 0.16);
     let p = ui.painter().with_clip_rect(rect);
-    p.rect_filled(egui::Rect::from_center_size(rect.center(), egui::vec2(width, ROW)), CornerRadius::same(8), pal.separator.gamma_multiply(0.35));
+    p.rect_filled(egui::Rect::from_center_size(rect.center(), egui::vec2(width, ROW)), CornerRadius::same(theme::design(&ctx).radius_sm), pal.surface2);
     let base = shown.floor();
     let frac = shown - base;
     for k in -2..=3 {

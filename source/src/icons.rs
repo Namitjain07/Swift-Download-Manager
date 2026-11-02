@@ -15,7 +15,6 @@ pub enum Icon {
     Options,
     StartQueue,
     StopQueue,
-    Grabber,
     Batch,
     Scheduler,
 }
@@ -23,9 +22,9 @@ pub enum Icon {
 /// The tint a toolbar button gives each icon: blue to add, green to go, red to stop or remove.
 pub fn tint(icon: Icon, pal: &Palette) -> Color32 {
     match icon {
-        Icon::AddUrl | Icon::Batch | Icon::Grabber | Icon::Scheduler => pal.blue,
-        Icon::Resume | Icon::StartQueue => pal.green,
-        Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red,
+        Icon::AddUrl | Icon::Batch | Icon::Scheduler => pal.blue_ink,
+        Icon::Resume | Icon::StartQueue => pal.green_ink,
+        Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red_ink,
         Icon::Options => pal.secondary,
     }
 }
@@ -68,7 +67,7 @@ fn queue_lines(p: &Painter, c: Pos2, s: f32, st: Stroke) {
 pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
     let c = rect.center();
     let s = rect.width().min(rect.height());
-    let st = Stroke::new(1.5, dim_for(tint, enabled));
+    let st = Stroke::new(crate::theme::design(p.ctx()).icon_stroke, dim_for(tint, enabled));
     let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
     match icon {
         Icon::AddUrl => {
@@ -115,10 +114,6 @@ pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
         Icon::StopQueue => {
             queue_lines(p, c, s, st);
             p.rect_stroke(Rect::from_center_size(pt(0.30, 0.0), vec2(0.32 * s, 0.32 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
-        }
-        Icon::Grabber => {
-            p.rect_stroke(Rect::from_center_size(c, vec2(0.58 * s, 0.80 * s)), CornerRadius::same(4), st, StrokeKind::Middle);
-            arrow_down(p, pt(0.0, 0.04), s * 0.7, st);
         }
         Icon::Batch => {
             for (i, y) in [-0.28f32, 0.0, 0.28].iter().enumerate() {
@@ -188,7 +183,7 @@ mod tests {
     use crate::theme::Palette;
     use eframe::egui;
 
-    const ALL: [Icon; 12] = [
+    const ALL: [Icon; 11] = [
         Icon::AddUrl,
         Icon::Resume,
         Icon::Stop,
@@ -198,7 +193,6 @@ mod tests {
         Icon::Options,
         Icon::StartQueue,
         Icon::StopQueue,
-        Icon::Grabber,
         Icon::Batch,
         Icon::Scheduler,
     ];
@@ -210,7 +204,7 @@ mod tests {
                 let ctx = egui::Context::default();
                 let mut out = ctx.run_ui(Default::default(), |ui| {
                     let rect = Rect::from_center_size(pos2(40.0, 40.0), vec2(30.0, 30.0));
-                    draw(ui.painter(), rect, icon, tint(icon, &Palette::LIGHT), enabled);
+                    draw(ui.painter(), rect, icon, tint(icon, &Palette::IOS_LIGHT), enabled);
                 });
                 out.textures_delta.clear();
                 assert!(!out.shapes.is_empty(), "icon painted nothing (enabled={enabled})");
@@ -226,7 +220,7 @@ mod tests {
 
     #[test]
     fn disabled_tint_is_dimmer_than_enabled() {
-        let on = tint(Icon::Stop, &Palette::LIGHT);
+        let on = tint(Icon::Stop, &Palette::IOS_LIGHT);
         assert!(dim_for(on, false).a() < dim_for(on, true).a());
     }
 }

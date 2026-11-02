@@ -1,6 +1,6 @@
 [package]
 name = "swift_download_manager"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 description = "Swift Download Manager: a fast download manager with split downloads, pause/resume, queues, scheduler and browser add-on"
 license = "MIT"
@@ -18,6 +18,9 @@ chrono = "0.4"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 rfd = "0.17"
 getrandom = "0.3"
+
+[build-dependencies]
+winresource = "0.1"
 
 [profile.dev]
 opt-level = 1

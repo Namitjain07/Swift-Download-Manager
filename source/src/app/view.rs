@@ -3,7 +3,8 @@
 use super::*;
 use super::mcp_cmds::AiState;
 use crate::icons::{self, Icon};
-use crate::widgets::{anim, capsule_bar, cat_row, sidebar_pill, sidebar_row, spinner, status_chip, tool_button, toolbar_sep, RowIcon};
+use crate::theme::ThemeStyle;
+use crate::widgets::{anim, capsule_bar, cat_row, sidebar_pill, sidebar_row, spinner, state_chip, status_chip, tool_button, toolbar_sep, Hue, RowIcon};
 use eframe::egui::{RichText, Sense, Stroke};
 use egui_extras::{Column, TableBuilder};
 
@@ -19,7 +20,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.frame += 1;
         let ctx = ui.ctx().clone();
-        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme));
+        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme), self.style_override.unwrap_or(self.settings.theme_style));
         self.tick();
         self.handle_screenshot(&ctx);
         self.shortcuts(&ctx);
@@ -30,7 +31,10 @@ impl eframe::App for App {
         if self.show_categories {
             self.categories_panel(ui);
         }
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(theme::current(&ctx).card)).show(ui, |ui| self.table(ui));
+        let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
+        // Drishti: the list floats on a rounded surface above the page ground; iOS: it fills the window.
+        let page = if d.floating_list { egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::same(16)) } else { egui::Frame::NONE.fill(pal.card) };
+        egui::CentralPanel::default().frame(page).show(ui, |ui| self.table(ui));
 
         self.add_window(&ctx);
         self.batch_window(&ctx);
@@ -257,6 +261,14 @@ impl App {
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_categories, "Show categories");
                     ui.menu_button("Appearance", |ui| {
+                        ui.label(RichText::new("DESIGN").size(11.0).color(theme::current(ui.ctx()).tertiary));
+                        for (style, name) in [(ThemeStyle::Drishti, "Drishti (default)"), (ThemeStyle::Ios, "iOS")] {
+                            if ui.selectable_value(&mut self.settings.theme_style, style, name).clicked() {
+                                self.dirty = true;
+                            }
+                        }
+                        ui.separator();
+                        ui.label(RichText::new("MODE").size(11.0).color(theme::current(ui.ctx()).tertiary));
                         for (mode, name) in [(ThemeMode::System, "Automatic (follow system)"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")] {
                             if ui.selectable_value(&mut self.settings.theme, mode, name).clicked() {
                                 self.dirty = true;
@@ -292,9 +304,10 @@ impl App {
         let cq0 = self.current_queue();
         let any_queued = self.items.iter().any(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(cq0.as_str()));
 
-        let pal = theme::current(ui.ctx());
+        let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
+        let toolbar = if d.floating_list { egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::symmetric(16, 8)) } else { egui::Frame::NONE.fill(pal.card).inner_margin(egui::Margin::symmetric(10, 6)) };
         egui::Panel::top("toolbar")
-            .frame(egui::Frame::NONE.fill(pal.card).inner_margin(egui::Margin::symmetric(10, 6)))
+            .frame(toolbar)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
@@ -367,13 +380,13 @@ impl App {
                     status_chip(ui, (active > 0).then_some(pal.green), &format!("{active} active"), pal.secondary);
                     status_chip(ui, None, &format!("{queued} queued"), pal.secondary);
                     if !running.is_empty() {
-                        status_chip(ui, Some(pal.green), &format!("Running: {}", running.join(", ")), pal.green);
+                        status_chip(ui, Some(pal.green), &format!("Running: {}", running.join(", ")), pal.green_ink);
                     }
                     if let Some((q, t)) = &scheduled {
-                        status_chip(ui, Some(pal.blue), &format!("{q} starts at {t}"), pal.blue);
+                        status_chip(ui, Some(pal.blue), &format!("{q} starts at {t}"), pal.blue_ink);
                     }
                     if self.settings.limit_on {
-                        status_chip(ui, Some(pal.orange), &format!("Speed limit {} KB/s", self.settings.limit_kbps), pal.orange);
+                        status_chip(ui, Some(pal.orange), &format!("Speed limit {} KB/s", self.settings.limit_kbps), pal.orange_ink);
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let s = if speed > 0.0 { human_speed(speed) } else { "0 B/s".into() };
@@ -382,7 +395,7 @@ impl App {
                             let (txt, dot, col) = match &self.listener {
                                 Ok(()) => ("Browser: connected", Some(pal.green), pal.secondary),
                                 Err(_) if !self.settings.browser_listen => ("Browser: off", None, pal.secondary),
-                                Err(_) => ("Browser: unavailable", Some(pal.red), pal.red),
+                                Err(_) => ("Browser: unavailable", Some(pal.red), pal.red_ink),
                             };
                             if status_chip(ui, dot, txt, col).on_hover_text("Browser integration…").clicked() {
                                 self.browser_open = true;
@@ -392,9 +405,9 @@ impl App {
                         }
                         let (txt, dot, col) = match self.ai_state() {
                             AiState::Off => ("AI: off", None, pal.secondary),
-                            AiState::Unavailable => ("AI: unavailable", Some(pal.orange), pal.orange),
+                            AiState::Unavailable => ("AI: unavailable", Some(pal.orange), pal.orange_ink),
                             AiState::Ready => ("AI: ready", Some(pal.green), pal.secondary),
-                            AiState::Active => ("AI: active", Some(pal.blue), pal.blue),
+                            AiState::Active => ("AI: active", Some(pal.blue), pal.blue_ink),
                         };
                         if status_chip(ui, dot, txt, col).on_hover_text("AI assistants (MCP)…").clicked() {
                             self.ai_open = true;
@@ -420,11 +433,12 @@ impl App {
             .map(|q| (q.name.clone(), count(&|i: &Item| i.queue.as_deref() == Some(q.name.as_str()) && i.status() != Status::Complete)))
             .collect();
 
-        let pal = theme::current(ui.ctx());
-        egui::Panel::left("categories")
+        let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
+        let rail = egui::Panel::left("categories")
             .resizable(true)
-            .default_size(200.0)
-            .frame(egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::symmetric(8, 10)))
+            .default_size(d.sidebar_w)
+            .show_separator_line(!d.floating_list)
+            .frame(egui::Frame::NONE.fill(if d.floating_list { pal.sidebar } else { pal.bg }).inner_margin(egui::Margin::symmetric(8, 10)))
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
                 sidebar_pill(ui);
@@ -486,9 +500,28 @@ impl App {
                     self.filter = f;
                 }
             });
+        if d.floating_list {
+            // The rail's edge has to read as an edge: separator-strong, 1 px.
+            let r = rail.response.rect;
+            ui.painter().vline(r.right() - 0.5, r.y_range(), Stroke::new(1.0, pal.separator_strong));
+        }
     }
 
     fn table(&mut self, ui: &mut egui::Ui) {
+        let d = theme::design(ui.ctx());
+        if d.floating_list {
+            let pal = theme::current(ui.ctx());
+            egui::Frame::NONE.fill(pal.card).corner_radius(egui::CornerRadius::same(d.radius_lg)).inner_margin(egui::Margin::symmetric(0, 6)).show(ui, |ui| {
+                ui.set_min_size(ui.available_size());
+                self.table_inner(ui);
+            });
+        } else {
+            self.table_inner(ui);
+        }
+    }
+
+    fn table_inner(&mut self, ui: &mut egui::Ui) {
+        let d = theme::design(ui.ctx());
         let rows = self.visible_rows();
         if rows.is_empty() {
             ui.centered_and_justified(|ui| {
@@ -511,8 +544,10 @@ impl App {
         let modifiers = ui.input(|i| i.modifiers);
         let sort = self.sort;
         let pal = theme::current(ui.ctx());
-        let hair = Stroke::new(1.0, pal.separator.gamma_multiply(0.7));
-        let painter = ui.painter().clone();
+        let hair = Stroke::new(1.0, theme::hairline(ui.ctx()));
+        // Row marks are clipped to the table's own area (the card's rounded rectangle in Drishti).
+        let area = ui.max_rect();
+        let painter = ui.painter().with_clip_rect(area);
         // Column dividers only show while hovered or dragged, like a native list.
         ui.visuals_mut().widgets.noninteractive.bg_stroke = Stroke::NONE;
         ui.visuals_mut().widgets.hovered.bg_stroke = Stroke::new(1.0, pal.separator);
@@ -523,14 +558,14 @@ impl App {
             .resizable(true)
             .sense(Sense::click())
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::initial(300.0).at_least(120.0).clip(true))
+            .column(Column::initial(if d.floating_list { 220.0 } else { 300.0 }).at_least(120.0).clip(true))
             .column(Column::initial(80.0).at_least(50.0))
-            .column(Column::initial(120.0).at_least(60.0))
+            .column(Column::initial(if d.state_chips { 160.0 } else { 120.0 }).at_least(60.0))
             .column(Column::initial(95.0).at_least(50.0))
-            .column(Column::initial(95.0).at_least(50.0))
-            .column(Column::initial(125.0).at_least(60.0))
-            .column(Column::remainder().at_least(80.0).clip(true))
-            .header(28.0, |mut h| {
+            .column(Column::initial(100.0).at_least(50.0))
+            .column(Column::initial(if d.floating_list { 150.0 } else { 125.0 }).at_least(60.0))
+            .column(Column::remainder().at_least(60.0).clip(true))
+            .header(d.control_h.max(28.0), |mut h| {
                 let cols = [
                     ("File Name", SortCol::Name),
                     ("Size", SortCol::Size),
@@ -547,7 +582,7 @@ impl App {
                             Some((sc, false)) if sc == c => " ▼",
                             _ => "",
                         };
-                        let r = ui.add(egui::Label::new(RichText::new(format!("{t}{arrow}")).size(11.0).color(pal.secondary)).sense(Sense::click()));
+                        let r = ui.add(egui::Label::new(RichText::new(format!("{}{arrow}", if d.style == ThemeStyle::Drishti { t.to_uppercase() } else { t.to_string() })).size(d.overline).color(pal.tertiary)).sense(Sense::click()));
                         if r.on_hover_text("Click to sort").clicked() {
                             sort_click = Some(c);
                         }
@@ -555,9 +590,9 @@ impl App {
                 }
             })
             .body(|body| {
-                body.rows(34.0, rows.len(), |mut row| {
+                body.rows(d.row_h, rows.len(), |mut row| {
                     let item = &self.items[rows[row.index()]];
-                    row.set_selected(self.selected.contains(&item.id));
+                    row.set_selected(!d.floating_list && self.selected.contains(&item.id));
                     let st = item.status();
                     row.col(|ui| {
                         let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
@@ -569,27 +604,34 @@ impl App {
                         ui.label(if t > 0 { human_size(t) } else { String::new() });
                     });
                     row.col(|ui| {
-                        let (dot, text_col) = match st {
-                            Status::Downloading => (pal.green, pal.label),
-                            Status::Connecting | Status::Paused => (pal.orange, pal.label),
-                            Status::Complete => (pal.blue, pal.secondary),
-                            Status::Error => (pal.red, pal.red),
-                            Status::Queued => (pal.secondary, pal.secondary),
+                        let (hue, dot, bar, text_col) = match st {
+                            Status::Downloading => (Hue::Green, pal.green, pal.green_ink, pal.label),
+                            Status::Connecting | Status::Paused => (Hue::Orange, pal.orange, pal.orange_ink, pal.label),
+                            Status::Complete => (Hue::Blue, pal.blue, pal.blue_ink, pal.secondary),
+                            Status::Error => (Hue::Red, pal.red, pal.red_ink, pal.red_ink),
+                            Status::Queued => (Hue::Neutral, pal.tertiary, pal.secondary, pal.secondary),
                         };
                         let with_bar = st == Status::Downloading || (st == Status::Paused && item.total() > 0);
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = 4.0;
-                            ui.set_max_width(112.0);
+                            ui.set_max_width(if d.state_chips { 150.0 } else { 112.0 });
                             if st == Status::Connecting {
                                 ui.horizontal(|ui| {
                                     spinner(ui, 13.0);
-                                    ui.label(RichText::new(item.status_text()).size(11.0).color(text_col));
+                                    ui.label(RichText::new(item.status_text()).size(d.caption).color(text_col));
+                                });
+                            } else if d.state_chips {
+                                ui.horizontal(|ui| {
+                                    state_chip(ui, hue, st.label());
+                                    if with_bar {
+                                        ui.label(RichText::new(format!("{:.0}%", item.progress() * 100.0)).size(d.caption).color(pal.secondary));
+                                    }
                                 });
                             } else {
                                 status_chip(ui, Some(dot), &item.status_text(), text_col);
                             }
                             if with_bar {
-                                capsule_bar(ui, egui::Id::unique(("row_bar", item.id)), item.progress(), dot, 5.0, None);
+                                capsule_bar(ui, egui::Id::unique(("row_bar", item.id)), item.progress(), bar, 5.0, None);
                             }
                         });
                     });
@@ -600,20 +642,29 @@ impl App {
                         ui.label(RichText::new(if st == Status::Downloading { human_speed(item.speed()) } else { String::new() }).color(pal.secondary));
                     });
                     row.col(|ui| {
-                        ui.label(RichText::new(&item.last_try).color(pal.secondary));
+                        ui.label(RichText::new(&item.last_try).color(pal.tertiary));
                     });
                     row.col(|ui| {
-                        let d = if st == Status::Error {
+                        let desc = if st == Status::Error {
                             item.live.error.lock().unwrap().clone().unwrap_or_default()
                         } else if let Some(c) = &item.check {
                             c.clone()
                         } else {
                             item.description.clone()
                         };
-                        ui.label(RichText::new(d).color(pal.secondary));
+                        ui.label(RichText::new(desc).color(pal.tertiary));
                     });
                     let resp = row.response();
-                    painter.hline(resp.rect.x_range(), resp.rect.bottom(), hair);
+                    let span = egui::Rangef::new(resp.rect.left().max(area.left()), resp.rect.right().min(area.right()));
+                    if d.floating_list {
+                        let inner = egui::Rect::from_x_y_ranges(span.shrink(6.0), (resp.rect.top() + 2.0)..=(resp.rect.bottom() - 2.0));
+                        if self.selected.contains(&item.id) {
+                            painter.rect_filled(inner, egui::CornerRadius::same(d.radius_md), pal.blue_tint);
+                        } else if resp.hovered() {
+                            painter.rect_filled(inner, egui::CornerRadius::same(d.radius_md), pal.hover);
+                        }
+                    }
+                    painter.hline(span.shrink(d.inset), resp.rect.bottom(), hair);
                     let id = item.id;
                     if resp.clicked() {
                         clicked = Some((id, modifiers));
@@ -717,11 +768,15 @@ impl App {
             .interactable(false)
             .show(ctx, |ui| {
                 ui.multiply_opacity(k_in.min(k_out));
-                egui::Frame::NONE
-                    .fill(Color32::from_rgb(44, 44, 46))
-                    .corner_radius(18)
-                    .inner_margin(egui::Margin::symmetric(18, 10))
-                    .show(ui, |ui| ui.label(RichText::new(msg).color(Color32::WHITE)));
+                let (pal, d) = (theme::current(ctx), theme::design(ctx));
+                let frame = if d.style == ThemeStyle::Drishti {
+                    // A floating layer: popover fill, a strong edge and the sheet shadow.
+                    egui::Frame::NONE.fill(pal.raised).stroke(Stroke::new(1.0, pal.separator_strong)).shadow(ctx.global_style().visuals.popup_shadow).corner_radius(d.radius_lg).inner_margin(egui::Margin::symmetric(16, 10))
+                } else {
+                    egui::Frame::NONE.fill(Color32::from_rgb(44, 44, 46)).corner_radius(18).inner_margin(egui::Margin::symmetric(18, 10))
+                };
+                let ink = if d.style == ThemeStyle::Drishti { pal.label } else { Color32::WHITE };
+                frame.show(ui, |ui| ui.label(RichText::new(msg).color(ink)));
             });
     }
 }
@@ -772,6 +827,6 @@ fn row_menu(ui: &mut egui::Ui, id: u64, st: Status, queues: &[String], action: &
 /// Small grey section title above a group of sidebar rows.
 fn section_header(ui: &mut egui::Ui, text: &str, pal: &crate::theme::Palette) {
     ui.add_space(2.0);
-    ui.label(RichText::new(text.to_uppercase()).size(11.0).color(pal.secondary));
+    ui.label(RichText::new(text.to_uppercase()).size(theme::design(ui.ctx()).overline).color(pal.tertiary));
     ui.add_space(2.0);
 }

@@ -1,61 +1,19 @@
-//! The app's icon, drawn in code (no image files needed): a blue rounded
-//! square with a white download arrow. Used for the window and the installers.
+//! The app's icon: the neon globe artwork in `assets/app-icon-512.png`, embedded in the program.
+//! Used for the window and the installers (`--write-icon`).
+
+use image::imageops::{resize, FilterType};
+use image::RgbaImage;
+use std::sync::OnceLock;
+
+fn master() -> &'static RgbaImage {
+    static MASTER: OnceLock<RgbaImage> = OnceLock::new();
+    MASTER.get_or_init(|| image::load_from_memory(include_bytes!("../assets/app-icon-512.png")).expect("the embedded icon is a valid PNG").to_rgba8())
+}
 
 /// RGBA pixels of a `size` x `size` icon.
 pub fn rgba(size: u32) -> Vec<u8> {
-    let s = size as f32;
-    let mut out = vec![0u8; (size * size * 4) as usize];
-    const SUB: u32 = 4;
-    for y in 0..size {
-        for x in 0..size {
-            let (mut bg, mut fg) = (0.0f32, 0.0f32);
-            for sy in 0..SUB {
-                for sx in 0..SUB {
-                    let px = (x as f32 + (sx as f32 + 0.5) / SUB as f32) / s;
-                    let py = (y as f32 + (sy as f32 + 0.5) / SUB as f32) / s;
-                    if in_rounded_square(px, py) {
-                        bg += 1.0;
-                        if in_arrow(px, py) {
-                            fg += 1.0;
-                        }
-                    }
-                }
-            }
-            let n = (SUB * SUB) as f32;
-            let (bg, fg) = (bg / n, fg / n);
-            // Vertical gradient for the background.
-            let t = y as f32 / s;
-            let (r0, g0, b0) = (52.0 + 0.0 * t, 140.0 - 40.0 * t, 236.0 - 36.0 * t);
-            let a = bg;
-            let mix = if bg > 0.0 { fg / bg } else { 0.0 };
-            let r = r0 * (1.0 - mix) + 255.0 * mix;
-            let g = g0 * (1.0 - mix) + 255.0 * mix;
-            let b = b0 * (1.0 - mix) + 255.0 * mix;
-            let i = ((y * size + x) * 4) as usize;
-            out[i] = r as u8;
-            out[i + 1] = g as u8;
-            out[i + 2] = b as u8;
-            out[i + 3] = (a * 255.0) as u8;
-        }
-    }
-    out
-}
-
-fn in_rounded_square(x: f32, y: f32) -> bool {
-    let (m, r) = (0.06, 0.2);
-    let cx = x.clamp(m + r, 1.0 - m - r);
-    let cy = y.clamp(m + r, 1.0 - m - r);
-    (x - cx).powi(2) + (y - cy).powi(2) <= r * r && x >= m && x <= 1.0 - m && y >= m && y <= 1.0 - m
-}
-
-fn in_arrow(x: f32, y: f32) -> bool {
-    // Shaft
-    let shaft = (x - 0.5).abs() <= 0.085 && (0.2..=0.55).contains(&y);
-    // Head: triangle pointing down
-    let head = y >= 0.47 && y <= 0.72 && (x - 0.5).abs() <= (0.72 - y) * 1.0;
-    // Base line
-    let base = (0.78..=0.85).contains(&y) && (0.24..=0.76).contains(&x);
-    shaft || head || base
+    let m = master();
+    if size == m.width() { m.as_raw().clone() } else { resize(m, size, size, FilterType::Lanczos3).into_raw() }
 }
 
 pub fn egui_icon() -> eframe::egui::IconData {
@@ -65,4 +23,42 @@ pub fn egui_icon() -> eframe::egui::IconData {
 /// Save the icon as a PNG (used when making the installers).
 pub fn save_png(path: &std::path::Path, size: u32) -> Result<(), String> {
     image::RgbaImage::from_raw(size, size, rgba(size)).ok_or("bad size")?.save(path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn px(data: &[u8], size: u32, x: u32, y: u32) -> [u8; 4] {
+        let i = ((y * size + x) * 4) as usize;
+        [data[i], data[i + 1], data[i + 2], data[i + 3]]
+    }
+
+    #[test]
+    fn icon_is_the_neon_globe_artwork_not_a_drawing() {
+        // The middle of the artwork is the glowing green arrow.
+        let d = rgba(512);
+        let [r, g, b, a] = px(&d, 512, 256, 256);
+        assert!(a == 255 && g > 180 && r < 170 && b < 130, "centre is not the green arrow: {r},{g},{b},{a}");
+    }
+
+    #[test]
+    fn icon_has_rounded_transparent_corners_at_every_size() {
+        for size in [16, 32, 48, 128, 256, 512] {
+            let d = rgba(size);
+            assert_eq!(d.len(), (size * size * 4) as usize);
+            assert_eq!(px(&d, size, 0, 0)[3], 0, "corner must be see-through at {size}px");
+            assert_eq!(px(&d, size, size - 1, size - 1)[3], 0);
+            assert!(px(&d, size, size / 2, size / 2)[3] > 250, "middle must be solid at {size}px");
+        }
+    }
+
+    #[test]
+    fn save_png_writes_the_requested_size() {
+        let path = std::env::temp_dir().join(format!("sdm-icon-{}.png", std::process::id()));
+        save_png(&path, 64).unwrap();
+        let img = image::open(&path).unwrap();
+        assert_eq!((img.width(), img.height()), (64, 64));
+        let _ = std::fs::remove_file(path);
+    }
 }
