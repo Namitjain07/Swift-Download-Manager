@@ -183,11 +183,22 @@ impl App {
     }
 
     pub(super) fn remove_items(&mut self, ids: &[u64], delete_files: bool) {
+        self.drop_items(ids, true, delete_files);
+    }
+
+    /// Take downloads off the list and stop them, leaving every file on disk (even partial ones).
+    pub(super) fn forget_items(&mut self, ids: &[u64]) {
+        self.drop_items(ids, false, false);
+    }
+
+    fn drop_items(&mut self, ids: &[u64], delete_partial: bool, delete_files: bool) {
         for id in ids {
             if let Some(item) = self.items.iter().find(|i| i.id == *id) {
                 item.live.stop.store(true, Ordering::SeqCst);
                 if !self.demo {
-                    let _ = std::fs::remove_file(engine::temp_path(&item.path()));
+                    if delete_partial {
+                        let _ = std::fs::remove_file(engine::temp_path(&item.path()));
+                    }
                     if delete_files && item.status() == Status::Complete {
                         let _ = std::fs::remove_file(item.path());
                     }

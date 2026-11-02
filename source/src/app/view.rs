@@ -7,6 +7,11 @@ use eframe::egui::{RichText, Sense, Stroke};
 use egui_extras::{Column, TableBuilder};
 
 impl eframe::App for App {
+    /// Closing the window keeps everything: an MCP client that is still attached takes over.
+    fn on_exit(&mut self) {
+        self.save();
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.frame += 1;
         let ctx = ui.ctx().clone();

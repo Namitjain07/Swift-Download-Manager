@@ -4,6 +4,7 @@
 mod actions;
 mod dialogs;
 mod grabber;
+mod mcp_cmds;
 mod tools;
 mod view;
 
@@ -76,12 +77,13 @@ fn home_dir() -> PathBuf {
     std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
-fn config_file() -> PathBuf {
+/// Where settings and the download list live (`downloads.json` and the MCP files).
+pub fn default_config_dir() -> PathBuf {
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from))
         .unwrap_or_else(|| home_dir().join(".config"));
-    base.join("swift-download-manager").join("downloads.json")
+    base.join("swift-download-manager")
 }
 
 fn open_path(path: &std::path::Path) {
@@ -206,6 +208,8 @@ pub struct Settings {
     pub site_logins: Vec<SiteLogin>,
     /// System, Light or Dark (View > Appearance).
     pub theme: ThemeMode,
+    /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
+    pub mcp_enabled: bool,
 }
 
 impl Default for Settings {
@@ -230,6 +234,7 @@ impl Default for Settings {
             categories: default_categories(),
             site_logins: Vec::new(),
             theme: ThemeMode::System,
+            mcp_enabled: true,
         }
     }
 }
@@ -472,6 +477,10 @@ pub struct Launch {
     pub theme: Option<ThemeMode>,
     /// Opens one window at start-up (screenshots).
     pub show: Option<String>,
+    /// No window: the engine runs for an MCP client. No browser listener or clipboard watching.
+    pub headless: bool,
+    /// Where to keep settings and the download list (default: the user's config folder).
+    pub config_dir: Option<PathBuf>,
 }
 
 pub struct App {
@@ -515,6 +524,9 @@ pub struct App {
     toast: Option<(String, Instant)>,
     /// Forces a theme for this run only (`--theme`), without touching the saved choice.
     theme_override: Option<ThemeMode>,
+    config_dir: PathBuf,
+    /// Running without a window (MCP engine).
+    headless: bool,
     ctx: egui::Context,
 }
 
@@ -522,8 +534,18 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
-        let Launch { screenshot, demo, start_url, theme: theme_override, show } = launch;
         theme::setup(&cc.egui_ctx);
+        Self::build(cc.egui_ctx.clone(), launch)
+    }
+
+    /// An app with no window, for `--mcp` when nothing else owns the downloads.
+    #[allow(dead_code)] // used by the --mcp server
+    pub fn headless() -> Self {
+        Self::build(egui::Context::default(), Launch { headless: true, ..Default::default() })
+    }
+
+    fn build(ctx: egui::Context, launch: Launch) -> Self {
+        let Launch { screenshot, demo, start_url, theme: theme_override, show, headless, config_dir } = launch;
         let mut app = App {
             items: Vec::new(),
             next_id: 1,
@@ -562,16 +584,20 @@ impl App {
             listener: Err("off".into()),
             toast: None,
             theme_override,
-            ctx: cc.egui_ctx.clone(),
+            config_dir: config_dir.unwrap_or_else(default_config_dir),
+            headless,
+            ctx,
         };
         if demo {
             app.load_demo();
         } else {
             app.load();
-            if app.settings.browser_listen {
-                app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
+            if !headless {
+                if app.settings.browser_listen {
+                    app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
+                }
+                bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
             }
-            bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
         }
         if let Some(url) = start_url {
             app.inbox.lock().unwrap().push(Incoming {
@@ -610,8 +636,12 @@ impl App {
         }
     }
 
+    fn state_file(&self) -> PathBuf {
+        self.config_dir.join("downloads.json")
+    }
+
     fn load(&mut self) {
-        let Ok(text) = std::fs::read_to_string(config_file()) else { return };
+        let Ok(text) = std::fs::read_to_string(self.state_file()) else { return };
         let Ok(state) = serde_json::from_str::<SavedState>(&text) else { return };
         self.settings = state.settings;
         self.next_id = state.next_id.max(1);
@@ -701,7 +731,7 @@ impl App {
             })
             .collect();
         let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items };
-        let path = config_file();
+        let path = self.state_file();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
