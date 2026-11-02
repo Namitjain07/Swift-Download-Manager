@@ -5,7 +5,7 @@ use crate::engine;
 use crate::widgets::segment_bar;
 use super::closing::BackgroundMode;
 use crate::theme::{ThemeMode, ThemeStyle};
-use crate::widgets::{button_row, card, card_row, dialog_window, group_title, plain_button, primary_button, segmented, spinner, tinted_button, toggle, toggle_row};
+use crate::widgets::{button_row, card, card_row, dialog_window, group_title, plain_button, primary_button, segmented, spinner, switch, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
 
 fn browse_folder(current: &mut String) {
@@ -179,6 +179,17 @@ impl App {
                             ui.label("Connections");
                             ui.label(format!("{}", item.live.connections.load(Ordering::Relaxed)));
                             ui.end_row();
+                            // With several networks chosen: what each one is carrying.
+                            let nets = item.live.router.lock().unwrap().as_ref().map(|r| r.status());
+                            for n in nets.into_iter().flatten() {
+                                ui.label(format!("Network {}", n.name));
+                                ui.label(if n.resting {
+                                    "not working, resting".to_string()
+                                } else {
+                                    format!("{} · {} connections", human_speed(n.bytes_per_sec), n.connections)
+                                });
+                                ui.end_row();
+                            }
                             ui.label("Resume capability");
                             ui.label(if item.live.resumable.load(Ordering::Relaxed) {
                                 "Yes"
@@ -285,10 +296,12 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
+            // The body scrolls by itself so the OK and Cancel buttons stay in view.
+            .vscroll(false)
             .default_width(crate::widgets::fit_width(ctx, 540.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -10.0])
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical().max_height(ctx.content_rect().height() - 140.0).show(ui, |ui| options_body(ui, &mut s, &mut result));
+                egui::ScrollArea::vertical().max_height(ctx.content_rect().height() - 140.0).min_scrolled_height(ctx.content_rect().height() - 140.0).auto_shrink([false, false]).show(ui, |ui| options_body(ui, &mut s, &mut result));
             });
         match result {
             Some(true) => {
@@ -449,6 +462,71 @@ impl App {
 }
 
 /// The contents of the Options window.
+/// The network cards that are connected, looked up at most every 3 seconds.
+fn connected_networks(ui: &egui::Ui) -> Vec<crate::netroute::Iface> {
+    // The sample window (--screenshot) shows made-up networks instead of this computer's.
+    if ui.data(|d| d.get_temp::<bool>(egui::Id::unique("sdm_demo_networks"))).unwrap_or(false) {
+        use crate::netroute::{Iface, Kind};
+        let sample = |name: &str, last: u8, kind| Iface { name: name.into(), addr: std::net::IpAddr::from([192, 168, 1, last]), index: None, kind };
+        return vec![sample("Wi-Fi", 20, Kind::Wifi), sample("Ethernet", 21, Kind::Ethernet), sample("Phone hotspot", 22, Kind::Phone)];
+    }
+    let id = egui::Id::unique("sdm_connected_networks");
+    let now = ui.input(|i| i.time);
+    if let Some((at, list)) = ui.data(|d| d.get_temp::<(f64, Vec<crate::netroute::Iface>)>(id)) {
+        if now - at < 3.0 {
+            ui.ctx().request_repaint_after(std::time::Duration::from_secs(3));
+            return list;
+        }
+    }
+    let list = crate::netroute::interfaces();
+    ui.data_mut(|d| d.insert_temp(id, (now, list.clone())));
+    ui.ctx().request_repaint_after(std::time::Duration::from_secs(3));
+    list
+}
+
+/// Options > Networks: spread each download over several network cards at once.
+fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
+    // Screenshots (--show networks) start with this card in view.
+    if ui.data(|d| d.get_temp::<bool>(egui::Id::unique("sdm_scroll_networks"))).unwrap_or(false) {
+        ui.scroll_to_cursor(Some(egui::Align::TOP));
+    }
+    group_title(ui, "Networks");
+    let nets = connected_networks(ui);
+    let was_on = s.multi_network;
+    card(ui, |ui| {
+        toggle_row(ui, "Download over several networks at once", &mut s.multi_network, !was_on);
+        if !s.multi_network {
+            return;
+        }
+        if nets.is_empty() {
+            card_row(ui, true, |ui| {
+                ui.label("No connected network found.");
+            });
+        }
+        for (k, n) in nets.iter().enumerate() {
+            card_row(ui, k + 1 == nets.len(), |ui| {
+                ui.label(RichText::new(&n.name).strong()).on_hover_text(n.addr.to_string());
+                ui.label(RichText::new(n.kind.label()).size(11.0).color(crate::theme::current(ui.ctx()).secondary));
+                button_row(ui, |ui| {
+                    let mut on = s.networks.contains(&n.name);
+                    if switch(ui, &mut on).changed() {
+                        s.networks.retain(|x| x != &n.name);
+                        if on {
+                            s.networks.push(n.name.clone());
+                        }
+                    }
+                });
+            });
+        }
+    });
+    let hint = if s.multi_network {
+        "Pick two or more. Each download then uses every picked network at once and their speeds add up; a network that drops out is skipped. Takes effect when a download starts."
+    } else {
+        "Combine Wi-Fi, Ethernet, a phone's hotspot and more into one faster download."
+    };
+    ui.label(RichText::new(hint).size(11.0).color(crate::theme::current(ui.ctx()).tertiary));
+}
+
 fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) {
     group_title(ui, "Downloads");
         egui::Grid::new("opts").num_columns(2).spacing([12.0, 7.0]).show(ui, |ui| {
@@ -510,6 +588,7 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
                 button_row(ui, |ui| segmented(ui, &[(ThemeMode::System, "Automatic"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")], &mut s.theme));
             });
         });
+        networks_card(ui, s);
         group_title(ui, "Background");
         card(ui, |ui| {
             card_row(ui, false, |ui| {

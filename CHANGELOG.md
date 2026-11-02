@@ -3,6 +3,24 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.0-beta.1] - 2026-11-02
+
+**Pre-release.** Try it, and tell us what you find; the stable version stays 1.4.0.
+
+### Download over several networks at once
+- Options > Networks: turn on **Download over several networks at once** and tick the network cards to use (Wi-Fi, Ethernet, a phone's USB
+  or hotspot connection, ...). Every download is then spread over all of them, so the speeds add up
+- Each connection is tied to one network card. Every card always gets a connection and the faster cards get more, so a slow card never holds
+  the others back; when a card stops working (cable pulled, phone out of range) it is left alone for 30 seconds while the rest carry on
+- The progress window shows what each network is carrying
+- Nothing falls back to the normal connection when networks are chosen: if none of them works the download says so
+- Linux ties the traffic to the card with `SO_BINDTODEVICE` (kernel 5.7 or newer, otherwise the card's address is used), macOS with `IP_BOUND_IF`,
+  Windows with the card's address. How well this works on a given Windows or macOS computer has not been tried on real hardware yet
+
+### Fixed
+- The Options window was cut short at the same height however big the window was, hiding most of its settings behind a tiny scroll area;
+  it now uses the room there is
+
 ## [1.4.0] - 2026-11-02
 
 ### A responsive window with cards
