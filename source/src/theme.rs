@@ -191,6 +191,9 @@ fn style_colors(style: &mut egui::Style, p: &Palette, dark: bool) {
         w.fg_stroke = Stroke::new(1.0, p.label);
         w.expansion = 0.0;
     }
+    // Window title bars are drawn with this fill; matching the dialog keeps them seamless.
+    v.widgets.open.weak_bg_fill = p.raised;
+    v.slider_trailing_fill = true;
 }
 
 #[cfg(test)]

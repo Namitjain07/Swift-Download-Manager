@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::bridge::DOWNLOAD_EXTS;
+use crate::widgets::{dialog_window, primary_button, toggle};
 use eframe::egui::RichText;
 use std::io::Read;
 
@@ -183,7 +184,7 @@ impl App {
             }
         }
         let queues: Vec<String> = self.settings.queues.iter().map(|q| q.name.clone()).collect();
-        egui::Window::new("Grab links from a web page")
+        dialog_window(ctx, "Grab links from a web page")
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
@@ -204,10 +205,10 @@ impl App {
                     }
                 });
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut g.follow, "Also look in pages it links to on the same site (up to 30)");
+                    toggle(ui, &mut g.follow, "Also look in pages it links to on the same site (up to 30)");
                 });
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut g.all_links, "All links");
+                    toggle(ui, &mut g.all_links, "All links");
                     ui.add_enabled_ui(!g.all_links, |ui| {
                         ui.label("File types:");
                         if ui.add(egui::TextEdit::singleline(&mut g.exts).desired_width(380.0)).changed() {
@@ -223,7 +224,7 @@ impl App {
                     });
                 }
                 if let Some(e) = &g.error {
-                    ui.colored_label(Color32::from_rgb(200, 50, 40), e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                 }
                 let picked = g.found.iter().filter(|(_, on)| *on).count();
                 ui.horizontal(|ui| {
@@ -237,10 +238,10 @@ impl App {
                 });
                 egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
                     for (l, on) in &mut g.found {
-                        ui.checkbox(on, RichText::new(l.as_str()).size(12.5));
+                        toggle(ui, on, RichText::new(l.as_str()).size(12.5));
                     }
                     if g.found.is_empty() && !busy && g.state.is_some() && g.error.is_none() {
-                        ui.label(RichText::new("No files of those types on this page. Try \"All links\" or more file types.").color(Color32::from_gray(120)));
+                        ui.label(RichText::new("No files of those types on this page. Try \"All links\" or more file types.").color(crate::theme::current(ui.ctx()).secondary));
                     }
                 });
                 ui.separator();
@@ -259,7 +260,7 @@ impl App {
                     if ui.add_enabled(picked > 0, egui::Button::new("Add to queue")).clicked() {
                         add = Some(false);
                     }
-                    if ui.add_enabled(picked > 0, egui::Button::new(RichText::new("Download picked now").strong()).fill(Color32::from_rgb(204, 228, 247))).clicked() {
+                    if ui.add_enabled_ui(picked > 0, |ui| primary_button(ui, "Download picked now")).inner.clicked() {
                         add = Some(true);
                     }
                 });

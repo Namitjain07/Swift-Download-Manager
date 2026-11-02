@@ -3,6 +3,7 @@
 use super::*;
 use crate::engine;
 use crate::widgets::segment_bar;
+use crate::widgets::{card, dialog_window, group_title, primary_button, tinted_button, toggle, toggle_row};
 use eframe::egui::RichText;
 
 fn browse_folder(current: &mut String) {
@@ -19,7 +20,7 @@ impl App {
         let mut open = true;
         let mut result: Option<bool> = None;
         let mut cancel = false;
-        egui::Window::new("Enter new address to download")
+        dialog_window(ctx, "Enter new address to download")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -27,7 +28,7 @@ impl App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -40.0])
             .show(ctx, |ui| {
                 if let Some(src) = &d.from_outside {
-                    ui.colored_label(Color32::from_rgb(33, 100, 190), format!("ℹ {src}"));
+                    ui.colored_label(crate::theme::current(ui.ctx()).blue, format!("ℹ {src}"));
                     ui.add_space(4.0);
                 }
                 egui::Grid::new("add_grid").num_columns(2).spacing([10.0, 8.0]).show(ui, |ui| {
@@ -62,7 +63,7 @@ impl App {
                     ui.label("Save to:");
                     ui.horizontal(|ui| {
                         ui.add(egui::TextEdit::singleline(&mut d.folder).desired_width(330.0));
-                        if ui.button("Browse…").clicked() {
+                        if tinted_button(ui, "Browse…").clicked() {
                             browse_folder(&mut d.folder);
                         }
                     });
@@ -88,11 +89,11 @@ impl App {
                     });
                 });
                 if let Some(e) = &d.error {
-                    ui.colored_label(Color32::from_rgb(200, 50, 40), e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                 }
                 ui.add_space(6.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Cancel").clicked() {
+                    if tinted_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
                     egui::ComboBox::from_id_salt("add_q").selected_text(d.queue.clone()).width(110.0).show_ui(ui, |ui| {
@@ -100,10 +101,10 @@ impl App {
                             ui.selectable_value(&mut d.queue, q.clone(), q);
                         }
                     });
-                    if ui.button("Download Later").on_hover_text("Add to the queue picked next to this button").clicked() {
+                    if tinted_button(ui, "Download Later").on_hover_text("Add to the queue picked next to this button").clicked() {
                         result = Some(false);
                     }
-                    let start = ui.add(egui::Button::new(RichText::new("Start Download").strong()).fill(Color32::from_rgb(204, 228, 247)));
+                    let start = primary_button(ui, "Start Download");
                     if start.clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         result = Some(true);
                     }
@@ -138,7 +139,7 @@ impl App {
                 let item = &self.items[idx];
                 let st = item.status();
                 let title = format!("{:.0}% {}", item.progress() * 100.0, item.name);
-                egui::Window::new(title)
+                dialog_window(ctx, title)
                     .id(egui::Id::unique(("progress", id)))
                     .open(&mut open)
                     .collapsible(false)
@@ -148,7 +149,7 @@ impl App {
                     .show(ctx, |ui| {
                         egui::Grid::new(("pg", id)).num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {
                             ui.label("Address");
-                            ui.add(egui::Label::new(RichText::new(&item.url).color(Color32::from_rgb(33, 100, 190))).truncate());
+                            ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue)).truncate());
                             ui.end_row();
                             ui.label("Status");
                             let s = match st {
@@ -191,29 +192,29 @@ impl App {
                         segment_bar(ui, item.progress(), item.total(), &segs);
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
-                            ui.checkbox(&mut lim_on, "Limit this download to");
+                            toggle(ui, &mut lim_on, "Limit this download to");
                             ui.add_enabled(lim_on, egui::DragValue::new(&mut lim_val).range(1..=1_000_000).suffix(" KB/s"));
                         });
                         ui.horizontal(|ui| {
-                            if ui.button(if details { "<< Hide details" } else { "Show details >>" }).clicked() {
+                            if tinted_button(ui, if details { "<< Hide details" } else { "Show details >>" }).clicked() {
                                 details = !details;
                             }
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("Cancel").on_hover_text("Stop and close").clicked() {
+                                if tinted_button(ui, "Cancel").on_hover_text("Stop and close").clicked() {
                                     act = Some("cancel");
                                 }
                                 if st.is_active() {
-                                    if ui.button("Pause").clicked() {
+                                    if tinted_button(ui, "Pause").clicked() {
                                         act = Some("pause");
                                     }
                                 } else if st == Status::Complete {
-                                    if ui.button("Open").clicked() {
+                                    if tinted_button(ui, "Open").clicked() {
                                         act = Some("open");
                                     }
-                                    if ui.button("Open folder").clicked() {
+                                    if tinted_button(ui, "Open folder").clicked() {
                                         act = Some("folder");
                                     }
-                                } else if ui.button("Resume").clicked() {
+                                } else if tinted_button(ui, "Resume").clicked() {
                                     act = Some("resume");
                                 }
                             });
@@ -221,7 +222,7 @@ impl App {
                         if details {
                             ui.separator();
                             if segs.is_empty() {
-                                ui.label(RichText::new("Single connection (the server does not allow splitting).").color(Color32::from_gray(110)));
+                                ui.label(RichText::new("Single connection (the server does not allow splitting).").color(crate::theme::current(ui.ctx()).secondary));
                             } else {
                                 egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
                                     egui::Grid::new(("segs", id)).striped(true).num_columns(3).spacing([18.0, 2.0]).show(ui, |ui| {
@@ -278,7 +279,7 @@ impl App {
         let Some(mut s) = self.options.take() else { return };
         let mut open = true;
         let mut result = None;
-        egui::Window::new("Options")
+        dialog_window(ctx, "Options")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -316,21 +317,21 @@ impl App {
         let Some(mut d) = self.delete.take() else { return };
         let mut result = None;
         let any_done = d.ids.iter().any(|id| self.items.iter().any(|i| i.id == *id && i.status() == Status::Complete));
-        egui::Window::new("Confirm deletion")
+        dialog_window(ctx, "Confirm deletion")
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.label(if d.ids.len() == 1 { "Remove this download from the list?".to_string() } else { format!("Remove {} downloads from the list?", d.ids.len()) });
                 if any_done {
-                    ui.checkbox(&mut d.delete_files, "Also delete the downloaded files from disk");
+                    toggle(ui, &mut d.delete_files, "Also delete the downloaded files from disk");
                 }
                 ui.add_space(6.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Cancel").clicked() {
+                    if tinted_button(ui, "Cancel").clicked() {
                         result = Some(false);
                     }
-                    if ui.button(RichText::new("Remove").strong()).clicked() {
+                    if primary_button(ui, "Remove").clicked() {
                         result = Some(true);
                     }
                 });
@@ -354,7 +355,7 @@ impl App {
         let mut open = true;
         let mut close = false;
         let mut verify = false;
-        egui::Window::new("File properties")
+        dialog_window(ctx, "File properties")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -401,7 +402,7 @@ impl App {
                             verify = true;
                         }
                         if let Some(c) = &item.check {
-                            let col = if c.contains("NOT") { Color32::from_rgb(200, 50, 40) } else if c.contains("matches") { Color32::from_rgb(40, 130, 60) } else { Color32::from_gray(90) };
+                            let col = if c.contains("NOT") { crate::theme::current(ui.ctx()).red } else if c.contains("matches") { crate::theme::current(ui.ctx()).green } else { crate::theme::current(ui.ctx()).secondary };
                             let r = ui.add(egui::Label::new(RichText::new(c).color(col)).truncate().sense(egui::Sense::click()));
                             if r.on_hover_text("Click to copy").clicked() {
                                 ui.ctx().copy_text(c.trim_start_matches("SHA-256: ").to_string());
@@ -412,13 +413,13 @@ impl App {
                 });
                 ui.add_space(6.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Close").clicked() {
+                    if tinted_button(ui, "Close").clicked() {
                         close = true;
                     }
                     if ui.add_enabled(item.status() == Status::Complete, egui::Button::new("Open")).clicked() {
                         open_path(&item.path());
                     }
-                    if ui.button("Open folder").clicked() {
+                    if tinted_button(ui, "Open folder").clicked() {
                         open_path(&item.folder);
                     }
                 });
@@ -436,13 +437,13 @@ impl App {
 
 /// The contents of the Options window.
 fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) {
-    ui.label(RichText::new("Downloads").strong());
+    group_title(ui, "Downloads");
         egui::Grid::new("opts").num_columns(2).spacing([12.0, 7.0]).show(ui, |ui| {
             ui.label("Download folder:");
             ui.horizontal(|ui| {
                 let mut f = s.folder.display().to_string();
                 let mut changed = ui.add(egui::TextEdit::singleline(&mut f).desired_width(250.0)).changed();
-                if ui.button("Browse…").clicked() {
+                if tinted_button(ui, "Browse…").clicked() {
                     browse_folder(&mut f);
                     changed = true;
                 }
@@ -452,7 +453,7 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             });
             ui.end_row();
             ui.label("");
-            ui.checkbox(&mut s.per_category_folders, "Use a sub-folder for each category");
+            toggle(ui, &mut s.per_category_folders, "Use a sub-folder for each category");
             ui.end_row();
             ui.label("Connections per download:");
             ui.add(egui::Slider::new(&mut s.connections, 1..=32));
@@ -462,27 +463,30 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             ui.end_row();
             ui.label("Speed limiter:");
             ui.horizontal(|ui| {
-                ui.checkbox(&mut s.limit_on, "Limit to");
+                toggle(ui, &mut s.limit_on, "Limit to");
                 ui.add_enabled(s.limit_on, egui::DragValue::new(&mut s.limit_kbps).range(1..=1_000_000).suffix(" KB/s"));
             });
             ui.end_row();
             ui.label("Proxy:");
             ui.horizontal(|ui| {
-                ui.checkbox(&mut s.proxy_on, "Use");
+                toggle(ui, &mut s.proxy_on, "Use");
                 ui.add_enabled(s.proxy_on, egui::TextEdit::singleline(&mut s.proxy).hint_text("http://host:port").desired_width(220.0));
             });
             ui.end_row();
         });
         ui.separator();
-        ui.label(RichText::new("Windows").strong());
-        ui.checkbox(&mut s.show_progress, "Show the progress window when a download starts");
-        ui.checkbox(&mut s.show_complete, "Show a window when a download completes");
-        ui.separator();
-        ui.label(RichText::new("Catching links").strong());
-        ui.checkbox(&mut s.watch_clipboard, "Watch the clipboard and offer to download copied file links");
-        ui.checkbox(&mut s.browser_listen, "Accept downloads from the browser add-on (restart the app to apply)");
-        ui.add_enabled(s.browser_listen, egui::Checkbox::new(&mut s.browser_start_now, "Start browser downloads straight away without asking"));
-        ui.separator();
+        group_title(ui, "Windows");
+        card(ui, |ui| {
+            toggle_row(ui, "Show the progress window when a download starts", &mut s.show_progress, false);
+            toggle_row(ui, "Show a window when a download completes", &mut s.show_complete, true);
+        });
+        group_title(ui, "Catching links");
+        card(ui, |ui| {
+            toggle_row(ui, "Watch the clipboard and offer to download copied file links", &mut s.watch_clipboard, false);
+            toggle_row(ui, "Accept downloads from the browser add-on (restart to apply)", &mut s.browser_listen, false);
+            ui.add_enabled_ui(s.browser_listen, |ui| toggle_row(ui, "Start browser downloads straight away without asking", &mut s.browser_start_now, true));
+        });
+        ui.add_space(8.0);
         egui::CollapsingHeader::new(RichText::new("Categories (file types and folders)").strong()).show(ui, |ui| {
             let mut remove = None;
             egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
@@ -512,13 +516,13 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             if let Some(k) = remove {
                 s.categories.remove(k);
             }
-            if ui.button("+ Add category").clicked() {
+            if tinted_button(ui, "+ Add category").clicked() {
                 let pos = s.categories.iter().position(|c| c.name == "General").unwrap_or(s.categories.len());
                 s.categories.insert(pos, CategoryDef { name: "New category".into(), exts: String::new(), folder: String::new() });
             }
         });
         egui::CollapsingHeader::new(RichText::new("Site logins").strong()).show(ui, |ui| {
-            ui.label(RichText::new("Used automatically for downloads from these sites.").color(Color32::from_gray(110)));
+            ui.label(RichText::new("Used automatically for downloads from these sites.").color(crate::theme::current(ui.ctx()).secondary));
             let mut remove = None;
             egui::Grid::new("logins").num_columns(4).spacing([6.0, 4.0]).show(ui, |ui| {
                 ui.label(RichText::new("Site").strong());
@@ -539,16 +543,16 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             if let Some(k) = remove {
                 s.site_logins.remove(k);
             }
-            if ui.button("+ Add login").clicked() {
+            if tinted_button(ui, "+ Add login").clicked() {
                 s.site_logins.push(SiteLogin::default());
             }
         });
         ui.add_space(8.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("Cancel").clicked() {
+            if tinted_button(ui, "Cancel").clicked() {
                 *result = Some(false);
             }
-            if ui.button(RichText::new("OK").strong()).clicked() {
+            if primary_button(ui, "OK").clicked() {
                 *result = Some(true);
             }
         });

@@ -3,6 +3,7 @@
 use super::actions::{expand_pattern, normalize_time};
 use super::*;
 use crate::icons::{self, Icon};
+use crate::widgets::{dialog_window, primary_button, segmented, tinted_button, toggle};
 use eframe::egui::{RichText, Sense};
 
 const ADDON_FILES: [(&str, &[u8]); 9] = [
@@ -42,18 +43,15 @@ impl App {
         } else {
             Ok(b.links.split_whitespace().map(|s| s.to_string()).collect())
         };
-        egui::Window::new("Batch download")
+        dialog_window(ctx, "Batch download")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
             .default_width(560.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut b.pattern_mode, false, "A list of links");
-                    ui.selectable_value(&mut b.pattern_mode, true, "Numbered links (pattern)");
-                });
-                ui.separator();
+                segmented(ui, &[(false, "A list of links"), (true, "Numbered links (pattern)")], &mut b.pattern_mode);
+                ui.add_space(8.0);
                 if b.pattern_mode {
                     ui.label("Address with a * where the number goes:");
                     ui.add(egui::TextEdit::singleline(&mut b.pattern).desired_width(520.0));
@@ -74,7 +72,7 @@ impl App {
                 ui.horizontal(|ui| {
                     ui.label("Save to:");
                     ui.add(egui::TextEdit::singleline(&mut b.folder).desired_width(300.0));
-                    if ui.button("Browse…").clicked() {
+                    if tinted_button(ui, "Browse…").clicked() {
                         if let Some(p) = rfd::FileDialog::new().pick_folder() {
                             b.folder = p.display().to_string();
                         }
@@ -91,32 +89,32 @@ impl App {
                     Ok(list) if !list.is_empty() => {
                         ui.label(RichText::new(format!("{} links", list.len())).strong());
                         for u in list.iter().take(3) {
-                            ui.add(egui::Label::new(RichText::new(u).color(Color32::from_gray(100))).truncate());
+                            ui.add(egui::Label::new(RichText::new(u).color(crate::theme::current(ui.ctx()).secondary)).truncate());
                         }
                         if list.len() > 3 {
-                            ui.label(RichText::new("…").color(Color32::from_gray(100)));
+                            ui.label(RichText::new("…").color(crate::theme::current(ui.ctx()).secondary));
                         }
                     }
                     Ok(_) => {
-                        ui.label(RichText::new("No links yet.").color(Color32::from_gray(120)));
+                        ui.label(RichText::new("No links yet.").color(crate::theme::current(ui.ctx()).secondary));
                     }
                     Err(e) => {
-                        ui.colored_label(Color32::from_rgb(200, 50, 40), e);
+                        ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                     }
                 }
                 if let Some(e) = &b.error {
-                    ui.colored_label(Color32::from_rgb(200, 50, 40), e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                 }
                 ui.add_space(6.0);
                 let ok = urls.as_ref().is_ok_and(|l| !l.is_empty());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Cancel").clicked() {
+                    if tinted_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
                     if ui.add_enabled(ok, egui::Button::new("Add to queue")).clicked() {
                         result = Some(false);
                     }
-                    if ui.add_enabled(ok, egui::Button::new(RichText::new("Download all now").strong()).fill(Color32::from_rgb(204, 228, 247))).clicked() {
+                    if ui.add_enabled_ui(ok, |ui| primary_button(ui, "Download all now")).inner.clicked() {
                         result = Some(true);
                     }
                 });
@@ -146,7 +144,7 @@ impl App {
         let mut start_now = false;
         let names: Vec<String> = self.settings.queues.iter().map(|q| q.name.clone()).collect();
         let queued = self.items.iter().filter(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(qname.as_str())).count();
-        egui::Window::new("Scheduler")
+        dialog_window(ctx, "Scheduler")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -162,43 +160,37 @@ impl App {
                             }
                         }
                     });
-                    ui.label(RichText::new(format!("{queued} downloads waiting")).color(Color32::from_gray(110)));
+                    ui.label(RichText::new(format!("{queued} downloads waiting")).color(crate::theme::current(ui.ctx()).secondary));
                 });
                 ui.add_space(4.0);
                 egui::Grid::new("sched").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                    ui.checkbox(&mut s.start_on, "Start the queue at");
+                    toggle(ui, &mut s.start_on, "Start the queue at");
                     ui.add(egui::TextEdit::singleline(&mut s.start_time).desired_width(60.0).hint_text("HH:MM"));
                     ui.end_row();
-                    ui.checkbox(&mut s.stop_on, "Stop the queue at");
+                    toggle(ui, &mut s.stop_on, "Stop the queue at");
                     ui.add(egui::TextEdit::singleline(&mut s.stop_time).desired_width(60.0).hint_text("HH:MM"));
                     ui.end_row();
                     ui.label("Repeat:");
-                    ui.horizontal(|ui| {
-                        ui.radio_value(&mut s.daily, true, "Every day");
-                        ui.radio_value(&mut s.daily, false, "Once");
-                    });
+                    segmented(ui, &[(true, "Every day"), (false, "Once")], &mut s.daily);
                     ui.end_row();
                     ui.label("When the queue is done:");
-                    ui.horizontal(|ui| {
-                        ui.radio_value(&mut s.when_done, WhenDone::Nothing, "Do nothing");
-                        ui.radio_value(&mut s.when_done, WhenDone::ExitApp, "Close the app");
-                    });
+                    segmented(ui, &[(WhenDone::Nothing, "Do nothing"), (WhenDone::ExitApp, "Close the app")], &mut s.when_done);
                     ui.end_row();
                 });
                 let bad = (s.start_on && normalize_time(&s.start_time).is_empty()) || (s.stop_on && normalize_time(&s.stop_time).is_empty());
                 if bad {
-                    ui.colored_label(Color32::from_rgb(200, 50, 40), "Write times as hours and minutes, e.g. 02:30 or 23:15.");
+                    ui.colored_label(crate::theme::current(ui.ctx()).red, "Write times as hours and minutes, e.g. 02:30 or 23:15.");
                 }
-                ui.label(RichText::new(format!("Time now: {}", chrono::Local::now().format("%H:%M"))).color(Color32::from_gray(110)));
+                ui.label(RichText::new(format!("Time now: {}", chrono::Local::now().format("%H:%M"))).color(crate::theme::current(ui.ctx()).secondary));
                 ui.add_space(6.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Cancel").clicked() {
+                    if tinted_button(ui, "Cancel").clicked() {
                         result = Some(false);
                     }
-                    if ui.add_enabled(!bad, egui::Button::new(RichText::new("Save").strong())).clicked() {
+                    if ui.add_enabled_ui(!bad, |ui| primary_button(ui, "Save")).inner.clicked() {
                         result = Some(true);
                     }
-                    if ui.button("Start queue now").clicked() {
+                    if tinted_button(ui, "Start queue now").clicked() {
                         start_now = true;
                     }
                 });
@@ -241,7 +233,7 @@ impl App {
         let mut sched: Option<String> = None;
         let mut new_name = std::mem::take(&mut self.new_queue);
         let mut changed = false;
-        egui::Window::new("Queues")
+        dialog_window(ctx, "Queues")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -347,7 +339,7 @@ impl App {
         let mut open = true;
         let mut ok = false;
         let mut cancel = false;
-        egui::Window::new("Refresh download address")
+        dialog_window(ctx, "Refresh download address")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -359,14 +351,14 @@ impl App {
                 ui.add_space(4.0);
                 ui.add(egui::TextEdit::singleline(&mut r.url).desired_width(500.0));
                 if let Some(e) = &r.error {
-                    ui.colored_label(Color32::from_rgb(200, 50, 40), e);
+                    ui.colored_label(crate::theme::current(ui.ctx()).red, e);
                 }
                 ui.add_space(4.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Cancel").clicked() {
+                    if tinted_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
-                    if ui.button(RichText::new("Use this link").strong()).clicked() {
+                    if primary_button(ui, "Use this link").clicked() {
                         ok = true;
                     }
                 });
@@ -397,7 +389,7 @@ impl App {
             let mut open = true;
             let mut act = None;
             let mut dont_show = !self.settings.show_complete;
-            egui::Window::new("Download complete")
+            dialog_window(ctx, "Download complete")
                 .id(egui::Id::unique(("complete", id)))
                 .open(&mut open)
                 .collapsible(false)
@@ -413,20 +405,20 @@ impl App {
                             ui.label(format!("{}  ·  {}", human_size(item.total()), item.folder.display()));
                         });
                     });
-                    ui.add(egui::Label::new(RichText::new(&item.url).color(Color32::from_rgb(33, 100, 190))).truncate());
+                    ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue)).truncate());
                     if let Some(c) = &item.check {
                         ui.label(c);
                     }
                     ui.add_space(4.0);
-                    ui.checkbox(&mut dont_show, "Don't show this window again");
+                    toggle(ui, &mut dont_show, "Don't show this window again");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Close").clicked() {
+                        if tinted_button(ui, "Close").clicked() {
                             act = Some("close");
                         }
-                        if ui.button("Open folder").clicked() {
+                        if tinted_button(ui, "Open folder").clicked() {
                             act = Some("folder");
                         }
-                        if ui.button(RichText::new("Open").strong()).clicked() {
+                        if primary_button(ui, "Open").clicked() {
                             act = Some("open");
                         }
                     });
@@ -451,7 +443,7 @@ impl App {
             return;
         }
         let mut open = true;
-        egui::Window::new("Browser integration")
+        dialog_window(ctx, "Browser integration")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -459,9 +451,9 @@ impl App {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
             .show(ctx, |ui| {
                 match (&self.listener, self.settings.browser_listen) {
-                    (Ok(()), _) => ui.colored_label(Color32::from_rgb(46, 140, 70), format!("● Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
-                    (Err(_), false) => ui.colored_label(Color32::from_gray(110), "○ Turned off in Options."),
-                    (Err(e), true) => ui.colored_label(Color32::from_rgb(190, 60, 40), format!("● Not available: {e}. Another copy of the app may be open.")),
+                    (Ok(()), _) => ui.colored_label(crate::theme::current(ui.ctx()).green, format!("● Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
+                    (Err(_), false) => ui.colored_label(crate::theme::current(ui.ctx()).secondary, "○ Turned off in Options."),
+                    (Err(e), true) => ui.colored_label(crate::theme::current(ui.ctx()).red, format!("● Not available: {e}. Another copy of the app may be open.")),
                 };
                 ui.add_space(6.0);
                 ui.label("The browser add-on sends the downloads you start in Chrome, Edge, Brave or Firefox to this app, and adds “Download with Swift Download Manager” when you right-click a link.");
@@ -471,10 +463,10 @@ impl App {
                 ui.label("2.  Chrome/Edge: open the Extensions page, turn on Developer mode,\n     click “Load unpacked” and pick the saved folder.");
                 ui.label("3.  Firefox: open about:debugging, “This Firefox”, “Load Temporary Add-on”\n     and pick manifest.json in the saved folder.");
                 ui.add_space(6.0);
-                ui.label(RichText::new("Without the add-on: copy a download link and the app will offer to download it (clipboard watching), or start the app with a link.").color(Color32::from_gray(100)));
+                ui.label(RichText::new("Without the add-on: copy a download link and the app will offer to download it (clipboard watching), or start the app with a link.").color(crate::theme::current(ui.ctx()).secondary));
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
-                    if ui.button(RichText::new("Save the add-on…").strong()).clicked() {
+                    if primary_button(ui, "Save the add-on…").clicked() {
                         if let Some(dir) = rfd::FileDialog::new().pick_folder() {
                             match save_addon(&dir) {
                                 Ok(p) => {
@@ -485,7 +477,7 @@ impl App {
                             }
                         }
                     }
-                    if ui.checkbox(&mut self.settings.watch_clipboard, "Watch the clipboard").changed() {
+                    if toggle(ui, &mut self.settings.watch_clipboard, "Watch the clipboard").changed() {
                         self.apply_settings();
                         self.dirty = true;
                     }
@@ -499,7 +491,7 @@ impl App {
             return;
         }
         let mut open = true;
-        egui::Window::new("About")
+        dialog_window(ctx, "About")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)

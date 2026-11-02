@@ -462,6 +462,18 @@ struct Shot {
     saved: Arc<AtomicBool>,
 }
 
+/// How the app was started (command line).
+#[derive(Default)]
+pub struct Launch {
+    pub screenshot: Option<PathBuf>,
+    pub demo: bool,
+    pub start_url: Option<String>,
+    /// Forces a theme for this run only.
+    pub theme: Option<ThemeMode>,
+    /// Opens one window at start-up (screenshots).
+    pub show: Option<String>,
+}
+
 pub struct App {
     items: Vec<Item>,
     next_id: u64,
@@ -509,7 +521,8 @@ pub struct App {
 // ---------------------------------------------------------------- setup & storage
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, screenshot: Option<PathBuf>, demo: bool, start_url: Option<String>, theme_override: Option<ThemeMode>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
+        let Launch { screenshot, demo, start_url, theme: theme_override, show } = launch;
         theme::setup(&cc.egui_ctx);
         let mut app = App {
             items: Vec::new(),
@@ -571,7 +584,30 @@ impl App {
             });
         }
         app.apply_settings();
+        if let Some(name) = show {
+            app.show_window(&name);
+        }
         app
+    }
+
+    /// Open one window by name, with sample data (used by `--show`).
+    fn show_window(&mut self, name: &str) {
+        match name {
+            "add" => self.open_add_dialog(None),
+            "batch" => self.open_batch(),
+            "options" => self.options = Some(self.settings.clone()),
+            "scheduler" => self.open_scheduler(MAIN_QUEUE),
+            "queues" => self.queues_open = true,
+            "delete" => self.delete = Some(DeleteDialog { ids: vec![2], delete_files: false }),
+            "properties" => self.properties = Some(2),
+            "progress" => {
+                self.progress_open.insert(1);
+            }
+            "about" => self.about_open = true,
+            "browser" => self.browser_open = true,
+            "grabber" => self.open_grabber(),
+            other => eprintln!("unknown window: {other}"),
+        }
     }
 
     fn load(&mut self) {

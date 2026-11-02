@@ -6,6 +6,7 @@
 pub mod anim;
 pub mod button;
 pub mod card;
+pub mod dialog;
 pub mod progress;
 pub mod segmented;
 pub mod spinner;
@@ -14,6 +15,7 @@ pub mod wheel;
 
 pub use button::{button, ButtonKind};
 pub use card::{card, card_row};
+pub use dialog::{dialog_window, group_title, primary_button, tinted_button, toggle, toggle_row};
 pub use progress::{capsule_bar, mini_bar, segment_bar};
 pub use spinner::spinner;
 pub use segmented::segmented;
