@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::AtomicUsize;
 
-const SIZE: usize = 5 * 1024 * 1024 + 12345;
+pub(crate) const SIZE: usize = 5 * 1024 * 1024 + 12345;
 
 fn data() -> Arc<Vec<u8>> {
     let mut x: u32 = 12345;
@@ -19,20 +19,20 @@ fn data() -> Arc<Vec<u8>> {
     )
 }
 
-struct Server {
+pub(crate) struct Server {
     port: u16,
     peak: Arc<AtomicUsize>,
-    data: Arc<Vec<u8>>,
+    pub(crate) data: Arc<Vec<u8>>,
     requests: Arc<AtomicUsize>,
 }
 
 impl Server {
-    fn url(&self, path: &str) -> String {
+    pub(crate) fn url(&self, path: &str) -> String {
         format!("http://127.0.0.1:{}{}", self.port, path)
     }
 }
 
-fn server() -> Server {
+pub(crate) fn server() -> Server {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let data = data();

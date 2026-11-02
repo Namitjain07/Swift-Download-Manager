@@ -241,4 +241,12 @@ mod tests {
         let text = r["result"]["content"][0]["text"].as_str().unwrap();
         assert_eq!(serde_json::from_str::<Value>(text).unwrap(), json!({"id": 1}));
     }
+
+    #[test]
+    fn handoff_is_not_a_tool() {
+        let r = ask(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list"}"#).unwrap();
+        assert!(!r["result"]["tools"].as_array().unwrap().iter().any(|t| t["name"].as_str().unwrap().contains("handoff")));
+        let r = ask(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"handoff","arguments":{}}}"#).unwrap();
+        assert_eq!(r["error"]["code"], -32602);
+    }
 }

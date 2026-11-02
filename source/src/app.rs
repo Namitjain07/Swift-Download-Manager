@@ -278,6 +278,9 @@ struct SavedItem {
     user_agent: String,
     #[serde(default)]
     limit_kbps: u64,
+    /// Was running when a window took the downloads over from the MCP engine: carry on.
+    #[serde(default)]
+    handoff_resume: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -285,6 +288,9 @@ struct SavedState {
     settings: Settings,
     next_id: u64,
     items: Vec<SavedItem>,
+    /// Queues that were running at a hand-over.
+    #[serde(default)]
+    handoff_queues: Vec<String>,
 }
 
 pub struct Item {
@@ -315,6 +321,7 @@ pub struct Item {
     /// This download's own speed limit (0 = none), chained to the overall limit.
     limit_kbps: u64,
     limiter: Arc<Limiter>,
+    handoff_resume: bool,
     speed: f64,
     last_bytes: u64,
     last_status: Status,
@@ -348,6 +355,7 @@ impl Item {
             user_agent: String::new(),
             limit_kbps: 0,
             limiter: Arc::new(Limiter::chained(overall.clone())),
+            handoff_resume: false,
             speed: 0.0,
             last_bytes,
             last_status,
@@ -529,6 +537,10 @@ pub struct App {
     headless: bool,
     /// Commands from `--mcp` processes (see `mcp::control`).
     control_rx: Option<std::sync::mpsc::Receiver<crate::mcp::control::Request>>,
+    /// Owns the download list while this process runs (see `mcp::lock`).
+    state_lock: Option<crate::mcp::lock::StateLock>,
+    /// Queues that were running when the downloads were handed over; restarted on load.
+    handoff_queues: Vec<String>,
     ctx: egui::Context,
 }
 
@@ -541,11 +553,11 @@ impl App {
     }
 
     /// An app with no window, for `--mcp` when nothing else owns the downloads.
-    pub fn headless() -> Self {
-        Self::build(egui::Context::default(), Launch { headless: true, ..Default::default() })
+    pub fn headless_in(config_dir: PathBuf) -> Self {
+        Self::build(egui::Context::default(), Launch { headless: true, config_dir: Some(config_dir), ..Default::default() })
     }
 
-    fn build(ctx: egui::Context, launch: Launch) -> Self {
+    pub(crate) fn build(ctx: egui::Context, launch: Launch) -> Self {
         let Launch { screenshot, demo, start_url, theme: theme_override, show, headless, config_dir } = launch;
         let mut app = App {
             items: Vec::new(),
@@ -588,14 +600,25 @@ impl App {
             config_dir: config_dir.unwrap_or_else(default_config_dir),
             headless,
             control_rx: None,
+            state_lock: None,
+            handoff_queues: Vec::new(),
             ctx,
         };
         if demo {
             app.load_demo();
         } else {
-            app.load();
+            // The lock comes first: a windowless engine may have to save before we read.
             if !headless {
-                app.start_control();
+                app.take_state_lock();
+            }
+            app.load();
+            app.resume_handed_over();
+            if !headless {
+                if app.state_lock.is_some() {
+                    app.start_control();
+                } else {
+                    app.toast("AI assistants cannot control the downloads: another copy of the app owns them");
+                }
                 if app.settings.browser_listen {
                     app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
                 }
@@ -647,6 +670,7 @@ impl App {
         let Ok(text) = std::fs::read_to_string(self.state_file()) else { return };
         let Ok(state) = serde_json::from_str::<SavedState>(&text) else { return };
         self.settings = state.settings;
+        self.handoff_queues = state.handoff_queues;
         self.next_id = state.next_id.max(1);
         for s in state.items {
             // Anything that was running when the app closed is now paused.
@@ -667,6 +691,7 @@ impl App {
             item.cookies = s.cookies;
             item.user_agent = s.user_agent;
             item.set_limit(s.limit_kbps);
+            item.handoff_resume = s.handoff_resume;
             self.items.push(item);
         }
         self.fix_settings();
@@ -731,9 +756,10 @@ impl App {
                 cookies: i.cookies.clone(),
                 user_agent: i.user_agent.clone(),
                 limit_kbps: i.limit_kbps,
+                handoff_resume: i.handoff_resume,
             })
             .collect();
-        let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items };
+        let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items, handoff_queues: self.handoff_queues.clone() };
         let path = self.state_file();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);

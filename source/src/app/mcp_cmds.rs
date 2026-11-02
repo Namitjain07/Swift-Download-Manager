@@ -84,6 +84,7 @@ impl App {
                 self.stop_queue(&name);
                 Ok(json!({ "queue": name, "running": false, "waiting": self.waiting_in(&name) }))
             }
+            Command::Handoff => Err("Only a windowless engine hands the downloads over; this app is running them.".into()),
             Command::Remove { id } => {
                 let name = self.find_item(id)?.name.clone();
                 self.forget_items(&[id]);
@@ -121,6 +122,45 @@ impl App {
     pub(super) fn close_control(&mut self) {
         if self.control_rx.take().is_some() {
             crate::mcp::control::clear_info(&self.config_dir);
+        }
+    }
+
+    /// Take the right to run the downloads, asking a windowless engine to hand over if needed.
+    pub(super) fn take_state_lock(&mut self) {
+        self.state_lock = crate::mcp::lock::acquire_with_handoff(&self.config_dir, std::time::Duration::from_secs(5));
+    }
+
+    /// Another process is about to take over: pause what runs, remember it, save and let go.
+    pub fn prepare_handoff(&mut self) {
+        self.handoff_queues = self.running.iter().cloned().collect();
+        for item in &mut self.items {
+            if item.status().is_active() {
+                item.handoff_resume = true;
+            }
+        }
+        self.stop_all();
+        for _ in 0..300 {
+            if !self.items.iter().any(|i| i.status().is_active()) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        self.save();
+    }
+
+    /// After loading: carry on with what was running when the downloads were handed over.
+    pub(super) fn resume_handed_over(&mut self) {
+        for q in std::mem::take(&mut self.handoff_queues) {
+            self.running.insert(q);
+            self.dirty = true;
+        }
+        let ids: Vec<u64> = self.items.iter().filter(|i| i.handoff_resume).map(|i| i.id).collect();
+        for id in ids {
+            if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
+                item.handoff_resume = false;
+            }
+            self.start_item(id);
+            self.dirty = true;
         }
     }
 
@@ -455,5 +495,23 @@ mod tests {
         app.pump();
         let status = answer.try_recv().expect("answered during the tick").unwrap();
         assert_eq!(status["mode"], "headless");
+    }
+
+    #[test]
+    fn running_queues_survive_a_handover() {
+        let dir = scratch("queues");
+        let mut app = test_app(&dir);
+        app.run_command(Command::StartQueue { name: MAIN_QUEUE.into() }).unwrap();
+        app.prepare_handoff();
+        assert!(!app.running.contains(MAIN_QUEUE), "the old owner stops running it");
+        let next = test_app(&dir);
+        assert!(next.running.contains(MAIN_QUEUE), "the new owner carries on");
+    }
+
+    #[test]
+    fn handoff_is_refused_by_a_running_app() {
+        let dir = scratch("refuse");
+        let mut app = test_app(&dir);
+        assert!(app.run_command(Command::Handoff).is_err());
     }
 }

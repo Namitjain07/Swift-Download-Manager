@@ -4,13 +4,14 @@
 
 use super::command::Command;
 use super::control::{self, CallError};
+use super::lock::StateLock;
 use super::protocol;
 use crate::app::{default_config_dir, App};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// What the server loop reacts to.
 pub enum Event {
@@ -48,47 +49,119 @@ pub fn lines_lossy(reader: impl BufRead) -> impl Iterator<Item = String> {
     reader.split(b'\n').map_while(Result::ok).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// How long a tool call waits for another process to finish starting or handing over.
+const BUSY_WAIT: Duration = Duration::from_secs(5);
+/// After handing the downloads to a window, how long this engine leaves it alone to open.
+const YIELD_GRACE: Duration = Duration::from_secs(8);
+
+/// The windowless engine: owns the downloads while no window does.
+struct Local {
+    app: App,
+    rx: mpsc::Receiver<control::Request>,
+    /// Released when this is dropped, after the app has saved.
+    _lock: StateLock,
+}
+
 /// Uses the open window when there is one; otherwise runs the downloads itself, without a window.
+/// When a window opens later it asks this engine to hand the downloads over, and from then on
+/// every command goes to the window.
 pub struct Engine {
     dir: PathBuf,
-    local: Option<App>,
+    local: Option<Local>,
+    pub(crate) busy_wait: Duration,
+    pub(crate) yield_grace: Duration,
+    /// When the downloads were last handed to a window.
+    yielded: Option<Instant>,
 }
 
 impl Engine {
     pub fn new(dir: PathBuf) -> Self {
-        Engine { dir, local: None }
+        Engine { dir, local: None, busy_wait: BUSY_WAIT, yield_grace: YIELD_GRACE, yielded: None }
     }
 
     /// Pause everything and save, so the next owner finds the downloads where they were.
     pub fn shutdown(&mut self) {
-        if let Some(app) = &mut self.local {
-            app.shutdown();
+        if let Some(mut local) = self.local.take() {
+            local.app.shutdown();
+            control::clear_info(&self.dir);
+        }
+    }
+
+    fn start_local(&mut self, lock: StateLock) -> Result<(), String> {
+        eprintln!("swift-download-manager: no window is open, running the downloads without one");
+        let app = App::headless_in(self.dir.clone());
+        let (tx, rx) = mpsc::channel();
+        control::start(&self.dir, tx, eframe::egui::Context::default(), "headless").map_err(|e| format!("could not open the control door: {e}"))?;
+        self.local = Some(Local { app, rx, _lock: lock });
+        self.yielded = None;
+        Ok(())
+    }
+
+    /// Answer what other processes asked of this engine, handing the downloads over when a
+    /// window asks for them.
+    fn serve_requests(&mut self) {
+        let Some(local) = &mut self.local else { return };
+        let jobs: Vec<control::Request> = local.rx.try_iter().collect();
+        let mut handoff = None;
+        for job in jobs {
+            if job.cmd == Command::Handoff {
+                local.app.prepare_handoff();
+                handoff = Some(job.reply);
+                break;
+            }
+            let answer = local.app.run_command(job.cmd);
+            let _ = job.reply.send(answer);
+        }
+        if let Some(reply) = handoff {
+            eprintln!("swift-download-manager: a window opened and took over the downloads");
+            control::clear_info(&self.dir);
+            // Dropping `local` releases the lock; only then is the window told it may go ahead.
+            self.local = None;
+            self.yielded = Some(Instant::now());
+            let _ = reply.send(Ok(serde_json::json!({ "handed_over": true })));
         }
     }
 }
 
 impl Backend for Engine {
     fn run(&mut self, cmd: Command) -> Result<Value, String> {
-        if self.local.is_none() {
+        self.serve_requests();
+        let started = Instant::now();
+        while self.local.is_none() {
             match control::call(&self.dir, &cmd) {
                 Ok(v) => return Ok(v),
                 Err(CallError::Tool(m) | CallError::Other(m)) => return Err(m),
                 Err(CallError::NoApp) => {
-                    eprintln!("swift-download-manager: no window is open, running the downloads without one");
-                    self.local = Some(App::headless());
+                    // Just handed the downloads to a window that is still opening: leave the lock
+                    // free for it instead of racing it for the downloads.
+                    if self.yielded.is_some_and(|t| t.elapsed() < self.yield_grace) {
+                        if started.elapsed() >= self.busy_wait {
+                            return Err("The app window is still opening. Try again in a moment.".into());
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
                 }
             }
+            match StateLock::try_acquire(&self.dir) {
+                Ok(Some(lock)) => self.start_local(lock)?,
+                // Someone else owns the downloads but is not answering yet (starting up).
+                Ok(None) if started.elapsed() < self.busy_wait => std::thread::sleep(Duration::from_millis(100)),
+                Ok(None) => return Err("The download list is in use by another Swift Download Manager that is not answering. Try again in a moment.".into()),
+                Err(e) => return Err(format!("Could not use the download list: {e}")),
+            }
         }
-        let Some(app) = self.local.as_mut() else { return Err("the download engine could not start".into()) };
-        app.pump();
-        let answer = app.run_command(cmd);
-        app.pump();
+        let Some(local) = self.local.as_mut() else { return Err("the download engine could not start".into()) };
+        local.app.pump();
+        let answer = local.app.run_command(cmd);
+        local.app.pump();
         answer
     }
 
     fn idle(&mut self) {
-        if let Some(app) = &mut self.local {
-            app.pump();
+        self.serve_requests();
+        if let Some(local) = &mut self.local {
+            local.app.pump();
         }
     }
 }

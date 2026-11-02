@@ -675,4 +675,4 @@ pub fn sha256_file(path: &Path) -> std::io::Result<String> {
 
 #[cfg(test)]
 #[path = "engine_tests.rs"]
-mod tests;
+pub(crate) mod tests;

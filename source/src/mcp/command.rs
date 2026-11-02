@@ -16,4 +16,6 @@ pub enum Command {
     StartQueue { name: String },
     StopQueue { name: String },
     Remove { id: u64 },
+    /// Not a tool: a window that is starting asks a windowless engine to let go of the downloads.
+    Handoff,
 }

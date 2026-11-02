@@ -208,11 +208,16 @@ fn handle(stream: TcpStream, port: u16, token: &str, tx: &Sender<Request>, ctx: 
 
 /// Run a command in the app that is listening, if there is one.
 pub fn call(dir: &Path, cmd: &Command) -> Result<Value, CallError> {
+    call_with_timeout(dir, cmd, Duration::from_secs(15))
+}
+
+/// Like `call`, giving up on the answer after `timeout`.
+pub fn call_with_timeout(dir: &Path, cmd: &Command, timeout: Duration) -> Result<Value, CallError> {
     let info = read_info(dir).ok_or(CallError::NoApp)?;
     let token = std::fs::read_to_string(dir.join("mcp-token")).map(|t| t.trim().to_string()).map_err(|_| CallError::NoApp)?;
     let mut s = TcpStream::connect_timeout(&([127, 0, 0, 1], info.port).into(), Duration::from_millis(500)).map_err(|_| CallError::NoApp)?;
     let io = |e: io::Error| CallError::Other(e.to_string());
-    s.set_read_timeout(Some(Duration::from_secs(15))).map_err(io)?;
+    s.set_read_timeout(Some(timeout)).map_err(io)?;
     let body = json!({ "command": cmd }).to_string();
     write!(
         s,

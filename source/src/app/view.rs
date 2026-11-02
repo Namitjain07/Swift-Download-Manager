@@ -11,6 +11,8 @@ impl eframe::App for App {
     fn on_exit(&mut self) {
         self.save();
         self.close_control();
+        // Let go of the download list so an MCP engine can pick it up at once.
+        self.state_lock = None;
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
