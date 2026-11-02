@@ -139,7 +139,7 @@ jobs:
           '@ | Set-Content -Encoding utf8 "$out/START HERE.txt"
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           if-no-files-found: error
@@ -163,7 +163,7 @@ jobs:
         with:
           workspaces: source
       - run: bash packaging/linux/build-deb.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           if-no-files-found: error
@@ -179,7 +179,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 packaging/browser/build_extension.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: addon
           if-no-files-found: error
@@ -197,7 +197,7 @@ jobs:
           version="${{ needs.version.outputs.version }}"
           mkdir dist
           git archive --format=zip --prefix="SwiftDownloadManager-$version-source/" -o "dist/SwiftDownloadManager-$version-source.zip" HEAD:source
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: source
           if-no-files-found: error
@@ -239,7 +239,7 @@ jobs:
             echo "public certificate in the zip and in the repository). Compare the file's SHA-256 with \`SHA256SUMS\`."
           } >> release-notes.md
           cat release-notes.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-assets
           path: |
