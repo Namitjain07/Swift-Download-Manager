@@ -18,6 +18,8 @@ chrono = "0.4"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 rfd = "0.17"
 getrandom = "0.4"
+socket2 = { version = "0.6", features = ["all"] }
+if-addrs = "0.15.0"
 
 # The tray icon. One API on every system; on Linux it talks to the desktop directly (no GTK needed).
 [target.'cfg(target_os = "linux")'.dependencies]

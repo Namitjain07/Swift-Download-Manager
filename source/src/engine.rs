@@ -11,6 +11,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::netroute::{Lease, Route, Router};
+
 /// Parts smaller than twice this are not split again.
 const MIN_SPLIT: u64 = 512 * 1024;
 
@@ -112,6 +114,8 @@ pub struct Live {
     pub connections: AtomicU64,
     /// Short note about retries, shown in the progress window.
     pub note: Mutex<Option<String>>,
+    /// The networks this download is spread over, while it runs with more than one chosen.
+    pub router: Mutex<Option<Arc<Router>>>,
 }
 
 impl Live {
@@ -127,6 +131,7 @@ impl Live {
             file_name: Mutex::new(None),
             connections: AtomicU64::new(0),
             note: Mutex::new(None),
+            router: Mutex::new(None),
         })
     }
     pub fn status(&self) -> Status {
@@ -157,6 +162,8 @@ pub struct Job {
     pub cookies: String,
     /// Browser identity to send instead of the app's own.
     pub user_agent: String,
+    /// Networks to download over at the same time (Wi-Fi, Ethernet, a phone ...). Empty: the normal way out.
+    pub routes: Vec<Route>,
 }
 
 pub fn temp_path(target: &Path) -> PathBuf {
@@ -165,23 +172,55 @@ pub fn temp_path(target: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
-fn agent(job: &Job) -> Result<ureq::Agent, String> {
+fn agent(job: &Job, route: Option<&Route>) -> Result<ureq::Agent, String> {
     let proxy = match job.proxy.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
         Some(p) => Some(ureq::Proxy::new(p).map_err(|e| format!("Proxy setting is not valid: {e}"))?),
         None => None,
     };
-    Ok(ureq::Agent::config_builder()
+    let config = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .proxy(proxy)
         .timeout_connect(Some(Duration::from_secs(20)))
         .timeout_recv_body(Some(Duration::from_secs(60)))
         .user_agent("SwiftDownloadManager/1.0")
-        .build()
-        .into())
+        .build();
+    Ok(match route {
+        Some(route) => crate::netroute::agent(config, route),
+        None => config.into(),
+    })
 }
 
-fn request(job: &Job, range: &str) -> Result<ureq::http::Response<ureq::Body>, String> {
-    let agent = agent(job)?;
+/// Why a request failed.
+struct ReqErr {
+    msg: String,
+    /// The network card is to blame (gone, unreachable, silent), not the server.
+    network: bool,
+}
+
+impl From<String> for ReqErr {
+    fn from(msg: String) -> Self {
+        ReqErr { msg, network: false }
+    }
+}
+
+impl From<ReqErr> for String {
+    fn from(e: ReqErr) -> Self {
+        e.msg
+    }
+}
+
+/// Whether a failed connection says the chosen network is not working.
+fn network_problem(e: &ureq::Error) -> bool {
+    use std::io::ErrorKind::*;
+    match e {
+        ureq::Error::Io(e) => matches!(e.kind(), AddrNotAvailable | NetworkUnreachable | HostUnreachable | NetworkDown | PermissionDenied),
+        ureq::Error::Timeout(t) => matches!(t, ureq::Timeout::Connect | ureq::Timeout::Resolve),
+        _ => false,
+    }
+}
+
+fn request(job: &Job, range: &str, lease: Option<&Lease>) -> Result<ureq::http::Response<ureq::Body>, ReqErr> {
+    let agent = agent(job, lease.map(|l| l.route()))?;
     let mut req = agent.get(&job.url).header("Range", range);
     if !job.referer.trim().is_empty() {
         req = req.header("Referer", job.referer.trim());
@@ -196,7 +235,15 @@ fn request(job: &Job, range: &str) -> Result<ureq::http::Response<ureq::Body>, S
         let token = base64_encode(format!("{}:{}", job.user, job.pass).as_bytes());
         req = req.header("Authorization", &format!("Basic {token}"));
     }
-    req.call().map_err(|e| format!("Could not connect: {e}"))
+    req.call().map_err(|e| ReqErr { network: lease.is_some() && network_problem(&e), msg: format!("Could not connect: {e}") })
+}
+
+/// A network for one connection. `None` when no networks were chosen: use the normal way out.
+fn take_route(router: &Arc<Router>) -> Result<Option<Lease>, String> {
+    if router.len() == 0 {
+        return Ok(None);
+    }
+    router.acquire().map(Some).ok_or_else(|| "None of the chosen networks is working right now".to_string())
 }
 
 /// Sleep for the retry delay, waking early when the download is paused.
@@ -210,6 +257,18 @@ fn retry_pause(live: &Live, attempt: u32) {
     }
 }
 
+/// Wait before trying again, except when another network can take over right away.
+fn retry_after_failure(live: &Live, attempt: u32, router: &Router) {
+    if router.usable() > 0 && router.len() > 1 {
+        *live.note.lock().unwrap() = Some("A network is not working, using the others…".into());
+        return;
+    }
+    retry_pause(live, attempt);
+}
+
+/// A part's first connection can be the one that probed the server.
+type Reuse = (Box<dyn Read + Send>, Option<Lease>);
+
 /// Start (or resume) a download on a background thread.
 pub fn start(job: Job, live: Arc<Live>, limiter: Arc<Limiter>, ctx: eframe::egui::Context) {
     live.stop.store(false, Ordering::SeqCst);
@@ -220,6 +279,7 @@ pub fn start(job: Job, live: Arc<Live>, limiter: Arc<Limiter>, ctx: eframe::egui
         let job = Arc::new(job);
         let result = run(&job, &live, &limiter);
         live.connections.store(0, Ordering::SeqCst);
+        *live.router.lock().unwrap() = None;
         *live.note.lock().unwrap() = None;
         match result {
             Ok(true) => live.set_status(Status::Complete),
@@ -297,30 +357,41 @@ fn header(resp: &ureq::http::Response<ureq::Body>, name: &str) -> Option<String>
 /// Returns Ok(true) when finished, Ok(false) when paused.
 fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool, String> {
     let have_segments = !live.segments.lock().unwrap().is_empty();
+    let router = Router::new(job.routes.clone());
+    if router.len() > 0 {
+        *live.router.lock().unwrap() = Some(router.clone());
+    }
 
     // A previously split download whose part file still exists: just resume the parts.
     if have_segments && temp_path(&job.target).exists() && live.resumable.load(Ordering::SeqCst) {
         live.set_status(Status::Downloading);
-        return run_segments(job, live, limiter, None);
+        return run_segments(job, live, limiter, &router, None);
     }
 
-    // Probe the server (with retries).
+    // Probe the server (with retries). The probe goes out through one of the chosen networks.
     let mut attempt = 0;
-    let resp = loop {
-        let r = request(job, "bytes=0-").and_then(|r| {
-            let code = r.status().as_u16();
-            if code >= 400 { Err(format!("Server answered {code}")) } else { Ok(r) }
+    let (resp, mut lease) = loop {
+        let r = take_route(&router).map_err(ReqErr::from).and_then(|lease| match request(job, "bytes=0-", lease.as_ref()) {
+            Ok(r) if r.status().as_u16() >= 400 => Err(ReqErr::from(format!("Server answered {}", r.status().as_u16()))),
+            Ok(r) => Ok((r, lease)),
+            Err(e) => {
+                if e.network {
+                    lease.iter().for_each(|l| l.fail());
+                }
+                Err(e)
+            }
         });
         match r {
             Ok(r) => break r,
             Err(e) => {
+                let e = e.msg;
                 // 4xx answers will not get better by retrying.
                 let permanent = e.starts_with("Server answered 4") && !e.contains("429");
                 if live.stopped() || permanent || attempt >= job.retries {
                     return Err(e);
                 }
                 attempt += 1;
-                retry_pause(live, attempt);
+                retry_after_failure(live, attempt, &router);
             }
         }
     };
@@ -360,7 +431,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
 
     if resumable && total > 0 {
         // Split into parts. The first part re-uses the probe connection.
-        let n = job.connections.max(1).min(((total / MIN_SPLIT).max(1)) as usize) as u64;
+        let n = job.connections.max(router.len()).max(1).min(((total / MIN_SPLIT).max(1)) as usize) as u64;
         let size = total / n;
         let segs = (0..n)
             .map(|i| Segment { start: i * size, end: if i == n - 1 { total - 1 } else { (i + 1) * size - 1 }, done: 0 })
@@ -372,7 +443,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
         drop(f);
         live.set_status(Status::Downloading);
         let first: Box<dyn Read + Send> = Box::new(resp.into_body().into_reader());
-        return run_segments(&job, live, limiter, Some(first));
+        return run_segments(&job, live, limiter, &router, Some((first, lease)));
     }
 
     // Plain single stream (server cannot resume): on a broken connection start over.
@@ -383,7 +454,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
         live.downloaded.store(0, Ordering::SeqCst);
         live.set_status(Status::Downloading);
         live.connections.store(1, Ordering::SeqCst);
-        match single_stream(&mut reader, &tmp, live, limiter) {
+        match single_stream(&mut reader, &tmp, live, limiter, lease.as_ref()) {
             Ok(true) => break,
             Ok(false) => return Ok(false),
             Err(e) => {
@@ -391,8 +462,10 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
                     return Err(e);
                 }
                 attempt += 1;
-                retry_pause(live, attempt);
-                let r = request(&job, "bytes=0-")?;
+                retry_after_failure(live, attempt, &router);
+                drop(lease.take()); // hand the network back first, so the router sees the real load
+                lease = take_route(&router)?;
+                let r = request(&job, "bytes=0-", lease.as_ref())?;
                 reader = Box::new(r.into_body().into_reader());
             }
         }
@@ -407,7 +480,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
     Ok(true)
 }
 
-fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Live, limiter: &Limiter) -> Result<bool, String> {
+fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Live, limiter: &Limiter, lease: Option<&Lease>) -> Result<bool, String> {
     let mut f = File::create(tmp).map_err(|e| format!("Cannot create file: {e}"))?;
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -421,6 +494,9 @@ fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Live, lim
         limiter.take(n);
         f.write_all(&buf[..n]).map_err(|e| format!("Write failed: {e}"))?;
         live.downloaded.fetch_add(n as u64, Ordering::SeqCst);
+        if let Some(l) = lease {
+            l.add_bytes(n as u64);
+        }
     }
 }
 
@@ -447,18 +523,18 @@ enum End {
     Failed(String),
 }
 
-fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, mut first: Option<Box<dyn Read + Send>>) -> Result<bool, String> {
+fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, router: &Arc<Router>, mut first: Option<Reuse>) -> Result<bool, String> {
     let tmp = temp_path(&job.target);
     let (tx, rx) = mpsc::channel::<(usize, End)>();
     // Lowered when the server says it has too many connections from us.
-    let mut max = job.connections.max(1);
+    let mut max = job.connections.max(router.len()).max(1);
     let mut running: Vec<usize> = Vec::new();
 
-    let spawn = |idx: usize, reuse: Option<Box<dyn Read + Send>>| {
-        let (job, live, limiter, tmp, tx) = (job.clone(), live.clone(), limiter.clone(), tmp.clone(), tx.clone());
+    let spawn = |idx: usize, reuse: Option<Reuse>| {
+        let (job, live, limiter, router, tmp, tx) = (job.clone(), live.clone(), limiter.clone(), router.clone(), tmp.clone(), tx.clone());
         live.connections.fetch_add(1, Ordering::SeqCst);
         thread::spawn(move || {
-            let r = segment_worker(idx, &job, &tmp, &live, &limiter, reuse);
+            let r = segment_worker(idx, &job, &tmp, &live, &limiter, &router, reuse);
             live.connections.fetch_sub(1, Ordering::SeqCst);
             let _ = tx.send((idx, r));
         });
@@ -536,7 +612,7 @@ fn busy_pause(live: &Live, secs: u64) {
     }
 }
 
-fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: &Arc<Limiter>, mut reuse: Option<Box<dyn Read + Send>>) -> End {
+fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: &Arc<Limiter>, router: &Arc<Router>, mut reuse: Option<Reuse>) -> End {
     let mut f = match OpenOptions::new().write(true).open(tmp) {
         Ok(f) => f,
         Err(e) => return End::Failed(format!("Cannot open file: {e}")),
@@ -553,32 +629,49 @@ fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: 
             }
             (s.start + s.done, s.end)
         };
+        // The network this connection uses (dropped, and so handed back, at the end of each round).
+        let mut lease: Option<Lease> = None;
         // Err((server busy?, message, seconds the server asked us to wait))
         let reader: Result<Box<dyn Read + Send>, (bool, String, Option<u64>)> = match reuse.take() {
-            Some(r) => Ok(r),
-            None => match request(job, &format!("bytes={pos}-{end}")) {
-                Ok(resp) => {
-                    let code = resp.status().as_u16();
-                    if code == 206 {
-                        Ok(Box::new(resp.into_body().into_reader()))
-                    } else if code == 429 || code == 503 {
-                        let wait = header(&resp, "retry-after").and_then(|v| v.trim().parse().ok());
-                        Err((true, format!("Server is busy (answer {code})"), wait))
-                    } else {
-                        Err((false, format!("Server refused to resume (answer {code})"), None))
+            Some((r, l)) => {
+                lease = l;
+                Ok(r)
+            }
+            None => match take_route(router) {
+                Err(e) => Err((false, e, None)),
+                Ok(l) => {
+                    lease = l;
+                    match request(job, &format!("bytes={pos}-{end}"), lease.as_ref()) {
+                        Ok(resp) => {
+                            let code = resp.status().as_u16();
+                            if code == 206 {
+                                Ok(Box::new(resp.into_body().into_reader()))
+                            } else if code == 429 || code == 503 {
+                                let wait = header(&resp, "retry-after").and_then(|v| v.trim().parse().ok());
+                                Err((true, format!("Server is busy (answer {code})"), wait))
+                            } else {
+                                Err((false, format!("Server refused to resume (answer {code})"), None))
+                            }
+                        }
+                        // The chosen network is down: rest it, the others carry on.
+                        Err(e) if e.network => {
+                            lease.iter().for_each(|l| l.fail());
+                            Err((false, e.msg, None))
+                        }
+                        // Could not connect at all: many servers do this when they limit connections.
+                        Err(e) => Err((true, e.msg, None)),
                     }
                 }
-                // Could not connect at all: many servers do this when they limit connections.
-                Err(e) => Err((true, e, None)),
             },
         };
         let (busy, e, wait) = match reader {
-            Ok(mut r) => match pump(idx, &mut r, &mut f, pos, live, limiter, &mut attempt) {
+            Ok(mut r) => match pump(idx, &mut r, &mut f, pos, live, limiter, &mut attempt, lease.as_ref()) {
                 Ok(()) => return End::Done,
                 Err(e) => (false, e, None),
             },
             Err(x) => x,
         };
+        drop(lease);
         if live.stopped() {
             return End::Done;
         }
@@ -594,13 +687,14 @@ fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: 
         if busy {
             busy_pause(live, wait.unwrap_or(2 * attempt as u64).clamp(1, 30));
         } else {
-            retry_pause(live, attempt);
+            retry_after_failure(live, attempt, router);
         }
     }
 }
 
 /// Copy bytes for one part until it is complete. Progress resets the retry counter.
-fn pump(idx: usize, r: &mut Box<dyn Read + Send>, f: &mut File, pos: u64, live: &Live, limiter: &Limiter, attempt: &mut u32) -> Result<(), String> {
+#[allow(clippy::too_many_arguments)]
+fn pump(idx: usize, r: &mut Box<dyn Read + Send>, f: &mut File, pos: u64, live: &Live, limiter: &Limiter, attempt: &mut u32, lease: Option<&Lease>) -> Result<(), String> {
     f.seek(SeekFrom::Start(pos)).map_err(|e| e.to_string())?;
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -620,6 +714,9 @@ fn pump(idx: usize, r: &mut Box<dyn Read + Send>, f: &mut File, pos: u64, live: 
         f.write_all(&buf[..n]).map_err(|e| format!("write failed: {e}"))?;
         live.segments.lock().unwrap()[idx].done += n as u64;
         live.downloaded.fetch_add(n as u64, Ordering::SeqCst);
+        if let Some(l) = lease {
+            l.add_bytes(n as u64);
+        }
         *attempt = 0;
     }
 }

@@ -221,6 +221,10 @@ pub struct Settings {
     pub launch_at_login: bool,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
+    /// Download over several networks at once (Options > Networks).
+    pub multi_network: bool,
+    /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
+    pub networks: Vec<String>,
 }
 
 impl Default for Settings {
@@ -250,6 +254,8 @@ impl Default for Settings {
             background: closing::BackgroundMode::Ask,
             launch_at_login: false,
             mcp_enabled: true,
+            multi_network: false,
+            networks: Vec::new(),
         }
     }
 }

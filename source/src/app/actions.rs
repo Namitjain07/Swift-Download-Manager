@@ -87,8 +87,17 @@ impl App {
         Ok(urls.len())
     }
 
+    /// The networks to download over: the cards chosen in Options > Networks that are connected right now.
+    fn chosen_routes(&self) -> Vec<crate::netroute::Route> {
+        if !self.settings.multi_network || self.demo {
+            return Vec::new();
+        }
+        crate::netroute::resolve(&self.settings.networks, &crate::netroute::interfaces())
+    }
+
     pub(super) fn start_item(&mut self, id: u64) {
         let logins = self.settings.site_logins.clone();
+        let routes = self.chosen_routes();
         let Some(item) = self.items.iter_mut().find(|i| i.id == id) else { return };
         if item.status().is_active() || item.status() == Status::Complete {
             return;
@@ -118,6 +127,7 @@ impl App {
             retries: self.settings.retries,
             cookies: item.cookies.clone(),
             user_agent: item.user_agent.clone(),
+            routes,
         };
         engine::start(job, item.live.clone(), item.limiter.clone(), self.ctx.clone());
         self.dirty = true;
