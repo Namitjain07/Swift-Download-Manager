@@ -9,9 +9,14 @@
 ![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)
 
-<img src="docs/images/screenshot.png" alt="Swift Download Manager main window: a category tree and queues on the left, a table of downloads with progress bars, speed and time left in the middle, and a toolbar with Add URL, Batch, Resume, Stop, Scheduler and Start Queue buttons on top" width="900">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
+  <img src="docs/images/screenshot.png" alt="Swift Download Manager main window in light mode: a category tree and queues on the left, a table of downloads with status dots and thin progress bars in the middle, and a toolbar of line icons on top" width="900">
+</picture>
 
-<sub>The main window, shown with the app's built-in sample data (<code>--demo</code> mode).</sub>
+<sub>The main window in light and dark mode (it follows your system), shown with the app's built-in sample data (<code>--demo</code> mode).</sub>
+
+<img src="docs/images/screenshot-dark.png" alt="The same window in dark mode" width="440"> <img src="docs/images/scheduler-dark.png" alt="The scheduler window in dark mode with a wheel picker for the start time" width="300">
 
 </div>
 
@@ -27,6 +32,11 @@ sooner and a broken connection never means starting over.
 - Splits each download into up to **32 connections**; a free connection takes half of the biggest remaining part
 - **Pause and resume**, even after closing the app; broken connections are retried and busy servers get fewer connections
 - **SHA-256 checksum** check, plus refreshing a link that has expired
+
+**A calm, native-feeling window**
+- A flat, iOS-style look with **light and dark mode** that follows your system (or choose under **View → Appearance**)
+- Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in
+- Switches, wheel pickers for times, and spinner wheels while something is loading. The window stays idle when nothing moves
 
 **Organised**
 - **Queues** with their own schedules (start and stop times, daily or once, close the app when done)
@@ -93,13 +103,16 @@ Install Rust from <https://rustup.rs>, then, in the [`source/`](source/) folder:
 On Linux the app also needs the usual desktop libraries (they are already there on desktop systems).
 The full build notes are in [`source/README.md`](source/README.md).
 
-### Retaking the screenshot
+### Retaking the screenshots
 
-The app can draw itself with sample data and save a picture of its window, which is how the screenshot above was made:
+The app can draw itself with sample data and save a picture of its window, which is how the screenshots above were made:
 
 ```bash
 cd source
-cargo run --release -- --screenshot ../docs/images/screenshot.png
+cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
+cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
+# a window other than the main one: --show add|batch|options|scheduler|queues|properties|progress|delete|about|browser|grabber
+cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
 
 On a machine without a screen, put `xvfb-run -a` in front of the program.
@@ -112,6 +125,7 @@ On a machine without a screen, put `xvfb-run -a` in front of the program.
 | [`source/src/engine.rs`](source/src/engine.rs) | The download engine: connections, splitting, resume, retries, speed limits |
 | [`source/src/bridge.rs`](source/src/bridge.rs) | The local link listener for the browser add-on, and clipboard watching |
 | [`source/src/app.rs`](source/src/app.rs), [`source/src/app/`](source/src/app/) | The window, dialogs, queues, scheduler and link grabber |
+| [`source/src/theme.rs`](source/src/theme.rs), [`source/src/widgets/`](source/src/widgets/) | The light and dark colours, and the widget kit (buttons, switch, wheel picker, progress bars) |
 | [`browser-extension/`](browser-extension/) | The browser add-on, packaged for Chrome and Firefox |
 | `linux/`, `windows/`, `mac/` | The ready-made program for each system |
 | [`docs/`](docs/) | Images used by this read-me |

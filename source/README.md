@@ -27,7 +27,7 @@ Install Rust from <https://rustup.rs>, then in this folder:
 | Windows (from Linux) | `bash packaging/windows/build-windows.sh` | `dist/windows/*.zip` |
 | Mac (on a Mac) | `bash packaging/macos/build-mac.sh` | `dist/*.dmg` |
 | Browser add-on | `python3 packaging/browser/build_extension.py` | `dist/browser/` (Chrome .zip, Firefox .xpi) |
-| Run the tests | `cargo test` | 20 automatic tests |
+| Run the tests | `cargo test` | the automatic tests |
 
 On Linux the app also needs the usual desktop libraries (they are already there on desktop systems).
 
@@ -39,6 +39,7 @@ On Linux the app also needs the usual desktop libraries (they are already there 
 - `src/engine.rs`: the download engine (connections, splitting, resume, retries, speed limits)
 - `src/bridge.rs`: the local link listener for the browser add-on, and clipboard watching
 - `src/app.rs` and `src/app/`: the window, dialogs, queues, scheduler and link grabber
+- `src/theme.rs` and `src/widgets/`: the light and dark colours and the widget kit (buttons, switch, wheel picker, progress bars)
 - `browser-extension/`: the browser add-on
 - `packaging/`: installer scripts for Linux, Windows and Mac
 

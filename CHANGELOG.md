@@ -3,6 +3,17 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### A new look
+- Flat, iOS-style design with **light and dark mode**; it follows the system by default and can be changed under **View → Appearance**
+- New widgets: capsule buttons, switches, segmented controls, grouped cards, wheel pickers for the scheduler times,
+  spinner wheels and gliding progress bars
+- Toolbar and sidebar redrawn: line icons that follow the theme and a selection highlight that slides between rows
+- Download list with taller rows, status dots and thin progress bars; dialogs redrawn as sheets
+- Animations: buttons fade and press, windows fade in, toasts slide up. The window only repaints while something moves
+- `--theme light|dark` and `--show <window>` for taking screenshots
+
 ## [1.2.0]
 
 First release published on GitHub.
