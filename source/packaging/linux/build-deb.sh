@@ -6,6 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+# A pre-release such as 1.5.0-beta.1 is written 1.5.0~beta.1 for dpkg, so it sorts before 1.5.0.
+VERSION=${VERSION/-/\~}
 ARCH=$(dpkg --print-architecture 2>/dev/null || echo amd64)
 NAME=swift-download-manager
 PKG="dist/deb/${NAME}_${VERSION}_${ARCH}"

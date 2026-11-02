@@ -1,6 +1,7 @@
 # Builds every file of a release on GitHub's own computers and publishes it.
 #
 #   git tag v1.3.0 && git push origin v1.3.0      # builds, signs and publishes a release
+#   (a version with a dash, such as 1.5.0-beta.1, is published as a pre-release)
 #   Actions > Release > Run workflow              # a dry run: builds and signs, publishes nothing
 #
 # The tag must match the version in source/Cargo.toml. The release gets the Windows program (built with
@@ -250,7 +251,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A version with a dash (1.5.0-beta.1) is a pre-release: it is never offered as the latest version.
+          flags=""
+          case "$VERSION" in *-*) flags="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --verify-tag \
             --title "Swift Download Manager $VERSION" \
-            --notes-file release-notes.md
+            --notes-file release-notes.md $flags

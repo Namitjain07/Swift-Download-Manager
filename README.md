@@ -39,6 +39,7 @@ sooner and a broken connection never means starting over.
 
 **A calm, native-feeling window**
 - **Responsive**: downloads are cards in a grid that gains columns as the window widens (or the classic table, one click away); the sidebar becomes an icon rail and then a drawer, and the toolbar collapses to icons and an overflow menu on narrow windows
+- **Several networks at once** *(pre-release 1.5.0-beta.1)*: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
 - Two designs, switchable under **View → Appearance** (or in **Options**): **Drishti** (the default), built from the Drishti design system with a dark-first palette, 36 px rounded controls, a sidebar rail and state chips that always carry a word, and the flat **iOS** look with capsule buttons and grouped cards. Both come in light and dark and follow your system
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in. The window stays idle when nothing moves
 
@@ -82,6 +83,24 @@ system tray:
 
 On Linux the icon needs a desktop that shows tray icons (KDE, Xfce, Cinnamon, MATE, or GNOME with the AppIndicator extension). Without one, the program still
 runs in the background; start it again to open the window.
+
+## Download over several networks at once
+
+*Pre-release (1.5.0-beta.1): get it from the releases page, where it is marked as a pre-release.*
+
+Open **Options → Networks**, turn on **Download over several networks at once** and tick the network cards to use: Wi-Fi, Ethernet, a phone's
+USB or hotspot connection. A download is then spread over all of them.
+
+<p align="center"><img src="docs/images/networks-dark.png" alt="Options with the Networks card" width="640"></p>
+
+- Each connection of a download is tied to one network card. Every card always gets a connection and the faster cards get more, so the speeds add
+  up and a slow card never holds the others back
+- A card that stops working (cable pulled, phone out of range) is left alone for 30 seconds while the others carry on
+- The progress window shows what each network is carrying
+- When networks are chosen, nothing falls back to the normal connection: if none of them works, the download says so
+- Linux ties the traffic to the card with `SO_BINDTODEVICE` (kernel 5.7 or newer; older kernels use the card's address), macOS with `IP_BOUND_IF`, and
+  Windows with the card's address. The logic is tested on Linux with separate local addresses standing in for networks; it has not yet been tried with
+  real phones and cables on Windows or macOS, so please report what you see
 
 ## Use it from an AI assistant (MCP)
 
@@ -211,7 +230,7 @@ cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
 cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
 cargo run --release -- --screenshot ../docs/images/screenshot-ios.png --theme light --style ios
 # the other design: --style ios   (drishti is the default)
-# a window other than the main one: --show add|batch|options|scheduler|queues|properties|progress|delete|about|browser|grabber
+# a window other than the main one: --show add|batch|options|networks|scheduler|queues|properties|progress|delete|about|browser|grabber
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
 
@@ -238,7 +257,7 @@ and in `%APPDATA%\swift-download-manager\` on Windows.
 ## Releases
 
 Releases are listed on the [releases page](https://github.com/Namitjain07/Swift-Download-Manager/releases), and what changed
-in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0` builds, signs and publishes a release; see
+in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0` builds, signs and publishes a release (a version with a dash, such as `1.5.0-beta.1`, is published as a pre-release); see
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ## Contributing

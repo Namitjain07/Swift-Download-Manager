@@ -2,7 +2,8 @@
 
 use super::*;
 use std::io::{BufRead, BufReader};
-use std::net::{TcpListener, TcpStream};
+use std::collections::HashMap;
+use std::net::{IpAddr, TcpListener, TcpStream};
 use std::sync::atomic::AtomicUsize;
 
 pub(crate) const SIZE: usize = 5 * 1024 * 1024 + 12345;
@@ -24,6 +25,23 @@ pub(crate) struct Server {
     peak: Arc<AtomicUsize>,
     pub(crate) data: Arc<Vec<u8>>,
     requests: Arc<AtomicUsize>,
+    net: Arc<Net>,
+}
+
+/// Which addresses connected, and how much each was sent.
+#[derive(Default)]
+struct Net {
+    peers: Mutex<Vec<IpAddr>>,
+    sent: Mutex<HashMap<IpAddr, u64>>,
+}
+
+impl Server {
+    fn peers(&self) -> Vec<IpAddr> {
+        self.net.peers.lock().unwrap().clone()
+    }
+    fn sent_to(&self, ip: &str) -> u64 {
+        self.net.sent.lock().unwrap().get(&ip.parse::<IpAddr>().unwrap()).copied().unwrap_or(0)
+    }
 }
 
 impl Server {
@@ -39,23 +57,26 @@ pub(crate) fn server() -> Server {
     let requests = Arc::new(AtomicUsize::new(0));
     let active = Arc::new(AtomicUsize::new(0));
     let peak = Arc::new(AtomicUsize::new(0));
-    let (d, r, pk) = (data.clone(), requests.clone(), peak.clone());
+    let net = Arc::new(Net::default());
+    let (d, r, pk, nt) = (data.clone(), requests.clone(), peak.clone(), net.clone());
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
-            let (d, r, a, pk) = (d.clone(), r.clone(), active.clone(), pk.clone());
+            let (d, r, a, pk, nt) = (d.clone(), r.clone(), active.clone(), pk.clone(), nt.clone());
             thread::spawn(move || {
                 let now = a.fetch_add(1, Ordering::SeqCst) + 1;
                 pk.fetch_max(now, Ordering::SeqCst);
-                handle(stream, &d, &r, now);
+                handle(stream, &d, &r, now, &nt);
                 a.fetch_sub(1, Ordering::SeqCst);
             });
         }
     });
-    Server { port, peak, data, requests }
+    Server { port, peak, data, requests, net }
 }
 
-fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usize) {
+fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usize, net: &Net) {
     let n_req = requests.fetch_add(1, Ordering::SeqCst);
+    let peer = s.peer_addr().unwrap().ip();
+    net.peers.lock().unwrap().push(peer);
     let mut reader = BufReader::new(s.try_clone().unwrap());
     let mut line = String::new();
     if reader.read_line(&mut line).is_err() {
@@ -98,6 +119,7 @@ fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usi
             if s.write_all(chunk).is_err() {
                 return;
             }
+            *net.sent.lock().unwrap().entry(peer).or_default() += chunk.len() as u64;
             if slow {
                 thread::sleep(Duration::from_millis(15));
             }
@@ -120,7 +142,8 @@ fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usi
         send(&mut s, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(), &[], false, None);
         return;
     }
-    let slow = path.starts_with("/slow") || path.starts_with("/limited");
+    // "/pernet": the network that comes from 127.0.0.2 is slow, the others are fast.
+    let slow = path.starts_with("/slow") || path.starts_with("/limited") || (path.starts_with("/pernet") && peer == "127.0.0.2".parse::<IpAddr>().unwrap());
     // Flaky: the first 6 requests break after 100 KB.
     let cut = if path.starts_with("/flaky") && n_req < 6 { Some(100 * 1024) } else { None };
     let extra = if path.starts_with("/named") {
@@ -358,4 +381,86 @@ fn per_download_limit_works_with_overall_limit() {
     assert_eq!(wait(&live, 60), Status::Complete);
     assert!(t.elapsed().as_secs_f64() > 1.8, "too fast: {:?}", t.elapsed());
     assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+}
+
+// --- several networks at once ---------------------------------------------------------------------
+
+use crate::netroute::Route;
+
+fn loopback(ip: &str) -> Route {
+    Route { name: "lo".into(), addr: ip.parse().unwrap(), index: None }
+}
+
+/// Whether this computer lets us use other 127.x.x.x addresses as if they were separate networks.
+fn aliases_work() -> bool {
+    TcpListener::bind("127.0.0.2:0").is_ok() && TcpListener::bind("127.0.0.3:0").is_ok()
+}
+
+#[test]
+fn download_over_two_networks_is_byte_exact_and_uses_both() {
+    if !aliases_work() {
+        eprintln!("skipped: no 127.0.0.2 / 127.0.0.3 here");
+        return;
+    }
+    let srv = server();
+    let out = dir("two-nets").join("file.bin");
+    let live = fresh();
+    let j = Job { routes: vec![loopback("127.0.0.2"), loopback("127.0.0.3")], ..job(srv.url("/range/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 30), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+    let peers = srv.peers();
+    assert!(peers.contains(&"127.0.0.2".parse().unwrap()), "{peers:?}");
+    assert!(peers.contains(&"127.0.0.3".parse().unwrap()), "{peers:?}");
+    assert!(!peers.contains(&"127.0.0.1".parse().unwrap()), "nothing may go out the default way: {peers:?}");
+}
+
+#[test]
+fn a_faster_network_carries_more_of_the_file() {
+    if !aliases_work() {
+        eprintln!("skipped: no 127.0.0.2 / 127.0.0.3 here");
+        return;
+    }
+    let srv = server();
+    let out = dir("fast-slow").join("file.bin");
+    let live = fresh();
+    // Two big parts (the small test file would otherwise be cut into parts too small to share out again).
+    let j = Job { routes: vec![loopback("127.0.0.2"), loopback("127.0.0.3")], connections: 2, ..job(srv.url("/pernet/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 60), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+    let (slow, fast) = (srv.sent_to("127.0.0.2"), srv.sent_to("127.0.0.3"));
+    assert!(slow > 0, "the slow network still helps");
+    assert!(fast > slow * 2, "the fast network does most of the work: slow {slow}, fast {fast}");
+}
+
+#[test]
+fn a_network_that_does_not_work_is_left_out_and_the_download_still_finishes() {
+    if !aliases_work() {
+        eprintln!("skipped: no 127.0.0.2 here");
+        return;
+    }
+    let srv = server();
+    let out = dir("one-bad").join("file.bin");
+    let live = fresh();
+    // 203.0.113.7 is reserved for documentation: no network card on this computer has it.
+    let gone = Route { name: "unplugged".into(), addr: "203.0.113.7".parse().unwrap(), index: None };
+    let j = Job { routes: vec![gone, loopback("127.0.0.2")], ..job(srv.url("/range/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 30), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+    assert!(srv.peers().iter().all(|p| *p == "127.0.0.2".parse::<IpAddr>().unwrap()));
+}
+
+#[test]
+fn with_no_working_network_the_download_says_so() {
+    let srv = server();
+    let out = dir("all-bad").join("file.bin");
+    let live = fresh();
+    let gone = Route { name: "unplugged".into(), addr: "203.0.113.7".parse().unwrap(), index: None };
+    let j = Job { routes: vec![gone], retries: 1, ..job(srv.url("/range/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 30), Status::Error);
+    assert!(srv.peers().is_empty(), "nothing may fall back to the normal connection");
+    assert!(!out.exists());
 }

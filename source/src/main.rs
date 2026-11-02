@@ -9,6 +9,7 @@ mod bridge;
 mod engine;
 mod icons;
 mod mcp;
+mod netroute;
 mod theme;
 mod widgets;
 

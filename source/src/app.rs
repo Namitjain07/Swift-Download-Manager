@@ -221,6 +221,10 @@ pub struct Settings {
     pub launch_at_login: bool,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
+    /// Download over several networks at once (Options > Networks).
+    pub multi_network: bool,
+    /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
+    pub networks: Vec<String>,
 }
 
 impl Default for Settings {
@@ -250,6 +254,8 @@ impl Default for Settings {
             background: closing::BackgroundMode::Ask,
             launch_at_login: false,
             mcp_enabled: true,
+            multi_network: false,
+            networks: Vec::new(),
         }
     }
 }
@@ -686,7 +692,19 @@ impl App {
         match name {
             "add" => self.open_add_dialog(None),
             "batch" => self.open_batch(),
-            "options" => self.options = Some(self.settings.clone()),
+            "options" | "networks" => {
+                if name == "networks" {
+                    self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_networks"), true));
+                }
+                let mut o = self.settings.clone();
+                if self.demo {
+                    // The picture shows the Networks card filled in.
+                    o.multi_network = true;
+                    o.networks = vec!["Wi-Fi".into(), "Ethernet".into(), "Phone hotspot".into()];
+                    self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_demo_networks"), true));
+                }
+                self.options = Some(o);
+            }
             "scheduler" => self.open_scheduler(MAIN_QUEUE),
             "queues" => self.queues_open = true,
             "delete" => self.delete = Some(DeleteDialog { ids: vec![2], delete_files: false }),
