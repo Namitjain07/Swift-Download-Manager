@@ -7,7 +7,8 @@ Security fixes are made for the latest release only. Please update to the newest
 
 | Version | Supported |
 | --- | --- |
-| Latest release (1.3.x) | Yes |
+| Latest stable release (1.4.x) | Yes |
+| Latest pre-release (1.6.0-beta.x: several networks, web interface, server, Docker) | Yes, and reports are especially welcome |
 | Older releases | No |
 
 ## Reporting a vulnerability
@@ -44,6 +45,11 @@ Reports about these are especially welcome:
 - the MCP control door used by AI assistants (`--mcp`): it listens only on `127.0.0.1` on a random port, needs the
   secret token from `mcp-token` in the settings folder, and must refuse web pages (an `Origin` header, a foreign
   `Host`) and oversized requests; assistants must never be able to delete files, choose a folder or read passwords
+- the web interface (`Options > Web interface`, and `--server` with the Docker image): the sign-in and session cookie,
+  the per-person separation of downloads and files (nobody may see, change or fetch somebody else's), the
+  `Host`/`Origin`/`X-SDM-Request` checks that keep other web pages out, the page's content security policy and anything that lets a
+  file name or link put code on the page, and the refusal of links to private and local addresses (a server must not be a way into the network behind
+  it; redirects included)
 - the installers and the packaged files in a release
 
 Problems that need an attacker who already controls the user's computer, or ordinary bugs without a security effect,
