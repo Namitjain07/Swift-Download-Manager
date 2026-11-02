@@ -136,7 +136,7 @@ impl Engine {
                 handoff = Some(job.reply);
                 break;
             }
-            let answer = local.app.run_command(job.cmd);
+            let answer = local.app.run_request(job.cmd, job.who);
             let _ = job.reply.send(answer);
         }
         if let Some(reply) = handoff {

@@ -23,6 +23,8 @@ const MAX_HEADERS: usize = 64;
 pub struct Request {
     pub cmd: Command,
     pub reply: Sender<Result<Value, String>>,
+    /// Set for the web interface; `None` for an AI assistant (MCP).
+    pub who: Option<super::command::Who>,
 }
 
 /// Where the listener can be found. Written to `control.json`.
@@ -190,7 +192,7 @@ fn handle(stream: TcpStream, port: u16, token: &str, tx: &Sender<Request>, ctx: 
                 None => return respond(&stream, "400 Bad Request", &json!({ "error": "expected {\"command\": {...}}" })),
             };
             let (reply, answer) = mpsc::channel();
-            if tx.send(Request { cmd, reply }).is_err() {
+            if tx.send(Request { cmd, reply, who: None }).is_err() {
                 return respond(&stream, "503 Service Unavailable", &json!({ "error": "the app is shutting down" }));
             }
             ctx.request_repaint();

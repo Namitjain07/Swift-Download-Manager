@@ -16,6 +16,16 @@ pub enum Command {
     StartQueue { name: String },
     StopQueue { name: String },
     Remove { id: u64 },
+    /// Not a tool: where a finished file is, so the web interface can send it to a browser.
+    Locate { id: u64 },
     /// Not a tool: a window that is starting asks a windowless engine to let go of the downloads.
     Handoff,
+}
+
+/// Who a web request is for. On a shared server every person has their own downloads; the page on
+/// your own computer has an empty name and is not tied to anybody.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Who {
+    pub name: String,
+    pub admin: bool,
 }

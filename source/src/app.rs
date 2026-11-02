@@ -302,6 +302,8 @@ struct SavedItem {
     /// Was running when a window took the downloads over from the MCP engine: carry on.
     #[serde(default)]
     handoff_resume: bool,
+    #[serde(default)]
+    owner: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -343,6 +345,8 @@ pub struct Item {
     limit_kbps: u64,
     limiter: Arc<Limiter>,
     handoff_resume: bool,
+    /// On a shared server: whose download this is (empty on a personal computer).
+    owner: String,
     speed: f64,
     last_bytes: u64,
     last_status: Status,
@@ -377,6 +381,7 @@ impl Item {
             limit_kbps: 0,
             limiter: Arc::new(Limiter::chained(overall.clone())),
             handoff_resume: false,
+            owner: String::new(),
             speed: 0.0,
             last_bytes,
             last_status,
@@ -753,6 +758,7 @@ impl App {
             item.user_agent = s.user_agent;
             item.set_limit(s.limit_kbps);
             item.handoff_resume = s.handoff_resume;
+            item.owner = s.owner;
             self.items.push(item);
         }
         self.fix_settings();
@@ -818,6 +824,7 @@ impl App {
                 user_agent: i.user_agent.clone(),
                 limit_kbps: i.limit_kbps,
                 handoff_resume: i.handoff_resume,
+                owner: i.owner.clone(),
             })
             .collect();
         let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items, handoff_queues: self.handoff_queues.clone() };

@@ -11,6 +11,7 @@ mod icons;
 mod mcp;
 mod netroute;
 mod theme;
+mod web;
 mod widgets;
 
 use std::path::PathBuf;
