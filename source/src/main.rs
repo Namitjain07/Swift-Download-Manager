@@ -6,6 +6,7 @@ mod appicon;
 mod bridge;
 mod engine;
 mod icons;
+mod mcp;
 mod theme;
 mod widgets;
 
