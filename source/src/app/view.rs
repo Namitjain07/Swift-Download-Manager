@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{cat_row, mini_bar, status_chip, tool_button, toolbar_sep};
+use crate::widgets::{cat_row, mini_bar, sidebar_pill, sidebar_row, status_chip, tool_button, toolbar_sep, RowIcon};
 use eframe::egui::{RichText, Sense};
 use egui_extras::{Column, TableBuilder};
 
@@ -395,24 +395,21 @@ impl App {
             .map(|q| (q.name.clone(), count(&|i: &Item| i.queue.as_deref() == Some(q.name.as_str()) && i.status() != Status::Complete)))
             .collect();
 
+        let pal = theme::current(ui.ctx());
         egui::Panel::left("categories")
             .resizable(true)
-            .default_size(190.0)
-            .frame(
-                egui::Frame::NONE
-                    .fill(Color32::from_rgb(244, 246, 249))
-                    .inner_margin(egui::Margin::symmetric(6, 8))
-                    .stroke(Stroke::new(1.0, Color32::from_rgb(214, 218, 224))),
-            )
+            .default_size(200.0)
+            .frame(egui::Frame::NONE.fill(pal.bg).inner_margin(egui::Margin::symmetric(8, 10)))
             .show(ui, |ui| {
-                ui.label(RichText::new("Categories").strong().color(Color32::from_rgb(70, 78, 90)));
-                ui.add_space(4.0);
+                ui.spacing_mut().item_spacing.y = 2.0;
+                sidebar_pill(ui);
+                section_header(ui, "Categories", &pal);
                 let mut new_filter = None;
-                if cat_row(ui, "All Downloads", all, 0.0, Color32::from_rgb(33, 118, 214), self.filter == Filter::All).clicked() {
+                if cat_row(ui, "All Downloads", all, 0.0, pal.blue, self.filter == Filter::All).clicked() {
                     new_filter = Some(Filter::All);
                 }
                 for (c, n) in &cats {
-                    let r = cat_row(ui, c, *n, 16.0, icons::category_color(c), self.filter == Filter::Category(c.clone()));
+                    let r = cat_row(ui, c, *n, 14.0, icons::category_color(c), self.filter == Filter::Category(c.clone()));
                     if r.clicked() {
                         new_filter = Some(Filter::Category(c.clone()));
                     }
@@ -423,15 +420,15 @@ impl App {
                     });
                 }
                 ui.add_space(4.0);
-                if cat_row(ui, "Unfinished", unfinished, 0.0, Color32::from_rgb(232, 145, 38), self.filter == Filter::Unfinished).clicked() {
+                if cat_row(ui, "Unfinished", unfinished, 0.0, pal.orange, self.filter == Filter::Unfinished).clicked() {
                     new_filter = Some(Filter::Unfinished);
                 }
-                if cat_row(ui, "Finished", finished, 0.0, Color32::from_rgb(46, 164, 79), self.filter == Filter::Finished).clicked() {
+                if cat_row(ui, "Finished", finished, 0.0, pal.green, self.filter == Filter::Finished).clicked() {
                     new_filter = Some(Filter::Finished);
                 }
-                ui.add_space(8.0);
+                ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Queues").strong().color(Color32::from_rgb(70, 78, 90)));
+                    section_header(ui, "Queues", &pal);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("+").on_hover_text("Manage queues").clicked() {
                             self.queues_open = true;
@@ -440,9 +437,8 @@ impl App {
                 });
                 for (q, n) in &queues {
                     let on = self.running.contains(q);
-                    let col = if on { Color32::from_rgb(46, 164, 79) } else { Color32::from_rgb(110, 118, 128) };
-                    let label = if on { format!("{q}  ▶") } else { q.clone() };
-                    let r = cat_row(ui, &label, *n, 0.0, col, self.filter == Filter::Queue(q.clone()));
+                    let col = if on { pal.green } else { pal.secondary };
+                    let r = sidebar_row(ui, q, *n, 0.0, RowIcon::Dot, col, self.filter == Filter::Queue(q.clone()));
                     if r.clicked() {
                         new_filter = Some(Filter::Queue(q.clone()));
                     }
@@ -719,4 +715,11 @@ fn row_menu(ui: &mut egui::Ui, id: u64, st: Status, queues: &[String], action: &
     item(ui, true, "Properties", "props");
     ui.separator();
     item(ui, true, "Remove", "remove");
+}
+
+/// Small grey section title above a group of sidebar rows.
+fn section_header(ui: &mut egui::Ui, text: &str, pal: &crate::theme::Palette) {
+    ui.add_space(2.0);
+    ui.label(RichText::new(text.to_uppercase()).size(11.0).color(pal.secondary));
+    ui.add_space(2.0);
 }

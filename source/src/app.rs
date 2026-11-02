@@ -10,7 +10,7 @@ mod view;
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
 use crate::theme::{self, ThemeMode};
-use eframe::egui::{self, Color32, Stroke};
+use eframe::egui::{self, Color32};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::PathBuf;

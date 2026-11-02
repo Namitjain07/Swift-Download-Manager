@@ -56,34 +56,59 @@ pub fn toolbar_sep(ui: &mut egui::Ui) {
     ui.painter().line_segment([egui::pos2(r.center().x, r.top() + 8.0), egui::pos2(r.center().x, r.bottom() - 8.0)], Stroke::new(1.0, col));
 }
 
+/// Height of one sidebar row.
+pub const SIDEBAR_ROW: f32 = 28.0;
+
+/// What a sidebar row shows in front of its label.
+#[derive(Clone, Copy, PartialEq)]
+pub enum RowIcon {
+    Folder,
+    Dot,
+}
+
+fn pill_target_id() -> egui::Id {
+    egui::Id::unique("sdm_sidebar_pill_target")
+}
+
 pub fn cat_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, col: Color32, selected: bool) -> egui::Response {
+    sidebar_row(ui, label, count, indent, RowIcon::Folder, col, selected)
+}
+
+/// One row of the sidebar source list. The selection pill is not drawn here: the selected
+/// row only reports where it is, and `sidebar_pill` slides one pill to it.
+pub fn sidebar_row(ui: &mut egui::Ui, label: &str, count: usize, indent: f32, icon: RowIcon, col: Color32, selected: bool) -> egui::Response {
     let w = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 22.0), Sense::click());
-    let p = ui.painter();
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, SIDEBAR_ROW), Sense::click());
+    let ctx = ui.ctx().clone();
+    let pal = theme::current(&ctx);
     if selected {
-        p.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(204, 228, 247));
-    } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(3), Color32::from_rgb(229, 238, 247));
+        ctx.data_mut(|d| d.insert_temp(pill_target_id(), (rect.top(), rect.left(), rect.width())));
     }
-    let icon = egui::Rect::from_center_size(egui::pos2(rect.left() + indent + 12.0, rect.center().y), egui::vec2(16.0, 14.0));
-    icons::folder(p, icon, col);
-    p.text(
-        egui::pos2(rect.left() + indent + 26.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        label,
-        egui::FontId::proportional(13.5),
-        Color32::from_rgb(35, 40, 50),
-    );
+    let hover = anim::fade(&ctx, resp.id.with("hover"), resp.hovered() && !selected, 0.12);
+    let p = ui.painter();
+    p.rect_filled(rect, CornerRadius::same(8), pal.separator.gamma_multiply(0.30 * hover));
+    let ic = egui::pos2(rect.left() + indent + 16.0, rect.center().y);
+    match icon {
+        RowIcon::Folder => icons::folder(p, egui::Rect::from_center_size(ic, egui::vec2(16.0, 14.0)), col),
+        RowIcon::Dot => {
+            p.circle_filled(ic, 4.0, col);
+        }
+    }
+    p.text(egui::pos2(rect.left() + indent + 32.0, rect.center().y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), pal.label);
     if count > 0 {
-        p.text(
-            egui::pos2(rect.right() - 6.0, rect.center().y),
-            egui::Align2::RIGHT_CENTER,
-            count.to_string(),
-            egui::FontId::proportional(12.0),
-            Color32::from_gray(120),
-        );
+        p.text(egui::pos2(rect.right() - 10.0, rect.center().y), egui::Align2::RIGHT_CENTER, count.to_string(), egui::FontId::proportional(11.0), pal.secondary);
     }
     resp
+}
+
+/// Paints the selection pill behind the sidebar rows. Call it first, before the rows; it
+/// glides to wherever the selected row was last frame.
+pub fn sidebar_pill(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
+    let Some((top, left, width)) = ctx.data(|d| d.get_temp::<(f32, f32, f32)>(pill_target_id())) else { return };
+    let y = anim::glide(&ctx, egui::Id::unique("sdm_sidebar_pill_y"), top, 0.18);
+    let pal = theme::current(&ctx);
+    ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(left, y), egui::vec2(width, SIDEBAR_ROW)), CornerRadius::same(8), pal.blue.gamma_multiply(0.16));
 }
 
 /// A small status-bar entry: optional coloured dot, then caption text. Clickable. It paints
