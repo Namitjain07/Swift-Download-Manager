@@ -15,6 +15,7 @@ fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let mut screenshot: Option<PathBuf> = None;
     let mut demo = false;
+    let mut theme: Option<theme::ThemeMode> = None;
     let mut start_url: Option<String> = None;
     let mut i = 1;
     while i < args.len() {
@@ -24,6 +25,14 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            "--theme" if i + 1 < args.len() => {
+                theme = match args[i + 1].as_str() {
+                    "light" => Some(theme::ThemeMode::Light),
+                    "dark" => Some(theme::ThemeMode::Dark),
+                    _ => None,
+                };
+                i += 1;
+            }
             "--write-icon" if i + 1 < args.len() => {
                 // Used when making the installers: --write-icon icon.png [size]
                 let size = args.get(i + 2).and_then(|s| s.parse().ok()).unwrap_or(256);
@@ -64,7 +73,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         app::APP_NAME,
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, screenshot, demo, start_url)))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, screenshot, demo, start_url, theme)))),
     )
 }
 

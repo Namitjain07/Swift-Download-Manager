@@ -9,6 +9,7 @@ mod view;
 
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
+use crate::theme::{self, ThemeMode};
 use eframe::egui::{self, Color32, Stroke};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -203,6 +204,8 @@ pub struct Settings {
     pub queues: Vec<QueueDef>,
     pub categories: Vec<CategoryDef>,
     pub site_logins: Vec<SiteLogin>,
+    /// System, Light or Dark (View > Appearance).
+    pub theme: ThemeMode,
 }
 
 impl Default for Settings {
@@ -226,6 +229,7 @@ impl Default for Settings {
             queues: vec![QueueDef::default()],
             categories: default_categories(),
             site_logins: Vec::new(),
+            theme: ThemeMode::System,
         }
     }
 }
@@ -497,13 +501,15 @@ pub struct App {
     clipboard_on: Arc<AtomicBool>,
     listener: Result<(), String>,
     toast: Option<(String, Instant)>,
+    /// Forces a theme for this run only (`--theme`), without touching the saved choice.
+    theme_override: Option<ThemeMode>,
     ctx: egui::Context,
 }
 
 // ---------------------------------------------------------------- setup & storage
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, screenshot: Option<PathBuf>, demo: bool, start_url: Option<String>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, screenshot: Option<PathBuf>, demo: bool, start_url: Option<String>, theme_override: Option<ThemeMode>) -> Self {
         setup_style(&cc.egui_ctx);
         let mut app = App {
             items: Vec::new(),
@@ -542,6 +548,7 @@ impl App {
             clipboard_on: Arc::new(AtomicBool::new(false)),
             listener: Err("off".into()),
             toast: None,
+            theme_override,
             ctx: cc.egui_ctx.clone(),
         };
         if demo {
@@ -748,4 +755,16 @@ fn setup_style(ctx: &egui::Context) {
         style.visuals.striped = true;
         style.visuals.faint_bg_color = Color32::from_rgb(247, 249, 252);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_without_theme_still_load() {
+        let s: Settings = serde_json::from_str(r#"{"connections":4}"#).unwrap();
+        assert_eq!(s.theme, crate::theme::ThemeMode::System);
+        assert_eq!(s.connections, 4);
+    }
 }

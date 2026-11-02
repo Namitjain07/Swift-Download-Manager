@@ -10,6 +10,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.frame += 1;
         let ctx = ui.ctx().clone();
+        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme));
         self.tick();
         self.handle_screenshot(&ctx);
         self.shortcuts(&ctx);
@@ -20,7 +21,7 @@ impl eframe::App for App {
         if self.show_categories {
             self.categories_panel(ui);
         }
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::WHITE)).show(ui, |ui| self.table(ui));
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(theme::current(&ctx).card)).show(ui, |ui| self.table(ui));
 
         self.add_window(&ctx);
         self.batch_window(&ctx);
@@ -242,6 +243,13 @@ impl App {
                 });
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.show_categories, "Show categories");
+                    ui.menu_button("Appearance", |ui| {
+                        for (mode, name) in [(ThemeMode::System, "Automatic (follow system)"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")] {
+                            if ui.selectable_value(&mut self.settings.theme, mode, name).clicked() {
+                                self.dirty = true;
+                            }
+                        }
+                    });
                     if ui.button("Clear sorting").clicked() {
                         self.sort = None;
                     }

@@ -2,7 +2,7 @@
 // Palette helpers are wired into the UI in the next commits.
 #![allow(dead_code)]
 
-use eframe::egui::Color32;
+use eframe::egui::{self, Color32, Id, Stroke, Theme, ThemePreference};
 use serde::{Deserialize, Serialize};
 
 /// Which theme the person wants. `System` follows the operating system live.
@@ -92,6 +92,82 @@ pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
+/// Seconds the colours take to cross-fade when the theme changes.
+const FADE_SECS: f32 = 0.2;
+
+fn palette_id() -> Id {
+    Id::unique("sdm_palette")
+}
+
+/// The palette being shown right now (blended while the theme is fading).
+pub fn current(ctx: &egui::Context) -> Palette {
+    ctx.data(|d| d.get_temp::<Palette>(palette_id())).unwrap_or(Palette::LIGHT)
+}
+
+/// Pick light or dark from the mode (and the operating system for `System`).
+fn wants_dark(ctx: &egui::Context, mode: ThemeMode) -> bool {
+    match mode {
+        ThemeMode::Light => false,
+        ThemeMode::Dark => true,
+        ThemeMode::System => ctx.system_theme() == Some(Theme::Dark),
+    }
+}
+
+/// Call once per frame. Fades towards the wanted palette and writes it into egui's style
+/// only while something changes, so an idle window costs nothing.
+pub fn apply(ctx: &egui::Context, mode: ThemeMode) {
+    let mode_id = Id::unique("sdm_theme_mode");
+    if ctx.data(|d| d.get_temp::<ThemeMode>(mode_id)) != Some(mode) {
+        ctx.data_mut(|d| d.insert_temp(mode_id, mode));
+        // Lets the window frame follow the choice too.
+        ctx.set_theme(match mode {
+            ThemeMode::System => ThemePreference::System,
+            ThemeMode::Light => ThemePreference::Light,
+            ThemeMode::Dark => ThemePreference::Dark,
+        });
+    }
+    let dark = wants_dark(ctx, mode);
+    let t = ctx.animate_value_with_time(Id::unique("sdm_theme_t"), if dark { 1.0 } else { 0.0 }, FADE_SECS);
+    let pal = Palette::LIGHT.lerp(&Palette::DARK, t);
+    if ctx.data(|d| d.get_temp::<Palette>(palette_id())) == Some(pal) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(palette_id(), pal));
+    let dark_mode = t > 0.5;
+    ctx.all_styles_mut(|style| style_colors(style, &pal, dark_mode));
+}
+
+/// Colours of every egui widget from the palette. Sizes and shapes are set in `setup`.
+fn style_colors(style: &mut egui::Style, p: &Palette, dark: bool) {
+    let v = &mut style.visuals;
+    v.dark_mode = dark;
+    v.panel_fill = p.bg;
+    v.window_fill = p.card;
+    v.window_stroke = Stroke::new(1.0, p.separator);
+    v.extreme_bg_color = p.bg;
+    v.faint_bg_color = p.bg;
+    v.code_bg_color = p.bg;
+    v.hyperlink_color = p.blue;
+    v.warn_fg_color = p.orange;
+    v.error_fg_color = p.red;
+    v.weak_text_color = Some(p.secondary);
+    v.selection.bg_fill = p.blue.gamma_multiply(0.28);
+    v.selection.stroke = Stroke::new(1.0, p.blue);
+    let hairline = Stroke::new(1.0, p.separator);
+    v.widgets.noninteractive.bg_fill = p.card;
+    v.widgets.noninteractive.weak_bg_fill = p.card;
+    v.widgets.noninteractive.bg_stroke = hairline;
+    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, p.label);
+    let steps = [(&mut v.widgets.inactive, 0.35), (&mut v.widgets.hovered, 0.55), (&mut v.widgets.active, 0.75), (&mut v.widgets.open, 0.55)];
+    for (w, k) in steps {
+        w.bg_fill = p.separator.gamma_multiply(k);
+        w.weak_bg_fill = p.separator.gamma_multiply(k);
+        w.bg_stroke = Stroke::NONE;
+        w.fg_stroke = Stroke::new(1.0, p.label);
+        w.expansion = 0.0;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +197,30 @@ mod tests {
         assert_eq!(Palette::LIGHT.bg, Color32::from_rgb(0xF2, 0xF2, 0xF7));
         assert_eq!(Palette::DARK.card, Color32::from_rgb(0x1C, 0x1C, 0x1E));
         assert_eq!(Palette::DARK.blue, Color32::from_rgb(0x0A, 0x84, 0xFF));
+    }
+
+    fn frame(ctx: &eframe::egui::Context, mode: ThemeMode) {
+        let mut out = ctx.run_ui(Default::default(), |ui| apply(ui.ctx(), mode));
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn forced_modes_apply_their_palette_on_the_first_frame() {
+        for (mode, want) in [(ThemeMode::Dark, Palette::DARK), (ThemeMode::Light, Palette::LIGHT)] {
+            let ctx = eframe::egui::Context::default();
+            frame(&ctx, mode);
+            assert_eq!(current(&ctx), want);
+        }
+    }
+
+    #[test]
+    fn switching_mode_blends_instead_of_jumping() {
+        let ctx = eframe::egui::Context::default();
+        frame(&ctx, ThemeMode::Light);
+        frame(&ctx, ThemeMode::Dark); // egui returns the old value on the frame an animation starts
+        frame(&ctx, ThemeMode::Dark);
+        let mid = current(&ctx);
+        assert_ne!(mid, Palette::LIGHT);
+        assert_ne!(mid, Palette::DARK);
     }
 }
