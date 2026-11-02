@@ -174,10 +174,44 @@ impl App {
         }
     }
 
-    /// Answer commands that arrived from `--mcp` processes. Called every frame.
+    /// Start, stop or move the web interface to match the settings.
+    pub(super) fn sync_web(&mut self) {
+        let want = self.settings.web_enabled && !self.demo && !self.headless && self.state_lock.is_some();
+        if !want {
+            self.web = None;
+            self.web_rx = None;
+            return;
+        }
+        let port = self.settings.web_port;
+        if self.web.as_ref().is_some_and(|h| h.addr.port() == port) {
+            return;
+        }
+        self.web = None;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let cfg = crate::web::server::Config { bind: [127, 0, 0, 1].into(), port, mode: crate::web::server::Mode::Personal, dir: self.config_dir.clone(), secure_cookie: false };
+        match crate::web::server::start_retrying(cfg, tx, self.ctx.clone(), 20) {
+            Ok(h) => {
+                self.web = Some(h);
+                self.web_rx = Some(rx);
+            }
+            Err(e) => self.toast(format!("The web interface could not start on port {port}: {e}")),
+        }
+    }
+
+    /// The port of the web interface, when it is switched on in the settings.
+    pub fn web_port_if_enabled(&self) -> Option<u16> {
+        self.settings.web_enabled.then_some(self.settings.web_port)
+    }
+
+    /// The link that opens the web interface in a browser, while it is on.
+    pub(super) fn web_link(&self) -> Option<String> {
+        self.web.as_ref().map(|h| format!("http://127.0.0.1:{}/?key={}", h.addr.port(), h.key))
+    }
+
+    /// Answer commands that arrived from `--mcp` processes and browsers. Called every frame.
     pub(super) fn serve_control(&mut self) {
-        let Some(rx) = &self.control_rx else { return };
-        let jobs: Vec<_> = rx.try_iter().collect();
+        let mut jobs: Vec<_> = self.control_rx.iter().flat_map(|rx| rx.try_iter()).collect();
+        jobs.extend(self.web_rx.iter().flat_map(|rx| rx.try_iter()));
         for job in jobs {
             let answer = self.run_request(job.cmd, job.who);
             let _ = job.reply.send(answer);
@@ -186,6 +220,9 @@ impl App {
 
     /// The window is closing: save, and stop advertising the control door.
     pub(super) fn close_control(&mut self) {
+        // Stop listening for browsers too, so the next process can take the port.
+        self.web = None;
+        self.web_rx = None;
         if self.control_rx.take().is_some() {
             crate::mcp::control::clear_info(&self.config_dir);
         }
@@ -713,6 +750,8 @@ mod tests {
     fn a_file_can_be_fetched_only_when_it_is_finished() {
         let dir = scratch("locate");
         let mut app = test_app(&dir);
+        // Keep the test's files out of the real Downloads folder.
+        app.settings.folder = dir.join("downloads");
         let anna = person("anna", false);
         let id = add_as(&mut app, &anna, "https://e.com/a.bin", "a.bin");
         assert!(app.run_as(Command::Locate { id }, &anna).unwrap_err().contains("not finished"));

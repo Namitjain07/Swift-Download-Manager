@@ -54,7 +54,12 @@ fn looks_like_token(t: &str) -> bool {
 
 /// The shared secret, created on first use: 32 random bytes as hex, readable only by you.
 pub fn token(dir: &Path) -> io::Result<String> {
-    let path = dir.join("mcp-token");
+    token_in(dir, "mcp-token")
+}
+
+/// A secret kept in the file `file` of the settings folder (see `token`).
+pub fn token_in(dir: &Path, file: &str) -> io::Result<String> {
+    let path = dir.join(file);
     if let Ok(t) = std::fs::read_to_string(&path) {
         if looks_like_token(t.trim()) {
             return Ok(t.trim().to_string());

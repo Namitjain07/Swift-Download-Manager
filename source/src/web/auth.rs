@@ -64,6 +64,11 @@ pub fn pbkdf2(password: &[u8], salt: &[u8], iterations: u32) -> [u8; 32] {
     out
 }
 
+/// Compare two secrets without stopping at the first difference.
+pub fn same_secret(a: &str, b: &str) -> bool {
+    same(a.as_bytes(), b.as_bytes())
+}
+
 fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }

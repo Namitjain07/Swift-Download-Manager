@@ -292,6 +292,7 @@ impl App {
         let Some(mut s) = self.options.take() else { return };
         let mut open = true;
         let mut result = None;
+        let link = self.web_link();
         dialog_window(ctx, "Options")
             .open(&mut open)
             .collapsible(false)
@@ -301,7 +302,7 @@ impl App {
             .default_width(crate::widgets::fit_width(ctx, 540.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -10.0])
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical().max_height(ctx.content_rect().height() - 140.0).min_scrolled_height(ctx.content_rect().height() - 140.0).auto_shrink([false, false]).show(ui, |ui| options_body(ui, &mut s, &mut result));
+                egui::ScrollArea::vertical().max_height(ctx.content_rect().height() - 140.0).min_scrolled_height(ctx.content_rect().height() - 140.0).auto_shrink([false, false]).show(ui, |ui| options_body(ui, &mut s, &mut result, link.as_deref()));
             });
         match result {
             Some(true) => {
@@ -527,7 +528,46 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
     ui.label(RichText::new(hint).size(11.0).color(crate::theme::current(ui.ctx()).tertiary));
 }
 
-fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) {
+/// Options > Web interface: use the downloads from a browser on this computer.
+fn web_card(ui: &mut egui::Ui, s: &mut Settings, link: Option<&str>) {
+    group_title(ui, "Web interface");
+    let was_on = s.web_enabled;
+    card(ui, |ui| {
+        toggle_row(ui, "Use Swift Download Manager from a web browser", &mut s.web_enabled, !was_on);
+        if !s.web_enabled {
+            return;
+        }
+        card_row(ui, false, |ui| {
+            ui.label("Port");
+            button_row(ui, |ui| {
+                ui.add(egui::DragValue::new(&mut s.web_port).range(1024..=65535));
+            });
+        });
+        card_row(ui, true, |ui| match link {
+            Some(link) => {
+                ui.label("Link");
+                button_row(ui, |ui| {
+                    if tinted_button(ui, "Copy").clicked() {
+                        ui.ctx().copy_text(link.to_string());
+                    }
+                    if primary_button(ui, "Open").clicked() {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(link));
+                    }
+                });
+            }
+            None => {
+                ui.label(RichText::new("Press OK to start it; the link appears here.").color(crate::theme::current(ui.ctx()).secondary));
+            }
+        });
+    });
+    ui.label(
+        RichText::new("Only this computer can reach it. The link holds a secret key, so treat it like a password. It needs this program (or its tray icon) to be running.")
+            .size(11.0)
+            .color(crate::theme::current(ui.ctx()).tertiary),
+    );
+}
+
+fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>, web_link: Option<&str>) {
     group_title(ui, "Downloads");
         egui::Grid::new("opts").num_columns(2).spacing([12.0, 7.0]).show(ui, |ui| {
             ui.label("Download folder:");
@@ -589,6 +629,7 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, result: &mut Option<bool>) 
             });
         });
         networks_card(ui, s);
+        web_card(ui, s, web_link);
         group_title(ui, "Background");
         card(ui, |ui| {
             card_row(ui, false, |ui| {
