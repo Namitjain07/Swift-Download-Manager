@@ -5,9 +5,13 @@
 
 pub mod anim;
 pub mod button;
+pub mod card;
+pub mod segmented;
 pub mod switch;
 
 pub use button::{button, ButtonKind};
+pub use card::{card, card_row};
+pub use segmented::segmented;
 pub use switch::switch;
 
 use crate::engine::Segment;
