@@ -751,6 +751,11 @@ impl App {
             }
             "table" => self.settings.view = layout::ViewMode::Table,
             "grabber" => self.open_grabber(),
+            // The window with no downloads at all, for the picture of the empty state.
+            "empty" => {
+                self.items.clear();
+                self.selected.clear();
+            }
             other => eprintln!("unknown window: {other}"),
         }
     }

@@ -69,6 +69,8 @@ pub struct Design {
     pub nav_indicator: bool,
     /// Side of a round or square icon button.
     pub icon_btn: f32,
+    /// Height of the title bar that holds the window title and the minimise, maximise and close buttons.
+    pub titlebar: f32,
 }
 
 /// The Airbnb shape: capsules, 16 px cards, 24 px dialogs.
@@ -93,6 +95,7 @@ pub const DESIGN: Design = Design {
     pill: 1.0,
     nav_indicator: false,
     icon_btn: 36.0,
+    titlebar: 38.0,
 };
 
 /// The Fluent shape of Files: 4 px controls, 8 px cards, 32 px tall, a thin switch.
@@ -117,6 +120,7 @@ pub const FLUENT: Design = Design {
     pill: 0.0,
     nav_indicator: true,
     icon_btn: 32.0,
+    titlebar: 32.0,
 };
 
 /// The Carbon shape: nearly square corners, 40 px controls.
@@ -141,6 +145,7 @@ pub const SHARP: Design = Design {
     pill: 0.0,
     nav_indicator: true,
     icon_btn: 36.0,
+    titlebar: 32.0,
 };
 
 impl Shape {
@@ -187,6 +192,7 @@ impl Design {
             pill: f(self.pill, other.pill),
             nav_indicator: if t < 0.5 { self.nav_indicator } else { other.nav_indicator },
             icon_btn: f(self.icon_btn, other.icon_btn),
+            titlebar: f(self.titlebar, other.titlebar),
         }
     }
 }

@@ -7,7 +7,8 @@ use crate::icons::Icon;
 use crate::theme::ThemeMode;
 use crate::widgets::{
     button, button_width, card, check_row, disclosure, dropdown, field, field_full, form_field, hint, icon_button, kv, kv_text, message, notice, number_field, plain_button, primary_button,
-    secondary_button, section_title, segment_bar, segmented, segmented_width, sheet, small_button, spinner, stepper, switch, ButtonKind, ButtonSize,
+    secondary_button, section_title, segment_bar, segmented, segmented_width, sheet, small_button, stepper, switch, ButtonKind, ButtonSize,
+    FlowChannel, FlowState,
 };
 use eframe::egui::RichText;
 
@@ -159,8 +160,31 @@ impl App {
                 let pal = theme::current(ctx);
                 let title = format!("{:.0}% {}", item.progress() * 100.0, item.name);
                 let pos = egui::pos2(280.0 + (id % 5) as f32 * 24.0, 120.0 + (id % 5) as f32 * 24.0);
+                // The parts of the file as channels that run into it, with how fast each one goes.
+                let segs = item.live.segments.lock().unwrap().clone();
+                let channels = {
+                    let key = egui::Id::unique(("flow_rates", id));
+                    let mut rates = ctx.data(|d| d.get_temp::<crate::widgets::flow::Rates>(key)).unwrap_or_default();
+                    let parts: Vec<(u64, bool)> = segs.iter().map(|s| (s.done.min(s.len()), s.finished())).collect();
+                    let list = if parts.is_empty() {
+                        // One connection (or not known yet): a single channel.
+                        vec![FlowChannel { rate: 1.0, done: st == Status::Complete }]
+                    } else {
+                        rates.update(ctx.input(|i| i.time), &parts)
+                    };
+                    ctx.data_mut(|d| d.insert_temp(key, rates));
+                    list
+                };
+                let flow_state = match st {
+                    Status::Connecting | Status::Downloading => FlowState::Running,
+                    Status::Complete => FlowState::Complete,
+                    Status::Error => FlowState::Failed,
+                    Status::Queued | Status::Paused => FlowState::Waiting,
+                };
                 let out = sheet(("progress", id), title).width(500.0).floating(pos).show(ctx, |s| {
                     s.body(|ui| {
+                        crate::widgets::flow(ui, ("progress", id), &channels, item.progress(), flow_state, 112.0);
+                        ui.add_space(12.0);
                         kv(ui, "Address", |ui| {
                             ui.add(egui::Label::new(RichText::new(&item.url).color(pal.blue_ink)).truncate());
                         });
@@ -199,7 +223,6 @@ impl App {
                             },
                         );
                         ui.add_space(10.0);
-                        let segs = item.live.segments.lock().unwrap().clone();
                         segment_bar(ui, item.progress(), item.total(), &segs);
                         ui.add_space(10.0);
                         ui.horizontal(|ui| {
@@ -423,7 +446,7 @@ impl App {
                         }
                     });
                     if item.is_checking {
-                        spinner(ui, 14.0);
+                        crate::widgets::arc_loader(ui, 18.0);
                         ui.label(RichText::new("Checking…").color(pal.secondary));
                     }
                     if let Some(c) = &item.check {

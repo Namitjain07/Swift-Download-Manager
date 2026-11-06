@@ -40,6 +40,7 @@ impl App {
         self.shortcuts(&ctx);
 
         let bp = self.breakpoint(&ctx);
+        crate::widgets::titlebar::show(ui);
         self.header(ui, bp);
         self.toolbar(ui, bp);
         self.status_bar(ui, bp);
@@ -86,6 +87,7 @@ impl App {
         if self.menu_preview {
             self.menu_preview_areas(&ctx);
         }
+        crate::widgets::titlebar::frame_and_edges(&ctx);
     }
 }
 
@@ -205,19 +207,20 @@ impl App {
     /// The top bar: logo, the menus, the search box and the main action.
     fn header(&mut self, ui: &mut egui::Ui, bp: layout::Breakpoint) {
         use layout::Breakpoint::{Compact, Wide};
-        let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
-        let frame = Frame::NONE.fill(pal.chrome).inner_margin(Margin::symmetric(if bp == Compact { 12 } else { 24 }, 12));
+        let pal = theme::current(ui.ctx());
+        // The name and the mark of the app are in the title bar above; the header holds the controls.
+        let own_title_bar = crate::widgets::titlebar::mode() != crate::widgets::titlebar::Mode::Native;
+        let frame = Frame::NONE.fill(pal.chrome).inner_margin(Margin::symmetric(if bp == Compact { 12 } else { 24 }, if own_title_bar { 6 } else { 12 }));
         egui::Panel::top("header").frame(frame).show_separator_line(false).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if bp == Compact && icon_button(ui, Icon::Sidebar, "Categories and queues").clicked() {
                     self.drawer_open = !self.drawer_open;
                 }
-                logo(ui);
+                if !own_title_bar {
+                    logo(ui);
+                }
                 if bp == Wide {
-                    ui.add_space(2.0);
-                    ui.label(RichText::new(APP_NAME).size(d.title + 1.0).family(theme::semibold()).color(pal.accent_ink));
-                    ui.add_space(20.0);
                     self.menu_bar(ui);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -1143,8 +1146,8 @@ mod tests {
         all
     }
 
-    const WINDOWS: [&str; 19] = [
-        "", "add", "batch", "options", "networks", "appearance", "scheduler", "queues", "delete", "properties", "progress", "about", "browser", "ai", "drawer", "close", "table", "grabber", "menus",
+    const WINDOWS: [&str; 20] = [
+        "", "add", "batch", "options", "networks", "appearance", "scheduler", "queues", "delete", "properties", "progress", "about", "browser", "ai", "drawer", "close", "table", "grabber", "menus", "empty",
     ];
     const SIZES: [(f32, f32); 6] = [(420.0, 420.0), (600.0, 760.0), (719.0, 640.0), (900.0, 640.0), (1180.0, 680.0), (1700.0, 1000.0)];
 

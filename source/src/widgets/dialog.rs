@@ -16,6 +16,8 @@ pub const HEADER_H: f32 = 64.0;
 /// Height of the footer of a sheet, hairline included.
 pub const FOOTER_H: f32 = 73.0;
 const SIDE: i8 = 24;
+/// How long a dialog takes to fade and rise in.
+pub const OPEN_SECS: f32 = 0.2;
 
 /// A dialog being built.
 pub struct Sheet {
@@ -65,7 +67,11 @@ impl Sheet {
         let frame = Frame::NONE.fill(pal.raised).corner_radius(CornerRadius::same(d.radius_xl)).stroke(Stroke::new(1.0, edge)).shadow(theme::shadow(ctx, Elevation::Dialog));
         let mut close = false;
         let Sheet { id, title, backdrop_closes, floating_at, .. } = self;
-        if let Some(pos) = floating_at {
+        // A dialog fades in over a fifth of a second (egui's own fade is a twelfth) and rises into place.
+        let opened = super::anim::entrance(ctx, id.with("open"), OPEN_SECS);
+        let normal_fade = ctx.global_style().animation_time;
+        ctx.global_style_mut(|s| s.animation_time = OPEN_SECS);
+        let shown = if let Some(pos) = floating_at {
             egui::Window::new(title.clone())
                 .id(id)
                 .title_bar(false)
@@ -75,10 +81,14 @@ impl Sheet {
                 .constrain(true)
                 .default_pos(pos)
                 .show(ctx, |ui| contents(ui, &title, width, body_max, id, &mut close, add));
-            // A floating window has no modal to listen to Escape, so only the button closes it.
-            return SheetOut { close };
-        }
-        let modal = egui::Modal::new(id).frame(frame).backdrop_color(pal.scrim).show(ctx, |ui| contents(ui, &title, width, body_max, id, &mut close, add));
+            None
+        } else {
+            let area = egui::Modal::default_area(id).anchor(egui::Align2::CENTER_CENTER, [0.0, super::anim::rise(opened)]);
+            Some(egui::Modal::new(id).area(area).frame(frame).backdrop_color(pal.scrim).show(ctx, |ui| contents(ui, &title, width, body_max, id, &mut close, add)))
+        };
+        ctx.global_style_mut(|s| s.animation_time = normal_fade);
+        // A floating window has no modal to listen to Escape, so only the button closes it.
+        let Some(modal) = shown else { return SheetOut { close } };
         let esc = modal.is_top_modal && !modal.any_popup_open && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         if esc || (backdrop_closes && modal.backdrop_response.clicked()) {
             close = true;

@@ -8,6 +8,7 @@ pub mod card;
 pub mod components;
 pub mod dialog;
 pub mod field;
+pub mod flow;
 #[cfg(test)]
 mod interaction;
 pub mod menu;
@@ -16,6 +17,7 @@ pub mod progress;
 pub mod segmented;
 pub mod spinner;
 pub mod switch;
+pub mod titlebar;
 pub mod wheel;
 
 pub use button::{button, button_width, icon_label_button, small_button, small_icon_label_button, ButtonKind, ButtonSize};
@@ -27,7 +29,8 @@ pub use menu::{menu_caption, menu_check_row, menu_danger_item, menu_icon_item, m
 pub use picker::theme_picker;
 pub use progress::{capsule_bar, segment_bar};
 pub use segmented::{segmented, segmented_width};
-pub use spinner::spinner;
+pub use flow::{flow, Channel as FlowChannel, State as FlowState};
+pub use spinner::{arc_loader, indeterminate_bar, spinner};
 pub use switch::switch;
 pub use wheel::time_wheels;
 

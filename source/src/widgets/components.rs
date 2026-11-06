@@ -111,18 +111,46 @@ pub fn stat_tile(ui: &mut Ui, width: f32, icon: Icon, label: &str, value: &str, 
     resp
 }
 
-/// Shown instead of a list when there is nothing to list: a glyph, a title, one sentence, and
+/// The picture above the words of an empty state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Art {
+    /// A glyph on a round tint.
+    Icon(Icon),
+    /// Streams running into one file, quietly, as an invitation to add a download.
+    Flow,
+}
+
+/// What the idle picture shows: five streams of different pace.
+const IDLE_CHANNELS: [super::flow::Channel; 5] = [
+    super::flow::Channel { rate: 0.9, done: false },
+    super::flow::Channel { rate: 0.4, done: false },
+    super::flow::Channel { rate: 0.7, done: false },
+    super::flow::Channel { rate: 0.2, done: false },
+    super::flow::Channel { rate: 0.55, done: false },
+];
+
+/// Shown instead of a list when there is nothing to list: a picture, a title, one sentence, and
 /// at most one primary action. Returns true when that action was pressed.
-pub fn empty_state(ui: &mut Ui, icon: Icon, title: &str, text: &str, action: Option<&str>) -> bool {
+pub fn empty_state(ui: &mut Ui, art: Art, title: &str, text: &str, action: Option<&str>) -> bool {
     let ctx = ui.ctx().clone();
     let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
     let mut pressed = false;
     ui.vertical_centered(|ui| {
-        ui.add_space((ui.available_height() * 0.22).clamp(16.0, 110.0));
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(88.0), Sense::hover());
-        ui.painter().circle_filled(rect.center(), 44.0, pal.accent_tint);
-        icons::draw(ui.painter(), Rect::from_center_size(rect.center(), Vec2::splat(40.0)), icon, pal.accent_ink, true);
-        ui.add_space(16.0);
+        ui.add_space((ui.available_height() * 0.18).clamp(12.0, 90.0));
+        match art {
+            Art::Icon(icon) => {
+                let (rect, _) = ui.allocate_exact_size(Vec2::splat(88.0), Sense::hover());
+                ui.painter().circle_filled(rect.center(), 44.0, pal.accent_tint);
+                icons::draw(ui.painter(), Rect::from_center_size(rect.center(), Vec2::splat(40.0)), icon, pal.accent_ink, true);
+            }
+            Art::Flow => {
+                ui.scope(|ui| {
+                    ui.set_max_width(340.0);
+                    super::flow::flow(ui, "empty", &IDLE_CHANNELS, 0.0, super::flow::State::Running, 124.0);
+                });
+            }
+        }
+        ui.add_space(12.0);
         ui.label(RichText::new(title).size(d.title + 3.0).family(theme::semibold()).color(pal.label));
         ui.add_space(2.0);
         ui.scope(|ui| {

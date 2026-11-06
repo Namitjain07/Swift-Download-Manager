@@ -46,6 +46,8 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            // Keep the title bar of the system instead of the app's own (for a desktop where that works better).
+            "--native-title-bar" => widgets::titlebar::use_native(true),
             // Starting size of the window, for screenshots of the narrow layouts: --size 900x600
             "--size" if i + 1 < args.len() => {
                 if let Some((w, h)) = args[i + 1].split_once('x') {
@@ -105,12 +107,15 @@ fn main() -> eframe::Result<()> {
     }
 
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title(app::APP_NAME)
-            .with_inner_size(size)
-            .with_min_inner_size([420.0, 420.0])
-            .with_app_id("swift-download-manager")
-            .with_icon(appicon::egui_icon()),
+        viewport: widgets::titlebar::viewport(
+            eframe::egui::ViewportBuilder::default()
+                .with_title(app::APP_NAME)
+                .with_inner_size(size)
+                .with_min_inner_size([420.0, 420.0])
+                .with_app_id("swift-download-manager")
+                .with_icon(appicon::egui_icon()),
+            widgets::titlebar::mode(),
+        ),
         ..Default::default()
     };
     eframe::run_native(

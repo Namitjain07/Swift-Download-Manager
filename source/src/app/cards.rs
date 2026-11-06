@@ -5,7 +5,8 @@ use super::view::row_menu;
 use super::*;
 use crate::icons::{self, Icon};
 use crate::theme::Elevation;
-use crate::widgets::{anim, capsule_bar, empty_state, icon_button_at, paint_state_chip, spinner, stat_tile, truncated, Hue};
+use crate::widgets::components::Art;
+use crate::widgets::{anim, capsule_bar, empty_state, icon_button_at, indeterminate_bar, paint_state_chip, stat_tile, truncated, Hue};
 use eframe::egui::{CornerRadius, FontId, Rect, Sense, Stroke, StrokeKind, Vec2};
 
 /// Height of one download card.
@@ -55,6 +56,8 @@ impl App {
         let pal = theme::current(ui.ctx());
         let active: Vec<&Item> = self.items.iter().filter(|i| i.status().is_active()).collect();
         let speed: f64 = active.iter().map(|i| i.speed()).sum();
+        // The number glides to each new speed instead of jumping, so the tile stays calm.
+        let speed = anim::glide(ui.ctx(), egui::Id::unique("stat_speed"), speed as f32, 0.45).max(0.0) as f64;
         let count = |s: Status| self.items.iter().filter(|i| i.status() == s).count();
         let (speed_text, unit) = split_speed(speed);
         let w = card_width(ui.available_width(), 4);
@@ -69,14 +72,14 @@ impl App {
 
     /// Shown instead of the list when there is nothing to list.
     pub(super) fn empty_view(&mut self, ui: &mut egui::Ui) {
-        let (icon, title, text, action) = if self.items.is_empty() {
-            (Icon::AddUrl, "No downloads yet", "Add a link, or copy one: download links on the clipboard are picked up automatically.", Some("Add download"))
+        let (art, title, text, action) = if self.items.is_empty() {
+            (Art::Flow, "No downloads yet", "Add a link, or copy one: download links on the clipboard are picked up automatically.", Some("Add download"))
         } else if !self.search.trim().is_empty() {
-            (Icon::Search, "No matches", "Nothing matches your search. Try fewer words.", None)
+            (Art::Icon(Icon::Search), "No matches", "Nothing matches your search. Try fewer words.", None)
         } else {
-            (Icon::Folder, "Nothing here", "No downloads in this category yet.", None)
+            (Art::Icon(Icon::Folder), "Nothing here", "No downloads in this category yet.", None)
         };
-        if empty_state(ui, icon, title, text, action) {
+        if empty_state(ui, art, title, text, action) {
             self.open_add_dialog(None);
         }
     }
@@ -169,13 +172,19 @@ impl App {
         p.galley(egui::pos2(left, rect.top() + PAD + 24.0), meta, pal.tertiary);
 
         // Progress, the full width of the card.
-        let with_bar = st == Status::Downloading || (st == Status::Paused && item.total() > 0);
+        // Waiting without an end in sight (connecting, or a size the server does not tell) slides a piece along the bar.
+        let unknown_end = st == Status::Connecting || (st == Status::Downloading && item.total() == 0);
+        let with_bar = unknown_end || st == Status::Downloading || (st == Status::Paused && item.total() > 0);
         if with_bar {
             let bar = Rect::from_min_size(egui::pos2(rect.left() + PAD, rect.top() + BAR_Y), Vec2::new(rect.width() - 2.0 * PAD, BAR_H));
             let color = if st == Status::Downloading { pal.accent } else { pal.orange };
             // new_child, not scope_builder: a scope would also advance the grid's layout cursor.
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar));
-            capsule_bar(&mut child, egui::Id::unique(("card_bar", id)), item.progress(), color, BAR_H, None);
+            if unknown_end {
+                indeterminate_bar(&mut child, BAR_H);
+            } else {
+                capsule_bar(&mut child, egui::Id::unique(("card_bar", id)), item.progress(), color, BAR_H, None);
+            }
         }
 
         // The line under the bar: what is happening right now.
@@ -190,13 +199,9 @@ impl App {
         };
         let line_cy = line_center_y(rect);
         let button_row = 3.0 * BUTTON + 2.0 * BUTTON_GAP;
-        let line_x = rect.left() + PAD + if st == Status::Connecting { 22.0 } else { 0.0 };
+        let line_x = rect.left() + PAD;
         let line = truncated(&p, &line, FontId::proportional(d.caption + 0.5), line_color, (right - line_x - button_row - 8.0).max(60.0));
         p.galley(egui::pos2(line_x, line_cy - line.size().y / 2.0), line, line_color);
-        if st == Status::Connecting {
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_center_size(egui::pos2(rect.left() + PAD + 8.0, line_cy), Vec2::splat(16.0))));
-            spinner(&mut child, 14.0);
-        }
 
         // Actions.
         let primary = match st {
