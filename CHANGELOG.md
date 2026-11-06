@@ -3,11 +3,10 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.7.0-beta.1] - 2026-11-06
+## [1.7.0] - 2026-11-06
 
-**Pre-release.** The stable version stays 1.4.0; 1.5.0-beta.1 (several networks at once) and 1.6.0-beta.1 (web page and `--server`) are included.
+**A stable release.** It brings together everything that was tried in the pre-releases since 1.4.0: 1.5.0-beta.1 (download over several networks at once) and 1.6.0-beta.1 (the web page, `--server` mode and the Docker image), in a redesigned window. The Docker image is published as `:latest` and `:1.7.0`.
 
-All of it comes in a redesigned window.
 
 ### A new design
 - **One design** replaces Drishti and iOS (the choice under View > Appearance > Design and in Options is gone, and so is `--style`). It is inspired by
