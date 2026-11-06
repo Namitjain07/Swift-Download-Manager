@@ -4,21 +4,25 @@
 
 # Swift Download Manager
 
-**A fast, IDM-inspired download manager for Windows, Linux and macOS, written in Rust.**
+**Free, open-source download manager and download accelerator for Windows, Linux and macOS.**
+
+Split every file into up to 32 connections, pause and resume (even after a restart), queue and schedule downloads, and send downloads from Chrome, Edge, Firefox, Brave and Opera straight to the app. A modern, fast alternative to Internet Download Manager (IDM), written in Rust.
 
 [![Latest release](https://img.shields.io/github/v/release/Namitjain07/Swift-Download-Manager?label=release)](https://github.com/Namitjain07/Swift-Download-Manager/releases/latest)
 [![License](https://img.shields.io/github/license/Namitjain07/Swift-Download-Manager)](LICENSE)
 ![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)
 
+[**Download the latest release**](https://github.com/Namitjain07/Swift-Download-Manager/releases/latest) · [Features](#features) · [Screenshots](#screenshots) · [Browser add-on](#browser-add-on) · [Web interface and Docker](#run-it-for-your-organisation) · [FAQ](#frequently-asked-questions)
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
-  <img src="docs/images/screenshot.png" alt="Swift Download Manager: a header with the menus and a search box, a toolbar, a sidebar with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with coral progress bars, state chips and round action buttons" width="900">
+  <img src="docs/images/screenshot.png" alt="Swift Download Manager, a free download manager for Windows, Linux and macOS: a header with the menus and a search box, a toolbar, a sidebar with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with progress bars, state chips and action buttons" width="900">
 </picture>
 
 <sub>The main window, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
 
-<img src="docs/images/responsive-medium.png" alt="The same window at a medium width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="The window at a narrow width: the menus in one button, a scrolling toolbar of icons and one column of cards" width="230"> <img src="docs/images/options-light.png" alt="Options: grouped settings with switches, steppers and a segmented control" width="300">
+<img src="docs/images/responsive-medium.png" alt="Swift Download Manager at a medium window width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="Swift Download Manager at a narrow window width: the menus in one button, a scrolling toolbar of icons and one column of download cards" width="230"> <img src="docs/images/options-light.png" alt="The Options window: grouped settings with switches, steppers and a segmented control" width="300">
 
 <sub>It adapts to the window: full layout, an icon rail at medium widths, a drawer and one menu button when narrow. Right: the Options window.</sub>
 
@@ -26,9 +30,14 @@
 
 ## Why Swift Download Manager?
 
-Most downloads use a single connection and leave your bandwidth idle. Swift Download Manager splits every file into
-several parts, downloads them at the same time, and keeps going when a connection drops, so big files finish
-sooner and a broken connection never means starting over.
+Browsers download each file over a single connection, so a fast line often sits mostly idle, and a dropped connection can mean starting over. Swift Download Manager is a free **download accelerator**: it splits every file into several parts, downloads them at the same time, re-splits as parts finish, and keeps going when a connection drops. Big files finish sooner, and a broken connection never means starting over.
+
+- **Free and open source** (Apache License 2.0). No ads, no account, and no telemetry or update pings: the program only talks to the servers you download from.
+- **Cross-platform**: one program for Windows 10/11, Ubuntu, Debian and Linux Mint, and macOS (built on a Mac).
+- **Fast and light**: written in Rust. On Windows it is one self-contained `.exe` that needs no installer.
+- **Built for everyday use**: pause and resume, queues with schedules, categories, batch downloads, a link grabber, clipboard watching, speed limits and a proxy.
+- **Works with your browser**: an add-on for Chrome, Edge, Brave, Opera and Firefox catches downloads and passes your login along.
+- **More than a desktop app**: a web interface, a multi-user server with a Docker image, and a built-in MCP server so AI assistants such as Claude can manage downloads.
 
 ## Features
 
@@ -71,6 +80,58 @@ sooner and a broken connection never means starting over.
 - Spots videos and sounds that a page plays
 
 What is finished and what is still planned (integrations with package managers, other tools and more) is in the [roadmap](#roadmap-and-feature-checklist).
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/add-download.png" alt="The Add download window of Swift Download Manager: web address, file name, category, queue and save folder"><br><sub><b>Add a download</b>: paste a link, pick a category, a queue and a folder. Light mode.</sub></td>
+<td width="50%"><img src="docs/images/add-download-dark.png" alt="The Add download window in dark mode"><br><sub><b>Dark mode</b> follows your system, or you can choose it yourself.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/table-view.png" alt="The classic table view of the download list with sortable columns, state chips and progress bars"><br><sub><b>Table view</b>: sortable columns for people who like a classic download list.</sub></td>
+<td><img src="docs/images/scheduler-dark.png" alt="The download scheduler: start and stop a queue at set times, daily or once"><br><sub><b>Download scheduler</b>: start and stop a queue at set times, daily or once.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/options-dark.png" alt="Options: download folder, connections per download, retries, speed limit and proxy"><br><sub><b>Options</b>: up to 32 connections per download, retries, speed limit and proxy.</sub></td>
+<td><img src="docs/images/networks-dark.png" alt="Options with the Networks card: Wi-Fi, Ethernet and a phone hotspot used together"><br><sub><b>Several networks at once</b>: use Wi-Fi, Ethernet and a phone hotspot together.</sub></td>
+</tr>
+</table>
+
+## Frequently asked questions
+
+**Is Swift Download Manager free?**
+Yes. It is free and open source under the Apache License 2.0, with no ads, no account and no paid tier.
+
+**How is it different from Internet Download Manager (IDM)?**
+IDM is Windows-only, closed source and paid. Swift Download Manager follows the same proven idea (segmented downloading, queues, a scheduler and browser integration) but is free and open source, runs on Windows, Linux and macOS, and adds a web interface, a multi-user Docker server, downloading over several networks at once and control by AI assistants.
+
+**How does it make downloads faster?**
+Many servers limit the speed of each connection. Swift Download Manager opens several connections to the same file (up to 32), each fetching a different part, so the speeds add up. When a part finishes, the biggest remaining part is split so that no connection sits idle. How much faster it gets depends on the server: some allow only one connection per file, and then the download simply runs on one.
+
+**Can I pause and resume a download?**
+Yes, also after closing the app or restarting the computer, as long as the server supports resuming. Broken connections are retried automatically, and a link that has expired can be refreshed so the download carries on where it stopped.
+
+**Does it work with Chrome, Edge, Firefox and Brave?**
+Yes, with the browser add-on for Chrome, Edge, Brave, Opera and Firefox. It catches downloads you start in the browser, passes your browser login (cookies) along and adds *Download with Swift Download Manager* to the right-click menu. See [Browser add-on](#browser-add-on).
+
+**Can I download over Wi-Fi and Ethernet at the same time?**
+Yes. Under **Options → Networks** you can tick several network cards (Wi-Fi, Ethernet, a phone's hotspot) and every download uses all of them together. See [Download over several networks at once](#download-over-several-networks-at-once).
+
+**Can I run it on a server, a NAS or in Docker?**
+Yes. `swift_download_manager --server` runs without a window and serves a web page where several people sign in with their own accounts, and there is a Docker image on GitHub Container Registry. See [Run it for your organisation](#run-it-for-your-organisation).
+
+**Is it safe? Windows says the publisher is unknown.**
+Every release is built by GitHub from the source code in this repository, and the Windows program is signed with the project's own certificate (its fingerprint is in [SECURITY.md](SECURITY.md)). Because that certificate is not issued by a commercial authority, Windows may show *unknown publisher*: choose **More info**, then **Run anyway**. Each release lists a `SHA256SUMS` file so you can check what you downloaded. See [Windows warnings and antivirus](#windows-warnings-and-antivirus).
+
+**Does it collect any data?**
+No. There is no telemetry, no analytics and no update check in the program. It only contacts the servers you download from.
+
+**Can an AI assistant use it?**
+Yes. Claude and other assistants that speak the Model Context Protocol (MCP) can list, add, pause, resume and remove downloads, but never delete files or choose folders. See [Use it from an AI assistant](#use-it-from-an-ai-assistant-mcp).
+
+**Where do I report a bug or ask for a feature?**
+Open an [issue](https://github.com/Namitjain07/Swift-Download-Manager/issues/new/choose). Pull requests are welcome; see the [contributing guide](CONTRIBUTING.md).
 
 ## Run it in the background
 
