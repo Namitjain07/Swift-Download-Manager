@@ -3,6 +3,41 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Colour themes
+- **14 themes**, each in light and dark: Coral (the default, the look of 1.7.0), **Files** (after the Files app for Windows 11: 4 px corners, 32 px
+  controls, a blue accent and a small accent bar beside the chosen sidebar row), **Carbon** (square corners), Blue, Green, Black, Purple, Pink, Orange,
+  Teal, Gold, Nord, Dracula and Mocha. Choose one under Options > Appearance (a picture for each) or View > Appearance > Theme; it is saved
+- Three shapes sit behind them: capsule buttons (Coral and the plain colours), Fluent (Files) and Sharp (Carbon). Every widget takes its sizes, corners
+  and colours from the theme in use, so nothing is hard-coded to one look
+- The tests check that text keeps at least 4.5:1 contrast on the surfaces it is drawn on, in every theme, light and dark (button text too; the one
+  exception is the held-down state of a Coral button in dark mode, which keeps 3:1)
+- Changing the theme glides from the old look to the new one in about a third of a second (colours and sizes)
+- `--color-theme NAME` starts the program in one theme for a run; `--show appearance` opens Options at the Appearance card; `--show empty` shows the
+  window with no downloads
+
+### A title bar that matches
+- The system's title bar is replaced (Windows and Linux) by the app's own, in the colours and corners of the theme: the name of the app on the left,
+  minimise, maximise or restore, and close on the right (close turns red under the pointer). Drag it to move the window, double-click to maximise,
+  and resize from any edge or corner. macOS keeps its traffic lights over the same bar
+- `--native-title-bar` keeps the system's bar on any system. The header below no longer repeats the name of the app
+
+### Seeing a download
+- **The flow picture**: the parts of a file are channels that run along smooth curves into one file; small packets travel at each part's own speed, the
+  file fills from the bottom as data arrives, finished parts turn green, and a tick shows when it is done. It is at the top of a download's progress
+  window and, quietly, in the empty state
+- **Loaders**: an arc loader replaces the small spinner while the link grabber reads pages and while a checksum is checked, and a sliding bar shows a
+  connection being made or a file whose size the server does not tell
+- **Motion**: dialogs fade and rise into place over 200 ms (they used to fade in 80 ms), and the speed number in the summary tiles glides to each
+  new value
+
+### Browser add-on 1.5.0
+- A new pop-up in the look of the app: a *Connected* badge that follows the app being opened or closed, an iOS-style switch, a card for each video or
+  sound found on the page (newest first, with its type and size) and a *Download* button that shows *Sending…*, *Sent ✓* or *App not running* (and can be pressed again). Light and dark
+  follow the browser; the empty state shows channels flowing into one file; motion stops if the system asks for less
+- New flat icons (coral, with a white download arrow) and a coral badge. A file name with a stray `%` no longer stops the list from being shown
+
 ## [1.7.0] - 2026-11-06
 
 **A stable release.** It brings together everything that was tried in the pre-releases since 1.4.0: 1.5.0-beta.1 (download over several networks at once) and 1.6.0-beta.1 (the web page, `--server` mode and the Docker image), in a redesigned window. The Docker image is published as `:latest` and `:1.7.0`.

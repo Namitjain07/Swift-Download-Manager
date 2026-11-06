@@ -17,7 +17,7 @@ Split every file into up to 32 connections, pause and resume (even after a resta
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
-  <img src="docs/images/screenshot.png" alt="Swift Download Manager, a free download manager for Windows, Linux and macOS: a header with the menus and a search box, a toolbar, a sidebar with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with progress bars, state chips and action buttons" width="900">
+  <img src="docs/images/screenshot.png" alt="Swift Download Manager, a free download manager for Windows, Linux and macOS: a title bar, a header with the menus and a search box, a toolbar, a sidebar with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with progress bars, state chips and action buttons" width="900">
 </picture>
 
 <sub>The main window, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
@@ -51,7 +51,10 @@ Browsers download each file over a single connection, so a fast line often sits 
 - **In a web browser and for a whole team**: a page on a localhost address, and a Docker image that serves several people from one machine
 - **Several networks at once**: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
 - One consistent design, inspired by Airbnb and drawn with iOS-style controls: white surfaces on a soft grey page, one coral accent, 16 px rounded cards with soft shadows, capsule buttons, an iOS switch, stepper and segmented control, and line icons from [Phosphor](https://phosphoricons.com). Text is set in [Inter](https://rsms.me/inter/). Flat colours only, no gradients. Light and dark, following your system (or choose under **View → Appearance**)
-- Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in. The window stays idle when nothing moves
+- **14 colour themes** to choose from in **Options → Appearance**: Coral (the default), **Files** (a Windows 11 look with small corners and a blue accent), **Carbon** (sharp corners), Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha, each in light and dark. Automated tests check that text stays easy to read in every theme, and switching glides from one look to the next
+- **A title bar in the theme's colours**: the app draws its own minimise, maximise and close buttons instead of the system's grey bar, so the whole window matches. Drag it to move the window, double-click to maximise, resize from any edge (macOS keeps its traffic lights; `--native-title-bar` brings the system's bar back)
+- **See a download at work**: the parts of a file are drawn as channels that flow along smooth curves into one file, each at its own speed, and the file fills up as data arrives. Waiting is shown with a smooth loader or a sliding bar, never a frozen window
+- Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars and the speed number glide, and dialogs fade and rise into place. The window stays idle when nothing moves
 
 **Runs in the background**
 - Close the window and **keep downloading**: an icon in the system tray (Windows notification area, macOS menu bar, Linux tray) shows what is going on, pauses and resumes everything, and opens the window again
@@ -77,7 +80,7 @@ Browsers download each file over a single connection, so a fast line often sits 
 - Catches downloads you start in the browser and hands them to the app
 - Passes your browser login (cookies) along, so downloads behind a login work
 - Adds **Download with Swift Download Manager** to the right-click menu
-- Spots videos and sounds that a page plays
+- Spots videos and sounds that a page plays, and offers them in a pop-up that has the look of the app (light and dark)
 
 What is finished and what is still planned (integrations with package managers, other tools and more) is in the [roadmap](#roadmap-and-feature-checklist).
 
@@ -96,7 +99,26 @@ What is finished and what is still planned (integrations with package managers, 
 <td><img src="docs/images/options-dark.png" alt="Options: download folder, connections per download, retries, speed limit and proxy"><br><sub><b>Options</b>: up to 32 connections per download, retries, speed limit and proxy.</sub></td>
 <td><img src="docs/images/networks-dark.png" alt="Options with the Networks card: Wi-Fi, Ethernet and a phone hotspot used together"><br><sub><b>Several networks at once</b>: use Wi-Fi, Ethernet and a phone hotspot together.</sub></td>
 </tr>
+<tr>
+<td><img src="docs/images/download-flow.png" alt="The progress window of a download: eight channels, one for each part of the file, flow along curves into one file that fills up, above the size, speed and time left"><br><sub><b>See it at work</b>: each part of the file is a channel that flows into the finished file at its own speed.</sub></td>
+<td><img src="docs/images/appearance-dark.png" alt="Options, Appearance: a grid of fourteen small pictures, one for each colour theme, with Files chosen"><br><sub><b>14 themes</b>: pick one by its picture under Options → Appearance.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/theme-files-light.png" alt="The Files theme in light mode: a Windows 11 look with small corners, a blue accent and a title bar that blends into the window"><br><sub><b>Files</b>: small corners and a blue accent, inspired by the Files app for Windows 11.</sub></td>
+<td><img src="docs/images/theme-carbon-dark.png" alt="The Carbon theme in dark mode: square corners, near-black surfaces and a blue accent"><br><sub><b>Carbon</b>: square corners and a dark, technical look.</sub></td>
+</tr>
 </table>
+
+### Colour themes
+
+Fourteen themes, each in light and dark. Click a picture to see it full size.
+
+<a href="docs/images/themes-dark.png"><img src="docs/images/themes-dark.png" alt="The main window in all fourteen colour themes in dark mode: Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha" width="900"></a>
+
+<a href="docs/images/themes-light.png"><img src="docs/images/themes-light.png" alt="The main window in all fourteen colour themes in light mode" width="900"></a>
+
+Choose one under **Options → Appearance** or **View → Appearance → Theme**. To try one for a single run, start the program with
+`--color-theme files` (or `carbon`, `blue`, `green`, `black`, `purple`, `pink`, `orange`, `teal`, `gold`, `nord`, `dracula`, `mocha`, `coral`).
 
 ## Frequently asked questions
 
@@ -129,6 +151,12 @@ No. There is no telemetry, no analytics and no update check in the program. It o
 
 **Can an AI assistant use it?**
 Yes. Claude and other assistants that speak the Model Context Protocol (MCP) can list, add, pause, resume and remove downloads, but never delete files or choose folders. See [Use it from an AI assistant](#use-it-from-an-ai-assistant-mcp).
+
+**Can I change how it looks?**
+Yes. Under **Options → Appearance** you choose light, dark or automatic, and one of 14 colour themes (Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha). The choice is saved and applies at once, with a short glide from the old look to the new one. See [Colour themes](#colour-themes).
+
+**Why does the window have its own title bar? Can I get the system's back?**
+The app draws its own minimise, maximise and close buttons so that the title bar has the colours and corners of the theme you picked. Dragging, double-click to maximise and resizing from the edges work as usual. If you prefer the system's bar (or your desktop handles frameless windows badly), start the program with `--native-title-bar`.
 
 **Where do I report a bug or ask for a feature?**
 Open an [issue](https://github.com/Namitjain07/Swift-Download-Manager/issues/new/choose). Pull requests are welcome; see the [contributing guide](CONTRIBUTING.md).
@@ -310,6 +338,10 @@ Every release also lists a `SHA256SUMS` file so you can check what you downloade
 
 The app has to be running for downloads to go to it; otherwise the browser downloads as usual.
 
+<p align="center"><img src="docs/images/extension-popup.png" alt="The browser add-on's pop-up in light and dark: a Connected to the app badge, a switch to send browser downloads to the app, and the videos and sounds found on the page with a Download button each; on the right the empty state, with channels flowing into one file" width="900"></p>
+
+<p align="center"><sub>The add-on's pop-up has the look of the app and follows the browser's light or dark setting.</sub></p>
+
 - **Chrome, Edge, Brave, Opera:** unzip the file into a folder you keep, open `chrome://extensions` (Edge: `edge://extensions`),
   turn on **Developer mode**, click **Load unpacked** and choose the folder.
 - **Firefox:** to try it now, open `about:debugging`, click **This Firefox**, then **Load Temporary Add-on…** and choose the `.xpi`.
@@ -364,7 +396,8 @@ The app can draw itself with sample data and save a picture of its window, which
 cd source
 cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
 cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
-# a window other than the main one: --show add|batch|options|networks|scheduler|queues|properties|progress|delete|about|browser|ai|grabber|close|table|drawer|menus
+# a window other than the main one: --show add|batch|options|networks|appearance|scheduler|queues|properties|progress|delete|about|browser|ai|grabber|close|table|drawer|menus|empty
+# a colour theme: --color-theme files|carbon|blue|green|black|purple|pink|orange|teal|gold|nord|dracula|mocha|coral
 # a narrower window: --size 900x640   (or 600x760)
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
