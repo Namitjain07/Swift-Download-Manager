@@ -4,7 +4,7 @@
 use super::dialogs::{options_of, path_field};
 use super::*;
 use crate::bridge::DOWNLOAD_EXTS;
-use crate::widgets::{button_width, card, check_row, dropdown, field, field_full, form_field, message, plain_button, primary_button, secondary_button, sheet, small_button, spinner, ButtonKind, ButtonSize};
+use crate::widgets::{button_width, card, check_row, dropdown, field, field_full, form_field, message, plain_button, primary_button, secondary_button, sheet, small_button, ButtonKind, ButtonSize};
 use eframe::egui::RichText;
 use std::io::Read;
 
@@ -221,7 +221,7 @@ impl App {
                 ui.add_space(8.0);
                 if busy {
                     ui.horizontal(|ui| {
-                        spinner(ui, 14.0);
+                        crate::widgets::arc_loader(ui, 18.0);
                         ui.label(format!("Reading… {pages} page(s) so far"));
                     });
                 }

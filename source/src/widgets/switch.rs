@@ -5,8 +5,8 @@ use crate::theme;
 use eframe::egui::{self, pos2, vec2, Color32, CornerRadius, Response, Sense, Ui, Vec2};
 
 /// Width and height of a switch.
-pub fn switch_size() -> Vec2 {
-    let (w, h) = theme::DESIGN.switch;
+pub fn switch_size(ctx: &egui::Context) -> Vec2 {
+    let (w, h) = theme::design(ctx).switch;
     vec2(w, h)
 }
 
@@ -14,19 +14,21 @@ pub fn switch(ui: &mut Ui, on: &mut bool) -> Response {
     let enabled = ui.is_enabled();
     let ctx = ui.ctx().clone();
     let pal = theme::current(&ctx);
-    let (rect, mut resp) = ui.allocate_exact_size(switch_size(), if enabled { Sense::click() } else { Sense::hover() });
+    let (rect, mut resp) = ui.allocate_exact_size(switch_size(&ctx), if enabled { Sense::click() } else { Sense::hover() });
     if resp.clicked() {
         *on = !*on;
         resp.mark_changed();
     }
     let k = fade(&ctx, resp.id.with("knob"), *on, 0.2);
+    // iOS switches turn green; Fluent and Carbon ones turn the accent colour.
+    let on_colour = pal.accent_solid.lerp_to_gamma(pal.green, theme::design(&ctx).pill);
     let dim = if enabled { 1.0 } else { 0.4 };
     let margin = 2.0;
     let r = (rect.height() - 2.0 * margin) / 2.0;
     let x = egui::lerp((rect.left() + margin + r)..=(rect.right() - margin - r), k);
     let thumb = pos2(x, rect.center().y);
     let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same((rect.height() / 2.0) as u8), pal.surface3.lerp_to_gamma(pal.green, k).gamma_multiply(dim));
+    p.rect_filled(rect, CornerRadius::same((rect.height() / 2.0) as u8), pal.surface3.lerp_to_gamma(on_colour, k).gamma_multiply(dim));
     // The thumb's soft shadow: two translucent discs under it.
     p.circle_filled(thumb + vec2(0.0, 2.0), r + 1.5, Color32::from_black_alpha(26));
     p.circle_filled(thumb + vec2(0.0, 1.0), r + 0.5, Color32::from_black_alpha(34));
@@ -43,7 +45,7 @@ mod tests {
     use crate::theme::ThemeMode;
 
     #[test]
-    fn a_switch_is_51_by_31_and_never_flips_by_itself() {
+    fn a_switch_has_the_themes_size_and_never_flips_by_itself() {
         let ctx = themed(ThemeMode::Light);
         let mut on = false;
         let mut size = Vec2::ZERO;

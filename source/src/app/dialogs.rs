@@ -7,7 +7,8 @@ use crate::icons::Icon;
 use crate::theme::ThemeMode;
 use crate::widgets::{
     button, button_width, card, check_row, disclosure, dropdown, field, field_full, form_field, hint, icon_button, kv, kv_text, message, notice, number_field, plain_button, primary_button,
-    secondary_button, section_title, segment_bar, segmented, segmented_width, sheet, small_button, spinner, stepper, switch, ButtonKind, ButtonSize,
+    secondary_button, section_title, segment_bar, segmented, segmented_width, sheet, small_button, stepper, switch, ButtonKind, ButtonSize,
+    FlowChannel, FlowState,
 };
 use eframe::egui::RichText;
 
@@ -159,8 +160,31 @@ impl App {
                 let pal = theme::current(ctx);
                 let title = format!("{:.0}% {}", item.progress() * 100.0, item.name);
                 let pos = egui::pos2(280.0 + (id % 5) as f32 * 24.0, 120.0 + (id % 5) as f32 * 24.0);
+                // The parts of the file as channels that run into it, with how fast each one goes.
+                let segs = item.live.segments.lock().unwrap().clone();
+                let channels = {
+                    let key = egui::Id::unique(("flow_rates", id));
+                    let mut rates = ctx.data(|d| d.get_temp::<crate::widgets::flow::Rates>(key)).unwrap_or_default();
+                    let parts: Vec<(u64, bool)> = segs.iter().map(|s| (s.done.min(s.len()), s.finished())).collect();
+                    let list = if parts.is_empty() {
+                        // One connection (or not known yet): a single channel.
+                        vec![FlowChannel { rate: 1.0, done: st == Status::Complete }]
+                    } else {
+                        rates.update(ctx.input(|i| i.time), &parts)
+                    };
+                    ctx.data_mut(|d| d.insert_temp(key, rates));
+                    list
+                };
+                let flow_state = match st {
+                    Status::Connecting | Status::Downloading => FlowState::Running,
+                    Status::Complete => FlowState::Complete,
+                    Status::Error => FlowState::Failed,
+                    Status::Queued | Status::Paused => FlowState::Waiting,
+                };
                 let out = sheet(("progress", id), title).width(500.0).floating(pos).show(ctx, |s| {
                     s.body(|ui| {
+                        crate::widgets::flow(ui, ("progress", id), &channels, item.progress(), flow_state, 112.0);
+                        ui.add_space(12.0);
                         kv(ui, "Address", |ui| {
                             ui.add(egui::Label::new(RichText::new(&item.url).color(pal.blue_ink)).truncate());
                         });
@@ -199,7 +223,6 @@ impl App {
                             },
                         );
                         ui.add_space(10.0);
-                        let segs = item.live.segments.lock().unwrap().clone();
                         segment_bar(ui, item.progress(), item.total(), &segs);
                         ui.add_space(10.0);
                         ui.horizontal(|ui| {
@@ -423,7 +446,7 @@ impl App {
                         }
                     });
                     if item.is_checking {
-                        spinner(ui, 14.0);
+                        crate::widgets::arc_loader(ui, 18.0);
                         ui.label(RichText::new("Checking…").color(pal.secondary));
                     }
                     if let Some(c) = &item.check {
@@ -500,6 +523,7 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
     }
     section_title(ui, "Networks");
     let nets = connected_networks(ui);
+    let switch_w = crate::widgets::switch::switch_size(ui.ctx()).x;
     card(ui, |g| {
         g.toggle("Download over several networks at once", Some("Combine Wi-Fi, Ethernet, a phone's hotspot and more into one faster download."), &mut s.multi_network);
         if !s.multi_network {
@@ -513,7 +537,7 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
         for n in &nets {
             let mut on = s.networks.contains(&n.name);
             let sub = format!("{} · {}", n.kind.label(), n.addr);
-            if g.row(&n.name, Some(&sub), crate::widgets::switch::switch_size().x, |ui| switch(ui, &mut on)).changed() {
+            if g.row(&n.name, Some(&sub), switch_w, |ui| switch(ui, &mut on)).changed() {
                 s.networks.retain(|x| x != &n.name);
                 if on {
                     s.networks.push(n.name.clone());
@@ -595,10 +619,19 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
         g.enable(s.browser_listen);
         g.toggle("Start browser downloads straight away", Some("Without asking first."), &mut s.browser_start_now);
     });
+    // Screenshots (--show appearance) start with this card in view.
+    if ui.data(|d| d.get_temp::<bool>(egui::Id::unique("sdm_scroll_appearance"))).unwrap_or(false) {
+        ui.scroll_to_cursor(Some(egui::Align::TOP));
+    }
     section_title(ui, "Appearance");
     let mode_w = segmented_width(ui, &["Automatic", "Light", "Dark"]);
     card(ui, |g| {
         g.row("Mode", None, mode_w, |ui| segmented(ui, &[(ThemeMode::System, "Automatic"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")], &mut s.theme));
+        g.free(|ui| {
+            ui.label(egui::RichText::new("Theme").size(theme::design(ui.ctx()).body).color(theme::current(ui.ctx()).label));
+            ui.add_space(10.0);
+            crate::widgets::theme_picker(ui, &mut s.color_theme);
+        });
     });
     networks_card(ui, s);
     web_card(ui, s, web_link);

@@ -50,17 +50,18 @@ pub fn small_icon_label_button(ui: &mut Ui, kind: ButtonKind, icon: Icon, label:
 
 /// The width a button will have, so rows can reserve room for it.
 pub fn button_width(ui: &Ui, size: ButtonSize, icon: bool, label: &str) -> f32 {
-    let (font, pad, icon_w) = metrics(size);
+    let (font, pad, icon_w) = metrics(&theme::design(ui.ctx()), size);
     let text = ui.painter().layout_no_wrap(label.to_owned(), font, Color32::PLACEHOLDER).size().x;
     2.0 * pad + text + if icon { icon_w + GAP } else { 0.0 }
 }
 
 const GAP: f32 = 8.0;
 
-fn metrics(size: ButtonSize) -> (FontId, f32, f32) {
+fn metrics(d: &theme::Design, size: ButtonSize) -> (FontId, f32, f32) {
+    // The side padding is wide for capsules and narrower for the rectangular buttons of Files and Carbon.
     match size {
-        ButtonSize::Regular => (FontId::new(theme::DESIGN.body, theme::semibold()), 20.0, 18.0),
-        ButtonSize::Small => (FontId::new(13.0, theme::semibold()), 14.0, 16.0),
+        ButtonSize::Regular => (FontId::new(d.body, theme::semibold()), 12.0 + 8.0 * d.pill, 18.0),
+        ButtonSize::Small => (FontId::new(13.0, theme::semibold()), 10.0 + 4.0 * d.pill, 16.0),
     }
 }
 
@@ -77,7 +78,7 @@ fn paint_button(ui: &mut Ui, kind: ButtonKind, size: ButtonSize, icon: Option<Ic
     let enabled = ui.is_enabled();
     let ctx = ui.ctx().clone();
     let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
-    let (font, pad, icon_w) = metrics(size);
+    let (font, pad, icon_w) = metrics(&d, size);
     let height = if size == ButtonSize::Small { d.small_h } else { d.control_h };
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font, Color32::PLACEHOLDER);
     let content_w = galley.size().x + if icon.is_some() { icon_w + GAP } else { 0.0 };
@@ -99,7 +100,7 @@ fn paint_button(ui: &mut Ui, kind: ButtonKind, size: ButtonSize, icon: Option<Ic
     // Disabled buttons are flat grey with grey text (never a faded copy of the coloured one, which would be unreadable).
     let (fill, text, stroke) = if enabled { (fill, text, stroke) } else { disabled_look(kind, &pal) };
     let dim = 1.0;
-    let radius = CornerRadius::same((rect.height() * 0.5).round() as u8);
+    let radius = CornerRadius::same(d.round(rect.height()));
     let p = ui.painter();
     if fill != Color32::TRANSPARENT {
         p.rect_filled(rect, radius, fill.gamma_multiply(dim));

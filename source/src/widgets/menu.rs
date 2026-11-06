@@ -95,7 +95,7 @@ fn row(ui: &mut Ui, icon: Option<Icon>, label: &str, trailing: Trailing, enabled
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), d.menu_row_h), if enabled { Sense::click() } else { Sense::hover() });
     let hover = fade(&ctx, resp.id.with("hover"), enabled && (resp.hovered() || resp.has_focus()), 0.1);
     let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same(10), pal.hover.gamma_multiply(hover));
+    p.rect_filled(rect, CornerRadius::same(d.radius_md.min(10)), pal.hover.gamma_multiply(hover));
     let ink = if !enabled {
         pal.disabled
     } else if danger {

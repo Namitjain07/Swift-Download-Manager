@@ -31,7 +31,7 @@ impl App {
     pub(super) fn draw(&mut self, ui: &mut egui::Ui) {
         self.frame += 1;
         let ctx = ui.ctx().clone();
-        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme));
+        theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme), self.color_theme_override.unwrap_or(self.settings.color_theme));
         if !self.demo && !self.quitting && ctx.input(|i| i.viewport().close_requested()) {
             self.on_close_requested(&ctx);
         }
@@ -40,6 +40,7 @@ impl App {
         self.shortcuts(&ctx);
 
         let bp = self.breakpoint(&ctx);
+        crate::widgets::titlebar::show(ui);
         self.header(ui, bp);
         self.toolbar(ui, bp);
         self.status_bar(ui, bp);
@@ -86,6 +87,7 @@ impl App {
         if self.menu_preview {
             self.menu_preview_areas(&ctx);
         }
+        crate::widgets::titlebar::frame_and_edges(&ctx);
     }
 }
 
@@ -165,13 +167,13 @@ impl App {
             // A dashed-look frame around the whole window and a pill in the middle.
             ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("drop_hint_frame"))).rect_stroke(
                 screen.shrink(8.0),
-                CornerRadius::same(theme::DESIGN.radius_xl),
+                CornerRadius::same(theme::design(ctx).radius_xl),
                 Stroke::new(3.0, pal.accent.gamma_multiply(k)),
                 egui::StrokeKind::Inside,
             );
             egui::Area::new(egui::Id::unique("drop_hint")).anchor(egui::Align2::CENTER_CENTER, [0.0, (1.0 - k) * 8.0]).interactable(false).show(ctx, |ui| {
                 ui.multiply_opacity(k);
-                Frame::NONE.fill(pal.accent_solid).corner_radius(CornerRadius::same(28)).shadow(theme::shadow(ctx, theme::Elevation::Popup)).inner_margin(Margin::symmetric(28, 18)).show(ui, |ui| {
+                Frame::NONE.fill(pal.accent_solid).corner_radius(CornerRadius::same(theme::design(ctx).round(56.0).min(28))).shadow(theme::shadow(ctx, theme::Elevation::Popup)).inner_margin(Margin::symmetric(28, 18)).show(ui, |ui| {
                     ui.label(RichText::new("Drop to download the links inside").color(pal.on_accent).size(17.0).family(theme::semibold()));
                 });
             });
@@ -205,19 +207,20 @@ impl App {
     /// The top bar: logo, the menus, the search box and the main action.
     fn header(&mut self, ui: &mut egui::Ui, bp: layout::Breakpoint) {
         use layout::Breakpoint::{Compact, Wide};
-        let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
-        let frame = Frame::NONE.fill(pal.card).inner_margin(Margin::symmetric(if bp == Compact { 12 } else { 24 }, 12));
+        let pal = theme::current(ui.ctx());
+        // The name and the mark of the app are in the title bar above; the header holds the controls.
+        let own_title_bar = crate::widgets::titlebar::mode() != crate::widgets::titlebar::Mode::Native;
+        let frame = Frame::NONE.fill(pal.chrome).inner_margin(Margin::symmetric(if bp == Compact { 12 } else { 24 }, if own_title_bar { 6 } else { 12 }));
         egui::Panel::top("header").frame(frame).show_separator_line(false).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 if bp == Compact && icon_button(ui, Icon::Sidebar, "Categories and queues").clicked() {
                     self.drawer_open = !self.drawer_open;
                 }
-                logo(ui);
+                if !own_title_bar {
+                    logo(ui);
+                }
                 if bp == Wide {
-                    ui.add_space(2.0);
-                    ui.label(RichText::new(APP_NAME).size(d.title + 1.0).family(theme::semibold()).color(pal.accent_ink));
-                    ui.add_space(20.0);
                     self.menu_bar(ui);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -245,12 +248,13 @@ impl App {
 
     /// The five menus, side by side (wide windows).
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        let control_h = theme::design(ui.ctx()).control_h;
         egui::MenuBar::new()
-            .style(|style: &mut egui::Style| {
+            .style(move |style: &mut egui::Style| {
                 // egui's own menu look first (no borders, a clear resting fill), then ours on top.
                 egui::containers::menu::menu_style(style);
                 style.spacing.button_padding = egui::vec2(14.0, 8.0);
-                style.spacing.interact_size.y = theme::DESIGN.control_h;
+                style.spacing.interact_size.y = control_h;
                 style.spacing.item_spacing.x = 2.0;
             })
             .ui(ui, |ui| {
@@ -412,6 +416,15 @@ impl App {
                     self.dirty = true;
                 }
             }
+            menu_separator(ui);
+            menu_submenu(ui, "Theme", true, |ui| {
+                for theme in crate::theme::ColorTheme::ALL {
+                    if menu_check_row(ui, theme.name(), self.settings.color_theme == theme).clicked() {
+                        self.settings.color_theme = theme;
+                        self.dirty = true;
+                    }
+                }
+            });
         });
         if menu_item(ui, "Clear sorting", "", self.sort.is_some()).clicked() {
             self.sort = None;
@@ -510,7 +523,7 @@ impl App {
         let groups = self.tool_groups();
         let pal = theme::current(ui.ctx());
         let margin = if bp == Compact { Margin::symmetric(8, 4) } else { Margin::symmetric(20, 4) };
-        let frame = Frame::NONE.fill(pal.card).inner_margin(margin);
+        let frame = Frame::NONE.fill(pal.chrome).inner_margin(margin);
         let mut chosen: Option<ToolKey> = None;
         let mut view = self.settings.view;
         egui::Panel::top("toolbar").frame(frame).show(ui, |ui| {
@@ -559,7 +572,7 @@ impl App {
         let scheduled: Option<(String, String)> = self.settings.queues.iter().find(|q| q.schedule.start_on).map(|q| (q.name.clone(), q.schedule.start_time.clone()));
         let running: Vec<String> = self.running.iter().cloned().collect();
         let compact = bp == layout::Breakpoint::Compact;
-        egui::Panel::bottom("status").frame(Frame::NONE.fill(pal.card).inner_margin(Margin::symmetric(if compact { 12 } else { 24 }, 8))).show(ui, |ui| {
+        egui::Panel::bottom("status").frame(Frame::NONE.fill(pal.chrome).inner_margin(Margin::symmetric(if compact { 12 } else { 24 }, 8))).show(ui, |ui| {
             // Rows are as tall as a button (40) unless told otherwise: a status line of 20 point chips needs 20.
             ui.spacing_mut().interact_size.y = 20.0;
             ui.horizontal(|ui| {
@@ -1007,7 +1020,7 @@ impl App {
             let pal = theme::current(ctx);
             // A dark pill with light text in either mode, the way phones show a message.
             let (fill, ink) = if ctx.global_style().visuals.dark_mode { (pal.label, pal.bg) } else { (pal.label, pal.card) };
-            Frame::NONE.fill(fill).corner_radius(CornerRadius::same(24)).shadow(theme::shadow(ctx, theme::Elevation::Popup)).inner_margin(Margin::symmetric(22, 12)).show(ui, |ui| {
+            Frame::NONE.fill(fill).corner_radius(CornerRadius::same(theme::design(ctx).round(46.0).min(24))).shadow(theme::shadow(ctx, theme::Elevation::Popup)).inner_margin(Margin::symmetric(22, 12)).show(ui, |ui| {
                 ui.label(RichText::new(msg).color(ink).family(theme::semibold()));
             });
         });
@@ -1018,7 +1031,7 @@ impl App {
 fn logo(ui: &mut egui::Ui) {
     let pal = theme::current(ui.ctx());
     let (rect, _) = ui.allocate_exact_size(egui::vec2(38.0, 38.0), Sense::hover());
-    ui.painter().rect_filled(rect, CornerRadius::same(12), pal.accent_solid);
+    ui.painter().rect_filled(rect, CornerRadius::same(theme::design(ui.ctx()).radius_md), pal.accent_solid);
     icons::draw_weight(ui.painter(), egui::Rect::from_center_size(rect.center(), egui::vec2(24.0, 24.0)), Icon::Download, pal.on_accent, true, false);
 }
 
@@ -1133,8 +1146,8 @@ mod tests {
         all
     }
 
-    const WINDOWS: [&str; 18] = [
-        "", "add", "batch", "options", "networks", "scheduler", "queues", "delete", "properties", "progress", "about", "browser", "ai", "drawer", "close", "table", "grabber", "menus",
+    const WINDOWS: [&str; 20] = [
+        "", "add", "batch", "options", "networks", "appearance", "scheduler", "queues", "delete", "properties", "progress", "about", "browser", "ai", "drawer", "close", "table", "grabber", "menus", "empty",
     ];
     const SIZES: [(f32, f32); 6] = [(420.0, 420.0), (600.0, 760.0), (719.0, 640.0), (900.0, 640.0), (1180.0, 680.0), (1700.0, 1000.0)];
 
@@ -1152,6 +1165,34 @@ mod tests {
                     assert!(clash.is_none(), "{name:?} at {w}x{h} in {mode:?} has a widget id clash: {clash:?}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn every_colour_theme_draws_the_main_window_and_the_busiest_dialogs() {
+        for theme in crate::theme::ColorTheme::ALL {
+            for mode in [ThemeMode::Light, ThemeMode::Dark] {
+                for name in ["", "table", "options", "appearance", "add", "progress", "menus"] {
+                    for (w, h) in [(600.0, 760.0), (1180.0, 800.0)] {
+                        let ctx = egui::Context::default();
+                        let launch = Launch { demo: true, theme: Some(mode), color_theme: Some(theme), show: (!name.is_empty()).then(|| name.to_string()), ..Default::default() };
+                        let mut app = App::build(ctx.clone(), launch);
+                        let text = draw(&mut app, &ctx, vec2(w, h), 3);
+                        assert!(!text.is_empty(), "{name:?} in {} {mode:?} painted nothing", theme.name());
+                        assert!(!text.iter().any(|t| t.contains('🔥')), "{name:?} at {w}x{h} in {} {mode:?} has a widget id clash", theme.name());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_options_dialog_offers_every_colour_theme_by_name() {
+        let ctx = egui::Context::default();
+        let mut app = App::build(ctx.clone(), Launch { demo: true, theme: Some(ThemeMode::Light), show: Some("appearance".into()), ..Default::default() });
+        let text = draw(&mut app, &ctx, vec2(1180.0, 900.0), 6);
+        for theme in crate::theme::ColorTheme::ALL {
+            assert!(text.iter().any(|t| t == theme.name()), "the picker does not show {}: {text:?}", theme.name());
         }
     }
 

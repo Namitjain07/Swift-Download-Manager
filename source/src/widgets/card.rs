@@ -46,8 +46,7 @@ impl Group<'_> {
 
     fn hairline_if_needed(&mut self) {
         if self.rows > 0 {
-            let pal = theme::current(self.ui.ctx());
-            let d = theme::DESIGN;
+            let (pal, d) = (theme::current(self.ui.ctx()), theme::design(self.ui.ctx()));
             let rect = self.ui.cursor();
             let x0 = rect.left() + d.inset;
             self.ui.painter().hline(x0..=self.ui.max_rect().right(), rect.top() - 0.5, Stroke::new(1.0, pal.separator));
@@ -88,13 +87,16 @@ impl Group<'_> {
 
     /// A row with a switch at its right end.
     pub fn toggle(&mut self, title: &str, description: Option<&str>, on: &mut bool) -> Response {
-        self.row(title, description, switch_size().x, |ui| switch(ui, on))
+        {
+            let w = switch_size(self.ui.ctx()).x;
+            self.row(title, description, w, |ui| switch(ui, on))
+        }
     }
 
     /// A row that holds anything at all, `height` tall, with the usual side padding.
     pub fn custom<R>(&mut self, height: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
         self.hairline_if_needed();
-        let d = theme::DESIGN;
+        let d = theme::design(self.ui.ctx());
         let width = self.ui.available_width();
         let (rect, _) = self.ui.allocate_exact_size(vec2(width, height), Sense::hover());
         let mut child = self.ui.new_child(UiBuilder::new().max_rect(rect.shrink2(vec2(d.inset, 0.0))).layout(Layout::left_to_right(Align::Center)));
@@ -104,7 +106,7 @@ impl Group<'_> {
     /// Room for one more kind of content: a row with a custom body that decides its own height.
     pub fn free<R>(&mut self, add: impl FnOnce(&mut Ui) -> R) -> R {
         self.hairline_if_needed();
-        let d = theme::DESIGN;
+        let d = theme::design(self.ui.ctx());
         egui::Frame::NONE.inner_margin(egui::Margin { left: d.inset as i8, right: d.inset as i8, top: 12, bottom: 12 }).show(self.ui, add).inner
     }
 }
@@ -253,7 +255,7 @@ mod tests {
         });
         for rect in &r {
             assert_eq!(rect.right(), r[0].right(), "every switch ends at the same x: {r:?}");
-            assert_eq!(rect.size(), switch_size());
+            assert_eq!(rect.size(), vec2(theme::DESIGN.switch.0, theme::DESIGN.switch.1), "a switch has the size the design gives it");
         }
     }
 

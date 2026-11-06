@@ -10,7 +10,7 @@ pub fn segment_width(widest: f32) -> f32 {
 }
 
 fn widest_label<'a>(ui: &Ui, labels: impl Iterator<Item = &'a str>) -> f32 {
-    let font = FontId::new(theme::DESIGN.body - 1.0, theme::semibold());
+    let font = FontId::new(theme::design(ui.ctx()).body - 1.0, theme::semibold());
     labels.map(|l| ui.painter().layout_no_wrap(l.to_owned(), font.clone(), Color32::PLACEHOLDER).size().x).fold(0.0, f32::max)
 }
 
@@ -38,9 +38,9 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, options: &[(T, &str)], value:
     let selected = options.iter().position(|(v, _)| v == value).unwrap_or(0);
     let x = glide(&ctx, resp.id.with("pill"), inner.left() + seg_w * selected as f32, 0.18);
     let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same((d.control_h / 2.0) as u8), pal.surface2);
+    p.rect_filled(rect, CornerRadius::same(d.round(d.control_h)), pal.surface2);
     let thumb = Rect::from_min_size(egui::pos2(x, inner.top()), vec2(seg_w, inner.height()));
-    let radius = CornerRadius::same((inner.height() / 2.0) as u8);
+    let radius = CornerRadius::same(d.round(inner.height()));
     p.add(theme::shadow(&ctx, Elevation::Rest).as_shape(thumb, radius));
     p.rect_filled(thumb, radius, pal.segment_on);
     for (i, (_, label)) in options.iter().enumerate() {

@@ -34,6 +34,7 @@ fn main() -> eframe::Result<()> {
     let mut screenshot: Option<PathBuf> = None;
     let mut demo = false;
     let mut theme: Option<theme::ThemeMode> = None;
+    let mut color_theme: Option<theme::ColorTheme> = None;
     let mut show: Option<String> = None;
     let mut size = [1180.0f32, 680.0];
     let mut start_url: Option<String> = None;
@@ -45,6 +46,8 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            // Keep the title bar of the system instead of the app's own (for a desktop where that works better).
+            "--native-title-bar" => widgets::titlebar::use_native(true),
             // Starting size of the window, for screenshots of the narrow layouts: --size 900x600
             "--size" if i + 1 < args.len() => {
                 if let Some((w, h)) = args[i + 1].split_once('x') {
@@ -65,6 +68,14 @@ fn main() -> eframe::Result<()> {
                     "dark" => Some(theme::ThemeMode::Dark),
                     _ => None,
                 };
+                i += 1;
+            }
+            // Forces a colour theme for this run, for screenshots: --color-theme files|carbon|blue|green|black|purple|pink|...
+            "--color-theme" if i + 1 < args.len() => {
+                color_theme = theme::ColorTheme::from_id(&args[i + 1]);
+                if color_theme.is_none() {
+                    eprintln!("unknown colour theme {:?}; try one of: {}", args[i + 1], theme::ColorTheme::ALL.map(|t| t.id()).join(", "));
+                }
                 i += 1;
             }
             "--write-icon" if i + 1 < args.len() => {
@@ -96,18 +107,21 @@ fn main() -> eframe::Result<()> {
     }
 
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title(app::APP_NAME)
-            .with_inner_size(size)
-            .with_min_inner_size([420.0, 420.0])
-            .with_app_id("swift-download-manager")
-            .with_icon(appicon::egui_icon()),
+        viewport: widgets::titlebar::viewport(
+            eframe::egui::ViewportBuilder::default()
+                .with_title(app::APP_NAME)
+                .with_inner_size(size)
+                .with_min_inner_size([420.0, 420.0])
+                .with_app_id("swift-download-manager")
+                .with_icon(appicon::egui_icon()),
+            widgets::titlebar::mode(),
+        ),
         ..Default::default()
     };
     eframe::run_native(
         app::APP_NAME,
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, show, ..Default::default() })))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, color_theme, show, ..Default::default() })))),
     )
 }
 

@@ -85,7 +85,7 @@ async function rememberMedia(tabId, m) {
   await store.set({ [key]: got.slice(-20) });
   console.info("Swift Download Manager: found media", m.url, m.type, m.size);
   api.action.setBadgeText({ tabId, text: String(Math.min(got.length, 99)) });
-  api.action.setBadgeBackgroundColor({ tabId, color: "#2176d6" });
+  api.action.setBadgeBackgroundColor({ tabId, color: "#e31c5f" });
 }
 
 // A new page in the tab: forget what the old one played.

@@ -13,7 +13,7 @@ mod view;
 
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
-use crate::theme::{self, ThemeMode};
+use crate::theme::{self, ColorTheme, ThemeMode};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -211,6 +211,8 @@ pub struct Settings {
     pub site_logins: Vec<SiteLogin>,
     /// Automatic, Light or Dark (View > Appearance).
     pub theme: ThemeMode,
+    /// The colour theme: Coral (the default), Files, Carbon, Blue, Green, Black, Purple, ... (View > Appearance, Options).
+    pub color_theme: ColorTheme,
     /// Cards or the classic table (View > Show downloads as).
     pub view: layout::ViewMode,
     /// What closing the window does (Options > Background).
@@ -252,6 +254,7 @@ impl Default for Settings {
             categories: default_categories(),
             site_logins: Vec::new(),
             theme: ThemeMode::System,
+            color_theme: ColorTheme::default(),
             view: layout::ViewMode::Cards,
             background: closing::BackgroundMode::Ask,
             launch_at_login: false,
@@ -514,6 +517,8 @@ pub struct Launch {
     pub start_url: Option<String>,
     /// Forces a theme for this run only.
     pub theme: Option<ThemeMode>,
+    /// Forces a colour theme for this run only (`--color-theme`).
+    pub color_theme: Option<ColorTheme>,
     /// Opens one window at start-up (screenshots).
     pub show: Option<String>,
     /// No window: the engine runs for an MCP client. No browser listener or clipboard watching.
@@ -566,6 +571,7 @@ pub struct App {
     toast: Option<(String, Instant)>,
     /// Forces a theme for this run only (`--theme`), without touching the saved choice.
     theme_override: Option<ThemeMode>,
+    color_theme_override: Option<ColorTheme>,
     config_dir: PathBuf,
     /// Running without a window (MCP engine).
     headless: bool,
@@ -606,7 +612,7 @@ impl App {
     }
 
     pub(crate) fn build(ctx: egui::Context, launch: Launch) -> Self {
-        let Launch { screenshot, demo, start_url, theme: theme_override, show, headless, config_dir } = launch;
+        let Launch { screenshot, demo, start_url, theme: theme_override, color_theme: color_theme_override, show, headless, config_dir } = launch;
         let mut app = App {
             items: Vec::new(),
             next_id: 1,
@@ -652,6 +658,7 @@ impl App {
             listener: if demo { Ok(()) } else { Err("off".into()) },
             toast: None,
             theme_override,
+            color_theme_override,
             config_dir: config_dir.unwrap_or_else(default_config_dir),
             headless,
             control_rx: None,
@@ -710,11 +717,21 @@ impl App {
         match name {
             "add" => self.open_add_dialog(None),
             "batch" => self.open_batch(),
-            "options" | "networks" => {
+            "options" | "networks" | "appearance" => {
                 if name == "networks" {
                     self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_networks"), true));
                 }
+                if name == "appearance" {
+                    self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_appearance"), true));
+                }
                 let mut o = self.settings.clone();
+                // A picture taken with --theme or --color-theme shows those choices as the ticked ones.
+                if let Some(mode) = self.theme_override {
+                    o.theme = mode;
+                }
+                if let Some(theme) = self.color_theme_override {
+                    o.color_theme = theme;
+                }
                 if self.demo {
                     // The picture shows the Networks card filled in.
                     o.multi_network = true;
@@ -741,6 +758,11 @@ impl App {
             }
             "table" => self.settings.view = layout::ViewMode::Table,
             "grabber" => self.open_grabber(),
+            // The window with no downloads at all, for the picture of the empty state.
+            "empty" => {
+                self.items.clear();
+                self.selected.clear();
+            }
             other => eprintln!("unknown window: {other}"),
         }
     }

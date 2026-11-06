@@ -13,7 +13,7 @@ use std::ops::RangeInclusive;
 /// A single-line text field set up for this design. Add it with `ui.add(...)`; give it a width with
 /// `.desired_width(...)`, or use `field_full` to fill the row.
 pub fn field(text: &mut String) -> TextEdit<'_> {
-    TextEdit::singleline(text).margin(Margin::symmetric(14, 8)).align(Align2::LEFT_CENTER).min_size(vec2(0.0, theme::DESIGN.control_h))
+    TextEdit::singleline(text).margin(Margin::symmetric(14, 8)).align(Align2::LEFT_CENTER)
 }
 
 /// A field as wide as the room there is.
@@ -32,7 +32,7 @@ pub fn search_field(ui: &mut Ui, text: &mut String, hint: &str, width: f32) -> R
     let ctx = ui.ctx().clone();
     let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
     let (rect, _) = ui.allocate_exact_size(vec2(width, d.control_h), Sense::hover());
-    let radius = CornerRadius::same((d.control_h / 2.0) as u8);
+    let radius = CornerRadius::same(d.round(d.control_h));
     let right_pad = if text.is_empty() { 16.0 } else { 40.0 };
     let inner = Rect::from_min_max(Pos2::new(rect.left() + 44.0, rect.top()), Pos2::new((rect.right() - right_pad).max(rect.left() + 60.0), rect.bottom()));
     let hovered = ui.rect_contains_pointer(rect);
@@ -98,7 +98,7 @@ pub fn stepper_with<T: Int>(ui: &mut Ui, value: &mut T, range: RangeInclusive<i6
     let w = 2.0 * button_w + galley.size().x.max(28.0) + 20.0;
     let (rect, mut resp) = ui.allocate_exact_size(vec2(w, d.control_h), Sense::hover());
     let p = ui.painter().clone();
-    p.rect_filled(rect, CornerRadius::same((d.control_h / 2.0) as u8), pal.surface2);
+    p.rect_filled(rect, CornerRadius::same(d.round(d.control_h)), pal.surface2);
     let mut changed = false;
     let cur = value.get();
     for (k, (icon, delta, id)) in [(Icon::Minus, -1i64, "minus"), (Icon::Plus, 1, "plus")].into_iter().enumerate() {
@@ -107,7 +107,7 @@ pub fn stepper_with<T: Int>(ui: &mut Ui, value: &mut T, range: RangeInclusive<i6
         let r = ui.interact(b, resp.id.with(id), if can { Sense::click() } else { Sense::hover() });
         let hover = fade(&ctx, r.id.with("hover"), can && r.hovered(), 0.12);
         let press = fade(&ctx, r.id.with("press"), can && r.is_pointer_button_down_on(), 0.08);
-        p.rect_filled(b, CornerRadius::same(((d.control_h - 4.0) / 2.0) as u8), pal.surface3.gamma_multiply(hover.max(press)));
+        p.rect_filled(b, CornerRadius::same(d.round(d.control_h - 4.0)), pal.surface3.gamma_multiply(hover.max(press)));
         icons::draw_weight(&p, Rect::from_center_size(b.center(), vec2(16.0, 16.0)), icon, pal.label, can, false);
         if can && r.clicked() {
             *value = T::set((cur + delta).clamp(*range.start(), *range.end()));
@@ -133,7 +133,7 @@ pub fn number_field<T: Int>(ui: &mut Ui, value: &mut T, range: RangeInclusive<i6
     if !focused_before {
         buf = value.get().to_string();
     }
-    let suffix_w = if suffix.is_empty() { 0.0 } else { ui.painter().layout_no_wrap(suffix.to_owned(), FontId::proportional(theme::DESIGN.body), Color32::PLACEHOLDER).size().x + 14.0 };
+    let suffix_w = if suffix.is_empty() { 0.0 } else { ui.painter().layout_no_wrap(suffix.to_owned(), FontId::proportional(theme::design(ui.ctx()).body), Color32::PLACEHOLDER).size().x + 14.0 };
     let enabled = ui.is_enabled();
     let resp = ui.add_enabled(enabled, field(&mut buf).id(id.with("edit")).desired_width(width).margin(Margin { left: 14, right: (14.0 + suffix_w) as i8, top: 8, bottom: 8 }));
     let mut changed = false;
@@ -152,7 +152,7 @@ pub fn number_field<T: Int>(ui: &mut Ui, value: &mut T, range: RangeInclusive<i6
     }
     ctx.data_mut(|d| d.insert_temp(id.with("buf"), buf));
     if suffix_w > 0.0 {
-        ui.painter().text(Pos2::new(resp.rect.right() - 14.0, resp.rect.center().y), Align2::RIGHT_CENTER, suffix, FontId::proportional(theme::DESIGN.body), if enabled { pal.tertiary } else { pal.disabled });
+        ui.painter().text(Pos2::new(resp.rect.right() - 14.0, resp.rect.center().y), Align2::RIGHT_CENTER, suffix, FontId::proportional(theme::design(ui.ctx()).body), if enabled { pal.tertiary } else { pal.disabled });
     }
     let mut resp = resp;
     if changed {
