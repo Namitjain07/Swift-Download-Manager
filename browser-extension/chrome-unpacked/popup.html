@@ -1,29 +1,77 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <style>
-      body { font: 13px system-ui, sans-serif; width: 320px; margin: 12px; color: #222; }
-      h1 { font-size: 14px; margin: 0 0 8px; }
-      h2 { font-size: 13px; margin: 12px 0 6px; }
-      #status { margin: 8px 0; padding: 6px 8px; border-radius: 4px; background: #eef1f4; }
-      #status.ok { background: #e3f4e6; color: #1f6b33; }
-      #status.bad { background: #fbe7e5; color: #9b2c22; }
-      label { display: flex; gap: 6px; align-items: center; }
-      .media { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-top: 1px solid #eee; }
-      .media span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .media small { color: #777; }
-      button { font: inherit; padding: 2px 8px; }
-      .muted { color: #666; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Swift Download Manager</title>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <h1>Swift Download Manager</h1>
-    <div id="status">Checking…</div>
-    <label><input type="checkbox" id="catchAll" /> Send all browser downloads to the app</label>
-    <h2>Videos and sounds on this page</h2>
-    <div id="media" class="muted">Play the video on the page, then open this again.</div>
-    <p class="muted">You can also right-click any link and choose “Download with Swift Download Manager”.</p>
+    <header>
+      <svg class="mark" viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
+        <rect width="36" height="36" rx="9" fill="#e31c5f" />
+        <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8.5v13" />
+          <path d="M12.2 16.2 18 22l5.8-5.8" />
+          <path d="M10.5 27.5h15" />
+        </g>
+      </svg>
+      <div class="title">
+        <h1>Swift Download Manager</h1>
+        <span id="status" class="pill wait" role="status"><i></i><span id="statusText">Checking…</span></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <label class="row" for="catchAll">
+          <span class="text">
+            <b>Send browser downloads to the app</b>
+            <small>Files you download in the browser open in Swift Download Manager instead.</small>
+          </span>
+          <span class="switch">
+            <input type="checkbox" id="catchAll" role="switch" />
+            <span class="track"><span class="knob"></span></span>
+          </span>
+        </label>
+      </section>
+      <p id="offline" class="notice" hidden>Downloads stay in the browser until you open Swift Download Manager.</p>
+
+      <h2>Videos and sounds on this page</h2>
+      <section class="card" id="media">
+        <div class="empty" id="empty">
+          <svg viewBox="0 0 240 96" width="240" height="96" aria-hidden="true">
+            <g fill="none" stroke="var(--accent)" stroke-opacity=".32" stroke-width="1.5" stroke-linecap="round">
+              <path id="c1" d="M14 12C103 12 87 48 174 48" />
+              <path id="c2" d="M14 30C103 30 87 48 174 48" />
+              <path id="c3" d="M14 48C103 48 87 48 174 48" />
+              <path id="c4" d="M14 66C103 66 87 48 174 48" />
+              <path id="c5" d="M14 84C103 84 87 48 174 48" />
+            </g>
+            <g fill="var(--card)" stroke="var(--accent)" stroke-width="1.5">
+              <circle cx="14" cy="12" r="4" /><circle cx="14" cy="30" r="4" /><circle cx="14" cy="48" r="4" /><circle cx="14" cy="66" r="4" /><circle cx="14" cy="84" r="4" />
+            </g>
+            <g fill="var(--accent)">
+              <circle r="2.6" opacity="0"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-0.2s"><mpath href="#c1" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.4s" repeatCount="indefinite" begin="-0.2s" /></circle>
+              <circle r="2.6" opacity="0"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-1.4s"><mpath href="#c1" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.4s" repeatCount="indefinite" begin="-1.4s" /></circle>
+              <circle r="2.6" opacity="0"><animateMotion dur="2.9s" repeatCount="indefinite" begin="-0.9s"><mpath href="#c2" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.9s" repeatCount="indefinite" begin="-0.9s" /></circle>
+              <circle r="2.6" opacity="0"><animateMotion dur="2.1s" repeatCount="indefinite" begin="-0.5s"><mpath href="#c3" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.1s" repeatCount="indefinite" begin="-0.5s" /></circle>
+              <circle r="2.6" opacity="0"><animateMotion dur="2.1s" repeatCount="indefinite" begin="-1.5s"><mpath href="#c3" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.1s" repeatCount="indefinite" begin="-1.5s" /></circle>
+              <circle r="2.6" opacity="0"><animateMotion dur="3s" repeatCount="indefinite" begin="-0.1s"><mpath href="#c4" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="3s" repeatCount="indefinite" begin="-0.1s" /></circle>
+              <circle r="2.6" opacity="0"><animateMotion dur="2.6s" repeatCount="indefinite" begin="-1.2s"><mpath href="#c5" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.6s" repeatCount="indefinite" begin="-1.2s" /></circle>
+            </g>
+            <rect x="176" y="24" width="48" height="48" rx="12" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.5" />
+            <g fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M200 37v15" /><path d="M193.5 46 200 52.5 206.5 46" /><path d="M192 60h16" />
+            </g>
+          </svg>
+          <p><b>Nothing found yet</b></p>
+          <p>Play the video or sound on the page, then open this again.</p>
+        </div>
+      </section>
+
+      <p class="hint">Tip: right-click any link and choose “Download with Swift Download Manager”.</p>
+    </main>
     <script src="popup.js"></script>
   </body>
 </html>
