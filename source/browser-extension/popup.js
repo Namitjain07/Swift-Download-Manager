@@ -35,16 +35,30 @@ async function refreshStatus() {
   statusText.textContent = running ? "Connected to the app" : "The app is not running";
   offline.hidden = running;
 }
-refreshStatus();
+// appIsRunning() never rejects, so nothing here can fail; `void` says the result is left alone on purpose.
+void refreshStatus();
 // The app can be started or closed while this is open.
-setInterval(refreshStatus, 3000);
+setInterval(() => void refreshStatus(), 3000);
 
 // ---------------------------------------------------------------- the switch
 
-api.storage.local.get({ catchAll: true }).then((v) => {
-  catchAll.checked = v.catchAll;
+// Sending downloads to the app is on unless it was switched off (this is also what the background script assumes).
+api.storage.local
+  .get({ catchAll: true })
+  .then((v) => {
+    catchAll.checked = v.catchAll;
+  })
+  .catch(() => {
+    catchAll.checked = true;
+  });
+catchAll.addEventListener("change", async () => {
+  try {
+    await api.storage.local.set({ catchAll: catchAll.checked });
+  } catch {
+    // Not saved: show what is really in force.
+    catchAll.checked = !catchAll.checked;
+  }
 });
-catchAll.addEventListener("change", () => api.storage.local.set({ catchAll: catchAll.checked }));
 
 // ---------------------------------------------------------------- videos and sounds
 
@@ -147,4 +161,5 @@ async function showMedia() {
   // Newest first: what the page has just started playing is what you want.
   mediaBox.replaceChildren(...list.slice().reverse().map((m) => row(tab, m)));
 }
-showMedia();
+// If the tab or the list cannot be read, the empty state stays as it is.
+showMedia().catch(() => {});
