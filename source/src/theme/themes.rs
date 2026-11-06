@@ -65,14 +65,14 @@ impl ColorTheme {
             ColorTheme::Airbnb => "Coral",
             ColorTheme::Files => "Files",
             ColorTheme::Carbon => "Carbon",
-            ColorTheme::Blue => "Ocean blue",
-            ColorTheme::Green => "Emerald",
+            ColorTheme::Blue => "Blue",
+            ColorTheme::Green => "Green",
             ColorTheme::Black => "Black",
-            ColorTheme::Purple => "Violet",
-            ColorTheme::Pink => "Bubblegum",
-            ColorTheme::Orange => "Sunset",
-            ColorTheme::Teal => "Lagoon",
-            ColorTheme::Gold => "Amber",
+            ColorTheme::Purple => "Purple",
+            ColorTheme::Pink => "Pink",
+            ColorTheme::Orange => "Orange",
+            ColorTheme::Teal => "Teal",
+            ColorTheme::Gold => "Gold",
             ColorTheme::Nord => "Nord",
             ColorTheme::Dracula => "Dracula",
             ColorTheme::Mocha => "Mocha",
@@ -99,7 +99,7 @@ impl ColorTheme {
         }
     }
 
-    /// Finds a theme by its id or its name, ignoring case ("coral", "Ocean blue", "files").
+    /// Finds a theme by its id or its name, ignoring case ("coral", "Blue", "files").
     pub fn from_id(s: &str) -> Option<ColorTheme> {
         let s = s.trim();
         ColorTheme::ALL.into_iter().find(|t| t.id().eq_ignore_ascii_case(s) || t.name().eq_ignore_ascii_case(s) || (*t == ColorTheme::Airbnb && s.eq_ignore_ascii_case("airbnb")))
@@ -330,7 +330,7 @@ mod tests {
             assert_eq!(ColorTheme::from_id(&t.name().to_uppercase()), Some(t));
         }
         assert_eq!(ColorTheme::from_id("airbnb"), Some(ColorTheme::Airbnb));
-        assert_eq!(ColorTheme::from_id("  Ocean blue "), Some(ColorTheme::Blue));
+        assert_eq!(ColorTheme::from_id("  BLUE "), Some(ColorTheme::Blue));
         assert_eq!(ColorTheme::from_id("neon"), None);
     }
 

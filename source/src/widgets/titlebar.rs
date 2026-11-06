@@ -285,7 +285,7 @@ mod tests {
 
     /// Runs the bar once in a window of `size` and returns the commands it sent.
     fn commands_after(ctx: &egui::Context, size: egui::Vec2, events: Vec<egui::Event>) -> Vec<ViewportCommand> {
-        let mut out = ctx.run_ui(crate::theme::testing::input(size, events), |ui| show(ui));
+        let mut out = ctx.run_ui(crate::theme::testing::input(size, events), show);
         out.textures_delta.clear();
         out.viewport_output.values().flat_map(|v| v.commands.clone()).collect()
     }

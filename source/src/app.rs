@@ -211,7 +211,7 @@ pub struct Settings {
     pub site_logins: Vec<SiteLogin>,
     /// Automatic, Light or Dark (View > Appearance).
     pub theme: ThemeMode,
-    /// The colour theme: Coral (the default), Files, Carbon, Ocean blue, ... (View > Appearance, Options).
+    /// The colour theme: Coral (the default), Files, Carbon, Blue, Green, Black, Purple, ... (View > Appearance, Options).
     pub color_theme: ColorTheme,
     /// Cards or the classic table (View > Show downloads as).
     pub view: layout::ViewMode,
@@ -725,6 +725,13 @@ impl App {
                     self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_appearance"), true));
                 }
                 let mut o = self.settings.clone();
+                // A picture taken with --theme or --color-theme shows those choices as the ticked ones.
+                if let Some(mode) = self.theme_override {
+                    o.theme = mode;
+                }
+                if let Some(theme) = self.color_theme_override {
+                    o.color_theme = theme;
+                }
                 if self.demo {
                     // The picture shows the Networks card filled in.
                     o.multi_network = true;
