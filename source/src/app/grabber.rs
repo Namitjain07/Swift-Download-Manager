@@ -1,9 +1,10 @@
 //! Link grabber: reads a web page (and, if asked, the pages it links to on the
 //! same site) and lists the files it links to, so you can pick which to download.
 
+use super::dialogs::{options_of, path_field};
 use super::*;
 use crate::bridge::DOWNLOAD_EXTS;
-use crate::widgets::{button_row, dialog_window, primary_button, spinner, toggle};
+use crate::widgets::{button_width, card, check_row, dropdown, field, field_full, form_field, message, plain_button, primary_button, secondary_button, sheet, small_button, spinner, ButtonKind, ButtonSize};
 use eframe::egui::RichText;
 use std::io::Read;
 
@@ -164,8 +165,8 @@ impl App {
 
     pub(super) fn grabber_window(&mut self, ctx: &egui::Context) {
         let Some(mut g) = self.grabber.take() else { return };
-        let mut open = true;
         let mut add: Option<bool> = None;
+        let mut cancel = false;
         // Collect results from the background reader.
         let mut busy = false;
         let mut pages = 0;
@@ -183,40 +184,41 @@ impl App {
                 g.error = s.error.clone();
             }
         }
-        let queues: Vec<String> = self.settings.queues.iter().map(|q| q.name.clone()).collect();
-        dialog_window(ctx, "Grab links from a web page")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(true)
-            .default_width(crate::widgets::fit_width(ctx, 620.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -10.0])
-            .show(ctx, |ui| {
-                ui.label("Reads a web page and lists the files it links to.");
-                ui.horizontal(|ui| {
-                    ui.label("Page:");
-                    ui.add(egui::TextEdit::singleline(&mut g.url).hint_text("https://example.com/downloads/").desired_width(crate::widgets::fit_field(ui, 420.0)));
-                    let ok = g.url.trim().starts_with("http") && !busy;
-                    if ui.add_enabled(ok, egui::Button::new(RichText::new("Find links").strong())).clicked() {
-                        let st = Arc::new(Mutex::new(GrabState::default()));
-                        g.found.clear();
-                        g.error = None;
-                        grab(g.url.trim().to_string(), g.follow, self.settings.proxy_on.then(|| self.settings.proxy.clone()), st.clone(), ctx.clone());
-                        g.state = Some(st);
-                    }
+        let queues = options_of(&self.settings.queues.iter().map(|q| q.name.clone()).collect::<Vec<_>>());
+        let proxy = self.settings.proxy_on.then(|| self.settings.proxy.clone());
+        let pal = theme::current(ctx);
+        let picked = g.found.iter().filter(|(_, on)| *on).count();
+        let out = sheet("grabber", "Grab links from a web page").width(680.0).show(ctx, |s| {
+            s.body(|ui| {
+                ui.label(RichText::new("Reads a web page and lists the files it links to.").color(pal.secondary));
+                ui.add_space(8.0);
+                form_field(ui, "Page address", |ui| {
+                    ui.horizontal(|ui| {
+                        let ok = g.url.trim().starts_with("http") && !busy;
+                        let bw = button_width(ui, ButtonSize::Regular, false, "Find links");
+                        let w = (ui.available_width() - bw - ui.spacing().item_spacing.x).max(80.0);
+                        ui.add(field(&mut g.url).hint_text("https://example.com/downloads/").desired_width(w));
+                        ui.add_enabled_ui(ok, |ui| {
+                            if primary_button(ui, "Find links").clicked() {
+                                let st = Arc::new(Mutex::new(GrabState::default()));
+                                g.found.clear();
+                                g.error = None;
+                                grab(g.url.trim().to_string(), g.follow, proxy.clone(), st.clone(), ctx.clone());
+                                g.state = Some(st);
+                            }
+                        });
+                    });
                 });
-                ui.horizontal(|ui| {
-                    toggle(ui, &mut g.follow, "Also look in pages it links to on the same site (up to 30)");
-                });
-                ui.horizontal(|ui| {
-                    toggle(ui, &mut g.all_links, "All links");
-                    ui.add_enabled_ui(!g.all_links, |ui| {
-                        ui.label("File types:");
-                        if ui.add(egui::TextEdit::singleline(&mut g.exts).desired_width(crate::widgets::fit_field(ui, 380.0))).changed() {
+                check_row(ui, &mut g.follow, "Also look in pages it links to on the same site (up to 30)");
+                check_row(ui, &mut g.all_links, "Show all links, not just downloadable files");
+                if !g.all_links {
+                    form_field(ui, "File types", |ui| {
+                        if field_full(ui, &mut g.exts, "zip pdf mp4").changed() {
                             g.found.clear();
                         }
                     });
-                });
-                ui.separator();
+                }
+                ui.add_space(8.0);
                 if busy {
                     ui.horizontal(|ui| {
                         spinner(ui, 14.0);
@@ -224,48 +226,64 @@ impl App {
                     });
                 }
                 if let Some(e) = &g.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
+                    message(ui, e, true);
                 }
-                let picked = g.found.iter().filter(|(_, on)| *on).count();
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("{} files found, {picked} picked", g.found.len())).strong());
-                    if ui.small_button("Pick all").clicked() {
-                        g.found.iter_mut().for_each(|f| f.1 = true);
-                    }
-                    if ui.small_button("Pick none").clicked() {
-                        g.found.iter_mut().for_each(|f| f.1 = false);
-                    }
-                });
-                egui::ScrollArea::vertical().max_height(260.0).auto_shrink([false, true]).show(ui, |ui| {
-                    for (l, on) in &mut g.found {
-                        toggle(ui, on, RichText::new(l.as_str()).size(12.5));
-                    }
-                    if g.found.is_empty() && !busy && g.state.is_some() && g.error.is_none() {
-                        ui.label(RichText::new("No files of those types on this page. Try \"All links\" or more file types.").color(crate::theme::current(ui.ctx()).secondary));
-                    }
-                });
-                ui.separator();
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Save to:");
-                    ui.add(egui::TextEdit::singleline(&mut g.folder).desired_width(crate::widgets::fit_field(ui, 300.0)));
-                    ui.label("Queue:");
-                    egui::ComboBox::from_id_salt("grab_q").selected_text(g.queue.clone()).show_ui(ui, |ui| {
-                        for q in &queues {
-                            ui.selectable_value(&mut g.queue, q.clone(), q);
+                    ui.label(RichText::new(format!("{} files found, {picked} picked", g.found.len())).family(theme::semibold()));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if small_button(ui, ButtonKind::Plain, "Pick none").clicked() {
+                            g.found.iter_mut().for_each(|f| f.1 = false);
+                        }
+                        if small_button(ui, ButtonKind::Plain, "Pick all").clicked() {
+                            g.found.iter_mut().for_each(|f| f.1 = true);
                         }
                     });
                 });
-                ui.add_space(4.0);
-                button_row(ui, |ui| {
-                    if ui.add_enabled(picked > 0, egui::Button::new("Add to queue")).clicked() {
-                        add = Some(false);
-                    }
-                    if ui.add_enabled_ui(picked > 0, |ui| primary_button(ui, "Download picked now")).inner.clicked() {
-                        add = Some(true);
-                    }
+                card(ui, |grp| {
+                    grp.free(|ui| {
+                        egui::ScrollArea::vertical().max_height(220.0).auto_shrink([false, true]).show(ui, |ui| {
+                            for (l, on) in &mut g.found {
+                                check_row(ui, on, l);
+                            }
+                            if g.found.is_empty() {
+                                let text = if !busy && g.state.is_some() && g.error.is_none() {
+                                    "No files of those types on this page. Try “Show all links” or more file types."
+                                } else {
+                                    "Nothing yet. Enter a page address and press “Find links”."
+                                };
+                                ui.label(RichText::new(text).color(pal.tertiary));
+                            }
+                        });
+                    });
+                });
+                ui.add_space(10.0);
+                form_field(ui, "Save to", |ui| {
+                    path_field(ui, &mut g.folder);
+                });
+                form_field(ui, "Add to queue", |ui| {
+                    let w = ui.available_width();
+                    dropdown(ui, "grab_queue", w, &queues, &mut g.queue);
                 });
             });
-        if !open {
+            s.footer_split(
+                |ui| {
+                    if plain_button(ui, "Cancel").clicked() {
+                        cancel = true;
+                    }
+                },
+                |ui| {
+                    ui.add_enabled_ui(picked > 0, |ui| {
+                        if primary_button(ui, "Download picked now").clicked() {
+                            add = Some(true);
+                        }
+                        if secondary_button(ui, "Add to queue").clicked() {
+                            add = Some(false);
+                        }
+                    });
+                },
+            );
+        });
+        if out.close || cancel {
             return;
         }
         if let Some(start) = add {

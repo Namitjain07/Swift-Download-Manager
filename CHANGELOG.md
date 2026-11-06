@@ -3,6 +3,39 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.0-beta.1] - 2026-11-06
+
+**Pre-release.** The stable version stays 1.4.0; 1.5.0-beta.1 (several networks at once) and 1.6.0-beta.1 (web page and `--server`) are included.
+
+All of it comes in a redesigned window.
+
+### A new design
+- **One design** replaces Drishti and iOS (the choice under View > Appearance > Design and in Options is gone, and so is `--style`). It is inspired by
+  Airbnb: white cards on a soft grey page, near-black text, one **coral** accent, 16 px rounded cards with soft shadows, a header with the menus, a
+  search box and the main action, and flat colours only (no gradients). Light and dark; a new install follows the system (settings saved by older
+  versions are read as before)
+- **iOS-style controls**: capsule buttons (primary, quiet, outlined, plain, red), a 51 x 31 switch, a stepper instead of sliders, a segmented control,
+  round tick boxes, round icon buttons and wheel pickers
+- **Icons from the Phosphor set** (line weight, with solid play, pause and stop) replace the hand-drawn ones, and text is set in **Inter**. Both fonts are
+  bundled (licences in `source/assets/fonts/`), so the window looks the same on every system
+- Every dialog is a sheet with a header, a scrolling body and a footer that always stays in view. Dialogs dim the page, close with Escape or the x and do
+  not close by a stray click, so a half-filled form is never lost. Forms put the label over the field and use the same 40 px height for every input
+- Menus have one row height, labels and shortcuts that never run together, check marks and red destructive rows. On narrow windows the five menus fold
+  into one button
+- The web page has the same design (light, dark, phone), and its sign-in page too
+- The table leaves out its last two columns (when it was last tried, and the description) on medium-width windows instead of running off the edge; a
+  failed download's reason is then shown when you point at its Error chip
+
+### Fixed
+- **Dialog buttons were cut off** when the window was short: the Scheduler (and others) lost their Save and Cancel buttons. They now stay in view and the
+  body scrolls
+- Fields, buttons and labels were not aligned in the dialogs (inputs of different heights and fill, "Browse…" sticking out of its column, the main
+  action on the wrong side of a row of buttons, labels and their fields on different lines). Everything now comes from one set of widgets with fixed
+  sizes
+- Shortcuts (Delete, Ctrl+N…) no longer act behind an open dialog
+- A download with an empty "Save to" folder is refused instead of being saved relative to the program's folder
+- The toolbar says **Pause** and **Pause all** (it said Stop, which was not what it did)
+
 ## [1.6.0-beta.1] - 2026-11-02
 
 **Pre-release.** The stable version stays 1.4.0; 1.5.0-beta.1 (several networks at once) is included.

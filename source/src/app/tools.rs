@@ -1,11 +1,15 @@
-//! More windows: batch download, scheduler, download complete, browser integration, about.
+//! More windows: batch download, scheduler, queues, download complete, browser integration, AI assistants, about.
 
 use super::actions::{expand_pattern, normalize_time};
-use super::*;
-use crate::icons;
+use super::dialogs::{options_of, path_field};
 use super::mcp_cmds::AiState;
-use crate::widgets::{button_row, card, card_row, card_row_h, dialog_window, group_title, plain_button, primary_button, segmented, time_wheels, tinted_button, toggle, toggle_row};
-use eframe::egui::{RichText, Sense};
+use super::*;
+use crate::icons::{self, Icon};
+use crate::widgets::{
+    button, card, check_row, dropdown, field, field_full, field_multiline, form_field, icon_button, message, number_field, plain_button, primary_button, secondary_button, segmented, segmented_width, sheet,
+    small_button, stepper, time_wheels, ButtonKind, truncated,
+};
+use eframe::egui::{FontId, RichText, Sense};
 
 const ADDON_FILES: [(&str, &[u8]); 9] = [
     ("manifest.json", include_bytes!("../../browser-extension/manifest.json")),
@@ -36,7 +40,8 @@ impl App {
         if !queue_names.contains(&b.queue) {
             b.queue = MAIN_QUEUE.to_string();
         }
-        let mut open = true;
+        let queues = options_of(&queue_names);
+        let pal = theme::current(ctx);
         let mut cancel = false;
         let mut result: Option<bool> = None;
         let urls: Result<Vec<String>, String> = if b.pattern_mode {
@@ -44,83 +49,83 @@ impl App {
         } else {
             Ok(b.links.split_whitespace().map(|s| s.to_string()).collect())
         };
-        dialog_window(ctx, "Batch download")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(crate::widgets::fit_width(ctx, 560.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .show(ctx, |ui| {
-                segmented(ui, &[(false, "A list of links"), (true, "Numbered links (pattern)")], &mut b.pattern_mode);
-                ui.add_space(8.0);
+        let ok = urls.as_ref().is_ok_and(|l| !l.is_empty());
+        let out = sheet("batch", "Batch download").width(600.0).show(ctx, |s| {
+            s.body(|ui| {
+                let w = segmented_width(ui, &["A list of links", "Numbered links (pattern)"]);
+                ui.horizontal(|ui| {
+                    ui.set_width(w);
+                    segmented(ui, &[(false, "A list of links"), (true, "Numbered links (pattern)")], &mut b.pattern_mode);
+                });
+                ui.add_space(12.0);
                 if b.pattern_mode {
-                    ui.label("Address with a * where the number goes:");
-                    ui.add(egui::TextEdit::singleline(&mut b.pattern).desired_width(crate::widgets::fit_field(ui, 520.0)));
-                    ui.horizontal(|ui| {
-                        ui.label("From");
-                        ui.add(egui::DragValue::new(&mut b.from).range(0..=1_000_000));
-                        ui.label("to");
-                        ui.add(egui::DragValue::new(&mut b.to).range(0..=1_000_000));
-                        ui.label("   Digits");
-                        ui.add(egui::DragValue::new(&mut b.width).range(1..=8)).on_hover_text("2 digits makes 1 into 01");
+                    form_field(ui, "Address with a * where the number goes", |ui| {
+                        field_full(ui, &mut b.pattern, "https://example.com/photos/img*.jpg");
+                    });
+                    ui.columns(3, |cols| {
+                        form_field(&mut cols[0], "From", |ui| {
+                            let w = ui.available_width();
+                            number_field(ui, &mut b.from, 0..=1_000_000, "", w);
+                        });
+                        form_field(&mut cols[1], "To", |ui| {
+                            let w = ui.available_width();
+                            number_field(ui, &mut b.to, 0..=1_000_000, "", w);
+                        });
+                        form_field(&mut cols[2], "Digits", |ui| {
+                            let w = ui.available_width();
+                            number_field(ui, &mut b.width, 1..=8, "", w).on_hover_text("2 digits makes 1 into 01");
+                        });
                     });
                 } else {
-                    ui.label("Paste links, one per line:");
-                    egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-                        ui.add(egui::TextEdit::multiline(&mut b.links).desired_rows(8).desired_width(crate::widgets::fit_field(ui, 520.0)).hint_text("https://example.com/file1.zip\nhttps://example.com/file2.zip"));
+                    form_field(ui, "Paste links, one per line", |ui| {
+                        let w = ui.available_width();
+                        ui.add(field_multiline(&mut b.links, 8).desired_width(w).hint_text("https://example.com/file1.zip\nhttps://example.com/file2.zip"));
                     });
                 }
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Save to:");
-                    ui.add(egui::TextEdit::singleline(&mut b.folder).desired_width(crate::widgets::fit_field(ui, 300.0)));
-                    if tinted_button(ui, "Browse…").clicked() {
-                        if let Some(p) = rfd::FileDialog::new().pick_folder() {
-                            b.folder = p.display().to_string();
-                        }
-                    }
-                    ui.label("Queue:");
-                    egui::ComboBox::from_id_salt("batch_q").selected_text(b.queue.clone()).show_ui(ui, |ui| {
-                        for q in &queue_names {
-                            ui.selectable_value(&mut b.queue, q.clone(), q);
-                        }
-                    });
+                form_field(ui, "Save to", |ui| {
+                    path_field(ui, &mut b.folder);
                 });
-                ui.separator();
+                form_field(ui, "Add to queue", |ui| {
+                    let w = ui.available_width();
+                    dropdown(ui, "batch_queue", w, &queues, &mut b.queue);
+                });
+                ui.add_space(4.0);
                 match &urls {
                     Ok(list) if !list.is_empty() => {
-                        ui.label(RichText::new(format!("{} links", list.len())).strong());
+                        ui.label(RichText::new(format!("{} links", list.len())).family(theme::semibold()));
                         for u in list.iter().take(3) {
-                            ui.add(egui::Label::new(RichText::new(u).color(crate::theme::current(ui.ctx()).secondary)).truncate());
+                            ui.add(egui::Label::new(RichText::new(u).size(12.5).color(pal.secondary)).truncate());
                         }
                         if list.len() > 3 {
-                            ui.label(RichText::new("…").color(crate::theme::current(ui.ctx()).secondary));
+                            ui.label(RichText::new("…").color(pal.secondary));
                         }
                     }
-                    Ok(_) => {
-                        ui.label(RichText::new("No links yet.").color(crate::theme::current(ui.ctx()).secondary));
-                    }
-                    Err(e) => {
-                        ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
-                    }
+                    Ok(_) => message(ui, "No links yet.", false),
+                    Err(e) => message(ui, e, true),
                 }
                 if let Some(e) = &b.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
+                    message(ui, e, true);
                 }
-                ui.add_space(6.0);
-                let ok = urls.as_ref().is_ok_and(|l| !l.is_empty());
-                button_row(ui, |ui| {
+            });
+            s.footer_split(
+                |ui| {
                     if plain_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
-                    if ui.add_enabled(ok, egui::Button::new("Add to queue")).clicked() {
-                        result = Some(false);
-                    }
-                    if ui.add_enabled_ui(ok, |ui| primary_button(ui, "Download all now")).inner.clicked() {
-                        result = Some(true);
-                    }
-                });
-            });
-        if !open || cancel {
+                },
+                |ui| {
+                    ui.add_enabled_ui(ok, |ui| {
+                        if primary_button(ui, "Download all now").clicked() {
+                            result = Some(true);
+                        }
+                        if secondary_button(ui, "Add to queue").clicked() {
+                            result = Some(false);
+                        }
+                    });
+                },
+            );
+        });
+        if out.close || cancel {
             return;
         }
         if let (Some(start), Ok(list)) = (result, &urls) {
@@ -139,73 +144,70 @@ impl App {
 
     pub(super) fn scheduler_window(&mut self, ctx: &egui::Context) {
         let Some((qname, mut s)) = self.scheduler.take() else { return };
-        let mut open = true;
         let mut result = None;
         let mut switch_to: Option<String> = None;
         let mut start_now = false;
         let names: Vec<String> = self.settings.queues.iter().map(|q| q.name.clone()).collect();
+        let options = options_of(&names);
         let queued = self.items.iter().filter(|i| i.status() == Status::Queued && i.queue.as_deref() == Some(qname.as_str())).count();
-        dialog_window(ctx, "Scheduler")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(crate::widgets::fit_width(ctx, 440.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .show(ctx, |ui| {
+        let pal = theme::current(ctx);
+        let bad = (s.start_on && normalize_time(&s.start_time).is_empty()) || (s.stop_on && normalize_time(&s.stop_time).is_empty());
+        let out = sheet("scheduler", "Scheduler").width(540.0).show(ctx, |sh| {
+            sh.body(|ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Queue:");
-                    egui::ComboBox::from_id_salt("sched_q").selected_text(qname.clone()).show_ui(ui, |ui| {
-                        for n in &names {
-                            if ui.selectable_label(*n == qname, n).clicked() && *n != qname {
-                                switch_to = Some(n.clone());
-                            }
-                        }
-                    });
-                    ui.label(RichText::new(format!("{queued} downloads waiting")).color(crate::theme::current(ui.ctx()).secondary));
+                    let mut chosen = qname.clone();
+                    dropdown(ui, "sched_q", 200.0, &options, &mut chosen);
+                    if chosen != qname {
+                        switch_to = Some(chosen);
+                    }
+                    ui.label(RichText::new(format!("{queued} downloads waiting")).color(pal.secondary));
                 });
-                ui.add_space(8.0);
-                card(ui, |ui| {
-                    toggle_row(ui, "Start the queue at", &mut s.start_on, false);
+                ui.add_space(10.0);
+                let repeat_w = segmented_width(ui, &["Every day", "Once"]);
+                let done_w = segmented_width(ui, &["Do nothing", "Close the app"]);
+                card(ui, |g| {
+                    g.toggle("Start the queue at", None, &mut s.start_on);
                     if s.start_on {
-                        card_row_h(ui, false, 96.0, |ui| {
+                        g.custom(104.0, |ui| {
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| time_wheels(ui, egui::Id::unique(("sched_start", &qname)), &mut s.start_time));
                         });
                     }
-                    toggle_row(ui, "Stop the queue at", &mut s.stop_on, false);
+                    g.toggle("Stop the queue at", None, &mut s.stop_on);
                     if s.stop_on {
-                        card_row_h(ui, false, 96.0, |ui| {
+                        g.custom(104.0, |ui| {
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| time_wheels(ui, egui::Id::unique(("sched_stop", &qname)), &mut s.stop_time));
                         });
                     }
-                    card_row(ui, false, |ui| {
-                        ui.label("Repeat");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| segmented(ui, &[(true, "Every day"), (false, "Once")], &mut s.daily));
-                    });
-                    card_row(ui, true, |ui| {
-                        ui.label("When the queue is done");
-                        button_row(ui, |ui| {
-                            segmented(ui, &[(WhenDone::Nothing, "Do nothing"), (WhenDone::ExitApp, "Close the app")], &mut s.when_done)
-                        });
-                    });
+                    g.row("Repeat", None, repeat_w, |ui| segmented(ui, &[(true, "Every day"), (false, "Once")], &mut s.daily));
+                    g.row("When the queue is done", None, done_w, |ui| segmented(ui, &[(WhenDone::Nothing, "Do nothing"), (WhenDone::ExitApp, "Close the app")], &mut s.when_done));
                 });
-                let bad = (s.start_on && normalize_time(&s.start_time).is_empty()) || (s.stop_on && normalize_time(&s.stop_time).is_empty());
+                ui.add_space(8.0);
                 if bad {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, "Write times as hours and minutes, e.g. 02:30 or 23:15.");
+                    message(ui, "Write times as hours and minutes, e.g. 02:30 or 23:15.", true);
                 }
-                ui.label(RichText::new(format!("Time now: {}", chrono::Local::now().format("%H:%M"))).color(crate::theme::current(ui.ctx()).secondary));
-                ui.add_space(6.0);
-                button_row(ui, |ui| {
+                message(ui, &format!("Time now: {}", chrono::Local::now().format("%H:%M")), false);
+            });
+            sh.footer_split(
+                |ui| {
+                    if small_button(ui, ButtonKind::Secondary, "Start queue now").clicked() {
+                        start_now = true;
+                    }
+                },
+                |ui| {
+                    ui.add_enabled_ui(!bad, |ui| {
+                        if primary_button(ui, "Save").clicked() {
+                            result = Some(true);
+                        }
+                    });
                     if plain_button(ui, "Cancel").clicked() {
                         result = Some(false);
                     }
-                    if ui.add_enabled_ui(!bad, |ui| primary_button(ui, "Save")).inner.clicked() {
-                        result = Some(true);
-                    }
-                    if tinted_button(ui, "Start queue now").clicked() {
-                        start_now = true;
-                    }
-                });
-            });
+                },
+            );
+        });
+        if out.close && result.is_none() {
+            result = Some(false);
+        }
         if start_now {
             self.start_queue(&qname);
         }
@@ -227,8 +229,7 @@ impl App {
                 self.toast(format!("Schedule for {qname} saved"));
             }
             Some(false) => {}
-            None if open => self.scheduler = Some((qname, s)),
-            None => {}
+            None => self.scheduler = Some((qname, s)),
         }
     }
 
@@ -237,52 +238,56 @@ impl App {
         if !self.queues_open {
             return;
         }
-        let mut open = true;
-        let mut remove: Option<usize> = None;
+        let mut remove: Option<String> = None;
         let mut renames: Vec<(String, String)> = Vec::new();
         let mut add = false;
         let mut sched: Option<String> = None;
         let mut new_name = std::mem::take(&mut self.new_queue);
         let mut changed = false;
-        dialog_window(ctx, "Queues")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(crate::widgets::fit_width(ctx, 460.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .show(ctx, |ui| {
-                ui.label("Each queue downloads its files a few at a time (the slider sets how many at once) and can have its own schedule.");
-                ui.add_space(4.0);
-                card(ui, |ui| {
-                    let count = self.settings.queues.len();
-                    for (k, q) in self.settings.queues.iter_mut().enumerate() {
-                        card_row(ui, k + 1 == count, |ui| {
+        let pal = theme::current(ctx);
+        let out = sheet("queues", "Queues").width(560.0).show(ctx, |s| {
+            s.body(|ui| {
+                ui.label(RichText::new("Each queue downloads its files a few at a time and can have its own schedule.").color(pal.secondary));
+                ui.add_space(10.0);
+                let sched_w = crate::widgets::button_width(ui, crate::widgets::ButtonSize::Small, false, "Scheduler");
+                card(ui, |g| {
+                    for q in self.settings.queues.iter_mut() {
+                        g.custom(64.0, |ui| {
                             let main = q.name == MAIN_QUEUE;
+                            let total = ui.available_width();
+                            let stepper_w = 128.0;
+                            let name_w = (total - stepper_w - sched_w - 36.0 - 3.0 * 8.0).max(80.0);
                             let mut name = q.name.clone();
-                            if ui.add_enabled(!main, egui::TextEdit::singleline(&mut name).desired_width(104.0)).changed() {
+                            if ui.add_enabled(!main, field(&mut name).desired_width(name_w)).changed() {
                                 renames.push((q.name.clone(), name.clone()));
                             }
-                            ui.spacing_mut().slider_width = 64.0;
-                            changed |= ui.add(egui::Slider::new(&mut q.max_parallel, 1..=8)).on_hover_text("How many downloads this queue runs at once").changed();
-                            button_row(ui, |ui| {
-                                if ui.add_enabled(!main, egui::Button::new("✕").small()).on_hover_text("Remove (its downloads stay in the list)").clicked() {
-                                    remove = Some(k);
-                                }
-                                if tinted_button(ui, "Scheduler…").clicked() {
-                                    sched = Some(q.name.clone());
+                            changed |= stepper(ui, &mut q.max_parallel, 1..=8).on_hover_text("How many downloads this queue runs at once").changed();
+                            if small_button(ui, ButtonKind::Secondary, "Scheduler").clicked() {
+                                sched = Some(q.name.clone());
+                            }
+                            ui.add_enabled_ui(!main, |ui| {
+                                if icon_button(ui, Icon::Delete, "Remove (its downloads stay in the list)").clicked() {
+                                    remove = Some(q.name.clone());
                                 }
                             });
                         });
                     }
                 });
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut new_name).hint_text("New queue name").desired_width(200.0));
-                    if ui.add_enabled_ui(!new_name.trim().is_empty(), |ui| tinted_button(ui, "Add queue")).inner.clicked() {
-                        add = true;
-                    }
+                ui.add_space(14.0);
+                form_field(ui, "New queue", |ui| {
+                    ui.horizontal(|ui| {
+                        let bw = crate::widgets::button_width(ui, crate::widgets::ButtonSize::Regular, false, "Add queue");
+                        let w = (ui.available_width() - bw - ui.spacing().item_spacing.x).max(80.0);
+                        ui.add(field(&mut new_name).hint_text("Queue name").desired_width(w));
+                        ui.add_enabled_ui(!new_name.trim().is_empty(), |ui| {
+                            if button(ui, ButtonKind::Secondary, "Add queue").clicked() {
+                                add = true;
+                            }
+                        });
+                    });
                 });
             });
+        });
         for (old, new) in renames {
             let new = new.trim().to_string();
             if new.is_empty() || self.settings.queues.iter().any(|q| q.name == new) {
@@ -304,10 +309,9 @@ impl App {
             }
             self.dirty = true;
         }
-        if let Some(k) = remove {
-            let name = self.settings.queues[k].name.clone();
+        if let Some(name) = remove {
             self.stop_queue(&name);
-            self.settings.queues.remove(k);
+            self.settings.queues.retain(|q| q.name != name);
             for i in &mut self.items {
                 if i.queue.as_deref() == Some(name.as_str()) {
                     i.queue = None;
@@ -335,7 +339,9 @@ impl App {
         if let Some(q) = sched {
             self.open_scheduler(&q);
         }
-        self.queues_open = open;
+        if out.close {
+            self.queues_open = false;
+        }
         if changed {
             self.dirty = true;
         }
@@ -346,34 +352,36 @@ impl App {
         let Some(mut r) = self.refresh.take() else { return };
         let Some(item) = self.items.iter().find(|i| i.id == r.id) else { return };
         let name = item.name.clone();
-        let mut open = true;
         let mut ok = false;
         let mut cancel = false;
-        dialog_window(ctx, "Refresh download address")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(crate::widgets::fit_width(ctx, 520.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .show(ctx, |ui| {
-                ui.label(RichText::new(&name).strong());
-                ui.label("If the link stopped working (many sites give links that expire), open the download page again, copy a fresh link to the same file and paste it here. The download carries on where it stopped.");
+        let pal = theme::current(ctx);
+        let out = sheet("refresh", "Refresh download address").width(560.0).show(ctx, |s| {
+            s.body(|ui| {
+                ui.label(RichText::new(&name).family(theme::semibold()));
                 ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut r.url).desired_width(crate::widgets::fit_field(ui, 500.0)));
+                ui.add(egui::Label::new(RichText::new("If the link stopped working (many sites give links that expire), open the download page again, copy a fresh link to the same file and paste it here. The download carries on where it stopped.").color(pal.secondary)).wrap());
+                ui.add_space(10.0);
+                form_field(ui, "New address", |ui| {
+                    field_full(ui, &mut r.url, "https://…");
+                });
                 if let Some(e) = &r.error {
-                    ui.colored_label(crate::theme::current(ui.ctx()).red_ink, e);
+                    message(ui, e, true);
                 }
-                ui.add_space(4.0);
-                button_row(ui, |ui| {
+            });
+            s.footer_split(
+                |ui| {
                     if plain_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
+                },
+                |ui| {
                     if primary_button(ui, "Use this link").clicked() {
                         ok = true;
                     }
-                });
-            });
-        if !open || cancel {
+                },
+            );
+        });
+        if out.close || cancel {
             return;
         }
         if ok {
@@ -396,53 +404,59 @@ impl App {
                 self.completed.retain(|c| *c != id);
                 continue;
             };
-            let mut open = true;
-            let mut act = None;
+            let act = std::cell::Cell::new(None::<&str>);
             let mut dont_show = !self.settings.show_complete;
-            dialog_window(ctx, "Download complete")
-                .id(egui::Id::unique(("complete", id)))
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .default_width(crate::widgets::fit_width(ctx, 440.0))
-                .default_pos(egui::pos2(360.0 + (id % 4) as f32 * 20.0, 200.0 + (id % 4) as f32 * 20.0))
-                .show(ctx, |ui| {
+            let pal = theme::current(ctx);
+            let pos = egui::pos2(360.0 + (id % 4) as f32 * 20.0, 160.0 + (id % 4) as f32 * 20.0);
+            let out = sheet(("complete", id), "Download complete").width(480.0).floating(pos).show(ctx, |s| {
+                s.body(|ui| {
                     ui.horizontal(|ui| {
-                        let (r, _) = ui.allocate_exact_size(egui::vec2(36.0, 36.0), Sense::hover());
-                        icons::file_badge(ui.painter(), r, &item.category);
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(52.0, 52.0), Sense::hover());
+                        icons::file_tile(ui.painter(), r, &item.category);
                         ui.vertical(|ui| {
-                            ui.label(RichText::new(&item.name).strong().size(15.0));
-                            ui.label(format!("{}  ·  {}", human_size(item.total()), item.folder.display()));
+                            ui.spacing_mut().item_spacing.y = 2.0;
+                            let w = ui.available_width();
+                            let g = truncated(ui.painter(), &item.name, FontId::new(16.0, theme::semibold()), pal.label, w);
+                            let (rect, _) = ui.allocate_exact_size(g.size(), Sense::hover());
+                            ui.painter().galley(rect.min, g, pal.label);
+                            ui.add(egui::Label::new(RichText::new(format!("{}  ·  {}", human_size(item.total()), item.folder.display())).size(12.5).color(pal.tertiary)).truncate());
                         });
                     });
-                    ui.add(egui::Label::new(RichText::new(&item.url).color(crate::theme::current(ui.ctx()).blue_ink)).truncate());
+                    ui.add_space(6.0);
+                    ui.add(egui::Label::new(RichText::new(&item.url).color(pal.blue_ink)).truncate());
                     if let Some(c) = &item.check {
-                        ui.label(c);
+                        let col = if c.contains("NOT") { pal.red_ink } else if c.contains("matches") { pal.green_ink } else { pal.secondary };
+                        ui.label(RichText::new(c).color(col));
                     }
-                    ui.add_space(4.0);
-                    toggle(ui, &mut dont_show, "Don't show this window again");
-                    button_row(ui, |ui| {
-                        if tinted_button(ui, "Close").clicked() {
-                            act = Some("close");
-                        }
-                        if tinted_button(ui, "Open folder").clicked() {
-                            act = Some("folder");
-                        }
-                        if primary_button(ui, "Open").clicked() {
-                            act = Some("open");
-                        }
-                    });
+                    ui.add_space(6.0);
+                    check_row(ui, &mut dont_show, "Don't show this window again");
                 });
+                s.footer_split(
+                    |ui| {
+                        if plain_button(ui, "Close").clicked() {
+                            act.set(Some("close"));
+                        }
+                    },
+                    |ui| {
+                        if primary_button(ui, "Open").clicked() {
+                            act.set(Some("open"));
+                        }
+                        if secondary_button(ui, "Open folder").clicked() {
+                            act.set(Some("folder"));
+                        }
+                    },
+                );
+            });
             if dont_show == self.settings.show_complete {
                 self.settings.show_complete = !dont_show;
                 self.dirty = true;
             }
-            match act {
+            match act.get() {
                 Some("open") => open_path(&item.path()),
                 Some("folder") => open_path(&item.folder),
                 _ => {}
             }
-            if !open || act.is_some() {
+            if out.close || act.get().is_some() {
                 self.completed.retain(|c| *c != id);
             }
         }
@@ -452,48 +466,62 @@ impl App {
         if !self.browser_open {
             return;
         }
-        let mut open = true;
-        dialog_window(ctx, "Browser integration")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(crate::widgets::fit_width(ctx, 480.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .show(ctx, |ui| {
-                match (&self.listener, self.settings.browser_listen) {
-                    (Ok(()), _) => ui.colored_label(crate::theme::current(ui.ctx()).green_ink, format!("● Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
-                    (Err(_), false) => ui.colored_label(crate::theme::current(ui.ctx()).secondary, "○ Turned off in Options."),
-                    (Err(e), true) => ui.colored_label(crate::theme::current(ui.ctx()).red_ink, format!("● Not available: {e}. Another copy of the app may be open.")),
+        let pal = theme::current(ctx);
+        let mut saved: Option<std::path::PathBuf> = None;
+        let mut save_error: Option<String> = None;
+        let mut close = false;
+        let out = sheet("browser", "Browser integration").width(560.0).backdrop_closes().show(ctx, |s| {
+            s.body(|ui| {
+                let (icon, tint, ink, text) = match (&self.listener, self.settings.browser_listen) {
+                    (Ok(()), _) => (Icon::CheckCircle, pal.green_tint, pal.green_ink, format!("Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
+                    (Err(_), false) => (Icon::Info, pal.surface2, pal.secondary, "Turned off in Options.".to_string()),
+                    (Err(e), true) => (Icon::WarningCircle, pal.red_tint, pal.red_ink, format!("Not available: {e}. Another copy of the app may be open.")),
                 };
+                crate::widgets::notice(ui, icon, &text, tint, ink);
+                ui.add_space(12.0);
+                ui.add(egui::Label::new(RichText::new("The browser add-on sends the downloads you start in Chrome, Edge, Brave or Firefox to this app, and adds “Download with Swift Download Manager” when you right-click a link.").color(pal.secondary)).wrap());
+                ui.add_space(12.0);
+                ui.label(RichText::new("How to install it").size(15.0).family(theme::semibold()));
+                ui.add_space(4.0);
+                step(ui, 1, "Click “Save the add-on…” below and choose a folder.");
+                step(ui, 2, "Chrome or Edge: open the Extensions page, turn on Developer mode, click “Load unpacked” and pick the saved folder.");
+                step(ui, 3, "Firefox: open about:debugging, “This Firefox”, “Load Temporary Add-on” and pick manifest.json in the saved folder.");
+                ui.add_space(8.0);
+                ui.add(egui::Label::new(RichText::new("Without the add-on: copy a download link and the app will offer to download it (clipboard watching), or start the app with a link.").size(12.5).color(pal.tertiary)).wrap());
                 ui.add_space(6.0);
-                ui.label("The browser add-on sends the downloads you start in Chrome, Edge, Brave or Firefox to this app, and adds “Download with Swift Download Manager” when you right-click a link.");
-                ui.add_space(6.0);
-                ui.label(RichText::new("How to install it").strong());
-                ui.label("1.  Click “Save the add-on…” below and choose a folder.");
-                ui.label("2.  Chrome/Edge: open the Extensions page, turn on Developer mode,\n     click “Load unpacked” and pick the saved folder.");
-                ui.label("3.  Firefox: open about:debugging, “This Firefox”, “Load Temporary Add-on”\n     and pick manifest.json in the saved folder.");
-                ui.add_space(6.0);
-                ui.label(RichText::new("Without the add-on: copy a download link and the app will offer to download it (clipboard watching), or start the app with a link.").color(crate::theme::current(ui.ctx()).secondary));
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if primary_button(ui, "Save the add-on…").clicked() {
-                        if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                            match save_addon(&dir) {
-                                Ok(p) => {
-                                    open_path(&p);
-                                    self.toast = Some((format!("Saved to {}", p.display()), Instant::now()));
-                                }
-                                Err(e) => self.toast = Some((format!("Could not save: {e}"), Instant::now())),
-                            }
+                if check_row(ui, &mut self.settings.watch_clipboard, "Watch the clipboard for links").changed() {
+                    self.apply_settings();
+                    self.dirty = true;
+                }
+            });
+            s.footer_split(
+                |ui| {
+                    if plain_button(ui, "Close").clicked() {
+                        close = true;
+                    }
+                },
+                |ui| {
+                    if primary_button(ui, "Save the add-on…").clicked()
+                        && let Some(dir) = rfd::FileDialog::new().pick_folder()
+                    {
+                        match save_addon(&dir) {
+                            Ok(p) => saved = Some(p),
+                            Err(e) => save_error = Some(format!("Could not save: {e}")),
                         }
                     }
-                    if toggle(ui, &mut self.settings.watch_clipboard, "Watch the clipboard").changed() {
-                        self.apply_settings();
-                        self.dirty = true;
-                    }
-                });
-            });
-        self.browser_open = open;
+                },
+            );
+        });
+        if let Some(p) = saved {
+            open_path(&p);
+            self.toast(format!("Saved to {}", p.display()));
+        }
+        if let Some(e) = save_error {
+            self.toast(e);
+        }
+        if out.close || close {
+            self.browser_open = false;
+        }
     }
 
     /// Help > AI assistants: the switch, the state, and setup text to copy.
@@ -506,38 +534,39 @@ impl App {
         let (state, mut on) = (self.ai_state(), self.settings.mcp_enabled);
         let (code, desktop) = (crate::mcp::setup::claude_code_command(&exe), crate::mcp::setup::desktop_config(&exe));
         let mut copied = None;
-        let mut open = true;
-        dialog_window(ctx, "AI assistants (MCP)")
-            .open(&mut open)
-            .default_width(crate::widgets::fit_width(ctx, 540.0))
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .show(ctx, |ui| {
-                let pal = crate::theme::current(ui.ctx());
-                ui.label("Let an AI assistant such as Claude look at your downloads and add, pause, resume or remove them. It cannot delete files from your disk or pick the folder a file is saved in.");
-                ui.add_space(8.0);
-                card(ui, |ui| {
-                    toggle_row(ui, "Allow AI assistants", &mut on, false);
-                    card_row(ui, true, |ui| {
-                        let (text, col) = match state {
-                            AiState::Off => ("Off: assistants are refused", pal.secondary),
-                            AiState::Unavailable => ("Another copy of the app owns the downloads, so this window cannot be controlled", pal.orange_ink),
-                            AiState::Ready => ("Ready: connect an assistant below", pal.green_ink),
-                            AiState::Active => ("An assistant is using it right now", pal.blue_ink),
-                        };
-                        ui.label(RichText::new(text).size(11.0).color(col));
-                    });
+        let mut close = false;
+        let pal = theme::current(ctx);
+        let out = sheet("ai", "AI assistants (MCP)").width(600.0).backdrop_closes().show(ctx, |s| {
+            s.body(|ui| {
+                ui.add(egui::Label::new(RichText::new("Let an AI assistant such as Claude look at your downloads and add, pause, resume or remove them. It cannot delete files from your disk or pick the folder a file is saved in.").color(pal.secondary)).wrap());
+                ui.add_space(12.0);
+                let (icon, tint, ink, text) = match state {
+                    AiState::Off => (Icon::Info, pal.surface2, pal.secondary, "Off: assistants are refused"),
+                    AiState::Unavailable => (Icon::WarningCircle, pal.orange_tint, pal.orange_ink, "Another copy of the app owns the downloads, so this window cannot be controlled"),
+                    AiState::Ready => (Icon::CheckCircle, pal.green_tint, pal.green_ink, "Ready: connect an assistant below"),
+                    AiState::Active => (Icon::Robot, pal.blue_tint, pal.blue_ink, "An assistant is using it right now"),
+                };
+                card(ui, |g| {
+                    g.toggle("Allow AI assistants", None, &mut on);
                 });
-                for (title, text) in [("Claude Code: run this once", &code), ("Claude Desktop and other apps: add this to their MCP settings", &desktop)] {
-                    group_title(ui, title);
-                    ui.add(egui::Label::new(RichText::new(text.as_str()).monospace().size(11.0)).selectable(true));
-                    ui.add_space(4.0);
-                    if tinted_button(ui, "Copy").clicked() {
-                        copied = Some(text.clone());
+                ui.add_space(8.0);
+                crate::widgets::notice(ui, icon, text, tint, ink);
+                for (title, snippet) in [("Claude Code: run this once", &code), ("Claude Desktop and other apps: add this to their MCP settings", &desktop)] {
+                    crate::widgets::section_title(ui, title);
+                    code_box(ui, snippet);
+                    ui.add_space(6.0);
+                    if crate::widgets::small_icon_label_button(ui, ButtonKind::Secondary, Icon::Copy, "Copy").clicked() {
+                        copied = Some(snippet.clone());
                     }
                 }
-                ui.add_space(6.0);
-                ui.label(RichText::new("The assistant starts this program itself and shares your open window, or runs the downloads without one while it is closed. Clients ask you before each action unless you tell them not to.").size(11.0).color(pal.secondary));
+                crate::widgets::hint(ui, "The assistant starts this program itself and shares your open window, or runs the downloads without one while it is closed. Clients ask you before each action unless you tell them not to.");
             });
+            s.footer(|ui| {
+                if primary_button(ui, "Done").clicked() {
+                    close = true;
+                }
+            });
+        });
         if on != self.settings.mcp_enabled {
             self.settings.mcp_enabled = on;
             self.dirty = true;
@@ -546,32 +575,59 @@ impl App {
             ctx.copy_text(text);
             self.toast("Copied");
         }
-        self.ai_open = open;
+        if out.close || close {
+            self.ai_open = false;
+        }
     }
 
     pub(super) fn about_window(&mut self, ctx: &egui::Context) {
         if !self.about_open {
             return;
         }
-        let mut open = true;
+        let pal = theme::current(ctx);
         let mut about_icon = self.about_icon.take();
-        dialog_window(ctx, "About")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
+        let out = sheet("about", "About").width(420.0).backdrop_closes().show(ctx, |s| {
+            s.body(|ui| {
                 ui.vertical_centered(|ui| {
+                    ui.add_space(6.0);
                     let icon = about_icon.get_or_insert_with(|| ctx.load_texture("about-icon", egui::ColorImage::from_rgba_unmultiplied([128, 128], &crate::appicon::rgba(128)), egui::TextureOptions::LINEAR));
-                    ui.add(egui::Image::new((icon.id(), egui::vec2(72.0, 72.0))));
-                    ui.heading(APP_NAME);
-                    ui.label(format!("Version {}, written in Rust", env!("CARGO_PKG_VERSION")));
-                    ui.label("Splits each download into several connections, re-splits as parts finish,\nretries broken connections, pauses and resumes, keeps a scheduled queue\nand works with your browser and clipboard.");
+                    ui.add(egui::Image::new((icon.id(), egui::vec2(80.0, 80.0))));
+                    ui.add_space(8.0);
+                    ui.label(RichText::new(APP_NAME).size(theme::DESIGN.heading - 2.0).family(theme::semibold()).color(pal.label));
+                    ui.label(RichText::new(format!("Version {}, written in Rust", env!("CARGO_PKG_VERSION"))).color(pal.tertiary));
+                    ui.add_space(10.0);
+                    ui.add(egui::Label::new(RichText::new("Splits each download into several connections, re-splits as parts finish, retries broken connections, pauses and resumes, keeps a scheduled queue and works with your browser and clipboard.").color(pal.secondary)).wrap());
+                    ui.add_space(6.0);
                 });
             });
+        });
         self.about_icon = about_icon;
-        self.about_open = open;
+        if out.close {
+            self.about_open = false;
+        }
     }
+}
+
+/// A numbered step of instructions: a coral circle with the number, and the text beside it.
+fn step(ui: &mut egui::Ui, n: usize, text: &str) {
+    let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
+    ui.horizontal_top(|ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(26.0, 26.0), Sense::hover());
+        ui.painter().circle_filled(rect.center(), 13.0, pal.accent_tint);
+        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, n.to_string(), FontId::new(d.caption + 1.0, theme::semibold()), pal.accent_ink);
+        ui.add_space(4.0);
+        ui.add(egui::Label::new(RichText::new(text).color(pal.label)).wrap());
+    });
+    ui.add_space(4.0);
+}
+
+/// A rounded box with selectable monospace text, for commands and settings to copy.
+fn code_box(ui: &mut egui::Ui, text: &str) {
+    let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
+    egui::Frame::NONE.fill(pal.surface2).corner_radius(egui::CornerRadius::same(d.radius_md)).inner_margin(egui::Margin::same(14)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.add(egui::Label::new(RichText::new(text).monospace().size(12.0).color(pal.label)).selectable(true));
+    });
 }
 
 #[cfg(test)]

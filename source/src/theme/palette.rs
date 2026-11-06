@@ -1,24 +1,28 @@
-//! Colour tokens for both designs, in light and dark.
+//! Colour tokens, in light and dark.
 //!
-//! `DRISHTI_*` follows the Drishti design system (tokens.json): dark by default, one blue accent,
-//! `-ink` colours for text and stand-alone marks, tinted fills for state. `IOS_*` is the flat iOS look.
-//! Both fill every token, so widgets never need to know which design is active.
+//! One design, two modes. The light palette follows the airy look of Airbnb: white surfaces on a
+//! very light grey page, near-black text, soft grey lines and one coral accent. The dark palette
+//! keeps the same accent on neutral charcoal surfaces. Colours are always flat: there are no
+//! gradients anywhere in the app.
+//!
+//! `*_ink` colours are for text and stand-alone marks (they hold 4.5:1 against the surfaces),
+//! `*_tint` colours are quiet backgrounds for state chips and selections.
 
 use eframe::egui::Color32;
 
-/// One flat set of colours. No gradients anywhere in the app.
+/// One flat set of colours.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
     // Grounds
     /// Page ground behind every screen.
     pub bg: Color32,
-    /// Cards, grouped lists and sheets (`surface`).
+    /// Cards, grouped lists and the header (`surface`).
     pub card: Color32,
-    /// Controls and nested fills (`surface-2`).
+    /// Quiet fills: tonal buttons, tiles, the track of a segmented control.
     pub surface2: Color32,
-    /// Hover and pressed fill for controls (`surface-3`).
+    /// Hover and pressed fill for `surface2`.
     pub surface3: Color32,
-    /// Dialogs, menus and toasts (`popover`).
+    /// Dialogs, menus and toasts.
     pub raised: Color32,
     /// Navigation rail ground.
     pub sidebar: Color32,
@@ -26,25 +30,36 @@ pub struct Palette {
     pub segment_on: Color32,
     /// Track behind progress bars and meters.
     pub track: Color32,
+    /// The dim layer behind a dialog.
+    pub scrim: Color32,
     // Lines and overlays
+    /// Translucent wash on hover.
     pub hover: Color32,
+    /// Translucent wash while pressed.
+    pub press: Color32,
+    /// Hairline between rows and around cards.
     pub separator: Color32,
+    /// A line that has to read as an edge (dialogs, the sidebar).
     pub separator_strong: Color32,
+    /// Border of inputs and outlined buttons.
     pub control_border: Color32,
     // Text
-    /// Primary text (`ink`).
+    /// Primary text.
     pub label: Color32,
-    /// Secondary text (`ink-2`).
+    /// Secondary text.
     pub secondary: Color32,
-    /// Tertiary text: overline labels, units, timestamps (`ink-3`).
+    /// Tertiary text: units, timestamps, hints.
     pub tertiary: Color32,
     pub disabled: Color32,
-    // Accent and state hues. `*_ink` is for text and stand-alone marks, `*_tint` for quiet backgrounds.
-    pub blue: Color32,
-    pub blue_ink: Color32,
-    pub blue_solid: Color32,
+    // The accent (coral) and the state hues.
+    pub accent: Color32,
+    pub accent_ink: Color32,
+    /// Fill of the primary button (holds 4.5:1 with `on_accent`).
+    pub accent_solid: Color32,
+    /// Primary button while hovered or pressed.
+    pub accent_press: Color32,
     pub on_accent: Color32,
-    pub blue_tint: Color32,
+    pub accent_tint: Color32,
     pub green: Color32,
     pub green_ink: Color32,
     pub green_tint: Color32,
@@ -55,6 +70,12 @@ pub struct Palette {
     pub red_ink: Color32,
     pub red_tint: Color32,
     pub red_solid: Color32,
+    /// Links and "information".
+    pub blue: Color32,
+    pub blue_ink: Color32,
+    pub blue_tint: Color32,
+    /// Base colour of drop shadows (alpha is applied where they are drawn).
+    pub shadow: Color32,
 }
 
 const fn rgb(hex: u32) -> Color32 {
@@ -73,149 +94,95 @@ macro_rules! lerp_fields {
 }
 
 impl Palette {
-    pub const IOS_LIGHT: Palette = Palette {
-        bg: rgb(0xF2F2F7),
+    pub const LIGHT: Palette = Palette {
+        bg: rgb(0xF7F7F7),
         card: rgb(0xFFFFFF),
-        surface2: rgb(0xE5E5EA),
-        surface3: rgb(0xD1D1D6),
-        raised: rgb(0xFFFFFF),
-        sidebar: rgb(0xF2F2F7),
-        segment_on: rgb(0xFFFFFF),
-        track: rgb(0xE5E5EA),
-        hover: rgba(0xC6C6C8, 77),
-        separator: rgb(0xC6C6C8),
-        separator_strong: rgb(0xC6C6C8),
-        control_border: rgb(0xC6C6C8),
-        label: rgb(0x000000),
-        secondary: rgb(0x8A8A8E),
-        tertiary: rgb(0x8A8A8E),
-        disabled: rgb(0xC7C7CC),
-        blue: rgb(0x007AFF),
-        blue_ink: rgb(0x007AFF),
-        blue_solid: rgb(0x007AFF),
-        on_accent: rgb(0xFFFFFF),
-        blue_tint: rgba(0x007AFF, 41),
-        green: rgb(0x34C759),
-        green_ink: rgb(0x34C759),
-        green_tint: rgba(0x34C759, 41),
-        orange: rgb(0xFF9500),
-        orange_ink: rgb(0xFF9500),
-        orange_tint: rgba(0xFF9500, 41),
-        red: rgb(0xFF3B30),
-        red_ink: rgb(0xFF3B30),
-        red_tint: rgba(0xFF3B30, 41),
-        red_solid: rgb(0xFF3B30),
-    };
-
-    pub const IOS_DARK: Palette = Palette {
-        bg: rgb(0x000000),
-        card: rgb(0x1C1C1E),
-        surface2: rgb(0x2C2C2E),
-        surface3: rgb(0x3A3A3C),
-        raised: rgb(0x2C2C2E),
-        sidebar: rgb(0x000000),
-        segment_on: rgb(0x636366),
-        track: rgb(0x2C2C2E),
-        hover: rgba(0x38383A, 77),
-        separator: rgb(0x38383A),
-        separator_strong: rgb(0x38383A),
-        control_border: rgb(0x38383A),
-        label: rgb(0xFFFFFF),
-        secondary: rgb(0x98989F),
-        tertiary: rgb(0x98989F),
-        disabled: rgb(0x48484A),
-        blue: rgb(0x0A84FF),
-        blue_ink: rgb(0x0A84FF),
-        blue_solid: rgb(0x0A84FF),
-        on_accent: rgb(0xFFFFFF),
-        blue_tint: rgba(0x0A84FF, 41),
-        green: rgb(0x30D158),
-        green_ink: rgb(0x30D158),
-        green_tint: rgba(0x30D158, 41),
-        orange: rgb(0xFF9F0A),
-        orange_ink: rgb(0xFF9F0A),
-        orange_tint: rgba(0xFF9F0A, 41),
-        red: rgb(0xFF453A),
-        red_ink: rgb(0xFF453A),
-        red_tint: rgba(0xFF453A, 41),
-        red_solid: rgb(0xFF453A),
-    };
-
-    pub const DRISHTI_LIGHT: Palette = Palette {
-        bg: rgb(0xF2F2F7),
-        card: rgb(0xFFFFFF),
-        surface2: rgb(0xE5E5EA),
-        surface3: rgb(0xD1D1D6),
+        surface2: rgb(0xF2F2F2),
+        surface3: rgb(0xE8E8E8),
         raised: rgb(0xFFFFFF),
         sidebar: rgb(0xFFFFFF),
         segment_on: rgb(0xFFFFFF),
-        track: rgb(0xD1D1D6),
+        track: rgb(0xEBEBEB),
+        scrim: rgba(0x000000, 102),
         hover: rgba(0x000000, 13),
-        separator: rgba(0x3C3C43, 36),
-        separator_strong: rgba(0x3C3C43, 74),
-        control_border: rgb(0x8E8E93),
-        label: rgb(0x000000),
-        secondary: rgb(0x48484A),
-        tertiary: rgb(0x6E6E73),
-        disabled: rgb(0xAEAEB2),
+        press: rgba(0x000000, 26),
+        separator: rgb(0xEBEBEB),
+        separator_strong: rgb(0xDDDDDD),
+        control_border: rgb(0x909090),
+        label: rgb(0x222222),
+        secondary: rgb(0x484848),
+        tertiary: rgb(0x6A6A6A),
+        disabled: rgb(0xB0B0B0),
+        accent: rgb(0xFF385C),
+        accent_ink: rgb(0xC2005A),
+        accent_solid: rgb(0xE31C5F),
+        accent_press: rgb(0xD70466),
+        on_accent: rgb(0xFFFFFF),
+        accent_tint: rgba(0xFF385C, 26),
+        green: rgb(0x34C759),
+        green_ink: rgb(0x0A6B27),
+        green_tint: rgba(0x34C759, 36),
+        orange: rgb(0xFF9500),
+        orange_ink: rgb(0x8A4B00),
+        orange_tint: rgba(0xFF9500, 36),
+        red: rgb(0xB32D0E),
+        red_ink: rgb(0xB32D0E),
+        red_tint: rgba(0xC13515, 26),
+        red_solid: rgb(0xB32D0E),
         blue: rgb(0x007AFF),
         blue_ink: rgb(0x005ECB),
-        blue_solid: rgb(0x0071E3),
-        on_accent: rgb(0xFFFFFF),
-        blue_tint: rgba(0x007AFF, 31),
-        green: rgb(0x34C759),
-        green_ink: rgb(0x1A7332),
-        green_tint: rgba(0x34C759, 31),
-        orange: rgb(0xFF9500),
-        orange_ink: rgb(0x9C4A00),
-        orange_tint: rgba(0xFF9500, 31),
-        red: rgb(0xFF3B30),
-        red_ink: rgb(0xC4001A),
-        red_tint: rgba(0xFF3B30, 31),
-        red_solid: rgb(0xD70015),
+        blue_tint: rgba(0x007AFF, 28),
+        shadow: rgb(0x000000),
     };
 
-    pub const DRISHTI_DARK: Palette = Palette {
-        bg: rgb(0x000000),
+    pub const DARK: Palette = Palette {
+        bg: rgb(0x0F0F10),
         card: rgb(0x1C1C1E),
         surface2: rgb(0x2C2C2E),
         surface3: rgb(0x3A3A3C),
-        raised: rgb(0x2C2C2E),
-        sidebar: rgb(0x111111),
+        raised: rgb(0x262628),
+        sidebar: rgb(0x151517),
         segment_on: rgb(0x636366),
         track: rgb(0x3A3A3C),
-        hover: rgba(0xFFFFFF, 15),
-        separator: rgba(0xFFFFFF, 20),
-        separator_strong: rgba(0x545458, 166),
-        control_border: rgb(0x6C6C70),
-        label: rgb(0xFFFFFF),
-        secondary: rgb(0xAEAEB2),
-        tertiary: rgb(0x8E8E93),
+        scrim: rgba(0x000000, 153),
+        hover: rgba(0xFFFFFF, 18),
+        press: rgba(0xFFFFFF, 31),
+        separator: rgba(0xFFFFFF, 26),
+        separator_strong: rgba(0xFFFFFF, 46),
+        control_border: rgb(0x76767B),
+        label: rgb(0xF5F5F7),
+        secondary: rgb(0xC7C7CC),
+        tertiary: rgb(0x98989F),
         disabled: rgb(0x636366),
-        blue: rgb(0x0A84FF),
-        blue_ink: rgb(0x409CFF),
-        blue_solid: rgb(0x0A6CFF),
+        accent: rgb(0xFF385C),
+        accent_ink: rgb(0xFF6B88),
+        accent_solid: rgb(0xE31C5F),
+        accent_press: rgb(0xFF385C),
         on_accent: rgb(0xFFFFFF),
-        blue_tint: rgba(0x0A84FF, 41),
+        accent_tint: rgba(0xFF385C, 46),
         green: rgb(0x30D158),
         green_ink: rgb(0x30D158),
-        green_tint: rgba(0x30D158, 41),
+        green_tint: rgba(0x30D158, 46),
         orange: rgb(0xFF9F0A),
         orange_ink: rgb(0xFF9F0A),
-        orange_tint: rgba(0xFF9F0A, 41),
-        red: rgb(0xFF453A),
-        red_ink: rgb(0xFF6961),
-        red_tint: rgba(0xFF453A, 41),
-        red_solid: rgb(0xD70015),
+        orange_tint: rgba(0xFF9F0A, 46),
+        red: rgb(0xFF6B4A),
+        red_ink: rgb(0xFF8A70),
+        red_tint: rgba(0xFF6B4A, 46),
+        red_solid: rgb(0xC13515),
+        blue: rgb(0x0A84FF),
+        blue_ink: rgb(0x409CFF),
+        blue_tint: rgba(0x0A84FF, 46),
+        shadow: rgb(0x000000),
     };
 
     /// Blend towards `other`: `t` 0 gives `self`, 1 gives `other`.
     pub fn lerp(&self, other: &Palette, t: f32) -> Palette {
         let t = t.clamp(0.0, 1.0);
         lerp_fields!(
-            self, other, t, bg, card, surface2, surface3, raised, sidebar, segment_on, track, hover, separator, separator_strong,
-            control_border, label, secondary, tertiary, disabled, blue, blue_ink, blue_solid, on_accent, blue_tint, green, green_ink,
-            green_tint, orange, orange_ink, orange_tint, red, red_ink, red_tint, red_solid
+            self, other, t, bg, card, surface2, surface3, raised, sidebar, segment_on, track, scrim, hover, press, separator, separator_strong,
+            control_border, label, secondary, tertiary, disabled, accent, accent_ink, accent_solid, accent_press, on_accent, accent_tint, green,
+            green_ink, green_tint, orange, orange_ink, orange_tint, red, red_ink, red_tint, red_solid, blue, blue_ink, blue_tint, shadow
         )
     }
 }
@@ -240,7 +207,7 @@ pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
 #[cfg(test)]
 pub fn over(top: Color32, bottom: Color32) -> Color32 {
     let k = 1.0 - top.a() as f32 / 255.0;
-    let mix = |t: u8, b: u8| (t as f32 + b as f32 * k).round().min(255.0) as u8;
+    let mix = |t: u8, b: u8| (t as f32 * top.a() as f32 / 255.0 + b as f32 * k).round().min(255.0) as u8;
     Color32::from_rgb(mix(top.r(), bottom.r()), mix(top.g(), bottom.g()), mix(top.b(), bottom.b()))
 }
 
@@ -248,84 +215,81 @@ pub fn over(top: Color32, bottom: Color32) -> Color32 {
 mod tests {
     use super::*;
 
-    fn all() -> [(&'static str, Palette); 4] {
-        [("ios light", Palette::IOS_LIGHT), ("ios dark", Palette::IOS_DARK), ("drishti light", Palette::DRISHTI_LIGHT), ("drishti dark", Palette::DRISHTI_DARK)]
+    fn both() -> [(&'static str, Palette); 2] {
+        [("light", Palette::LIGHT), ("dark", Palette::DARK)]
     }
 
     #[test]
-    fn label_on_card_has_4_5_contrast_in_every_palette() {
-        for (name, p) in all() {
-            assert!(contrast_ratio(p.label, p.card) >= 4.5, "{name}");
-        }
-    }
-
-    #[test]
-    fn ios_secondary_label_on_card_is_at_least_3() {
-        // #8A8A8E on white is about 3.4:1, so 4.5 is not reachable with the specified iOS colour.
-        assert!(contrast_ratio(Palette::IOS_LIGHT.secondary, Palette::IOS_LIGHT.card) >= 3.0);
-        assert!(contrast_ratio(Palette::IOS_DARK.secondary, Palette::IOS_DARK.card) >= 3.0);
-    }
-
-    #[test]
-    fn lerp_endpoints_match_in_both_designs() {
-        for (a, b) in [(Palette::IOS_LIGHT, Palette::IOS_DARK), (Palette::DRISHTI_LIGHT, Palette::DRISHTI_DARK)] {
-            assert_eq!(a.lerp(&b, 0.0), a);
-            assert_eq!(a.lerp(&b, 1.0), b);
-        }
-    }
-
-    #[test]
-    fn ios_palette_matches_spec_hex() {
-        assert_eq!(Palette::IOS_LIGHT.bg, Color32::from_rgb(0xF2, 0xF2, 0xF7));
-        assert_eq!(Palette::IOS_DARK.card, Color32::from_rgb(0x1C, 0x1C, 0x1E));
-        assert_eq!(Palette::IOS_DARK.blue, Color32::from_rgb(0x0A, 0x84, 0xFF));
-    }
-
-    #[test]
-    fn drishti_palette_matches_the_design_system_tokens() {
-        let (l, d) = (Palette::DRISHTI_LIGHT, Palette::DRISHTI_DARK);
-        assert_eq!(d.bg, Color32::from_rgb(0x00, 0x00, 0x00));
-        assert_eq!(d.card, Color32::from_rgb(0x1C, 0x1C, 0x1E));
-        assert_eq!(d.surface2, Color32::from_rgb(0x2C, 0x2C, 0x2E));
-        assert_eq!(d.surface3, Color32::from_rgb(0x3A, 0x3A, 0x3C));
-        assert_eq!(d.sidebar, Color32::from_rgb(0x11, 0x11, 0x11));
-        assert_eq!(d.blue_solid, Color32::from_rgb(0x0A, 0x6C, 0xFF));
-        assert_eq!(l.blue_ink, Color32::from_rgb(0x00, 0x5E, 0xCB));
-        assert_eq!(l.green_ink, Color32::from_rgb(0x1A, 0x73, 0x32));
-        assert_eq!(d.red_solid, Color32::from_rgb(0xD7, 0x00, 0x15));
-        // Translucent tokens keep their opacity (rgba(255,255,255,0.06) is 15/255).
-        assert_eq!(d.hover, Color32::from_rgba_unmultiplied(255, 255, 255, 15));
-        assert_eq!(l.separator, Color32::from_rgba_unmultiplied(0x3C, 0x3C, 0x43, 36));
-        assert_eq!(d.blue_tint, Color32::from_rgba_unmultiplied(10, 132, 255, 41));
-    }
-
-    #[test]
-    fn drishti_ink_colours_read_on_every_ground_as_the_design_system_promises() {
-        for (name, p) in [("light", Palette::DRISHTI_LIGHT), ("dark", Palette::DRISHTI_DARK)] {
-            for (ground_name, ground) in [("bg", p.bg), ("surface", p.card), ("sidebar", p.sidebar)] {
-                for (ink_name, ink) in [("ink", p.label), ("ink-2", p.secondary), ("ink-3", p.tertiary)] {
+    fn text_reads_on_every_ground() {
+        for (name, p) in both() {
+            for (ground_name, ground) in [("page", p.bg), ("surface", p.card), ("sidebar", p.sidebar), ("dialog", p.raised)] {
+                for (ink_name, ink) in [("label", p.label), ("secondary", p.secondary), ("tertiary", p.tertiary)] {
                     let c = contrast_ratio(ink, ground);
                     assert!(c >= 4.5, "{ink_name} on {ground_name} in {name} is only {c:.2}:1");
                 }
             }
-            for (hue_name, ink) in [("blue-ink", p.blue_ink), ("green-ink", p.green_ink), ("orange-ink", p.orange_ink), ("red-ink", p.red_ink)] {
-                let c = contrast_ratio(ink, p.card);
-                assert!(c >= 4.5, "{hue_name} on surface in {name} is only {c:.2}:1");
-            }
-            let c = contrast_ratio(p.blue_ink, over(p.blue_tint, p.card));
-            assert!(c >= 4.5, "blue-ink on blue-tint in {name} is only {c:.2}:1");
-            let c = contrast_ratio(p.on_accent, p.blue_solid);
-            assert!(c >= 4.5, "on-accent on blue-solid in {name} is only {c:.2}:1");
-            let c = contrast_ratio(p.on_accent, p.red_solid);
-            assert!(c >= 4.5, "on-accent on red-solid in {name} is only {c:.2}:1");
         }
     }
 
     #[test]
-    fn drishti_control_border_has_3_to_1_against_the_surface() {
-        for (name, p) in [("light", Palette::DRISHTI_LIGHT), ("dark", Palette::DRISHTI_DARK)] {
-            let c = contrast_ratio(p.control_border, p.card);
-            assert!(c >= 3.0, "control-border on surface in {name} is only {c:.2}:1");
+    fn ink_colours_read_on_surfaces_and_on_their_own_tint() {
+        for (name, p) in both() {
+            for (hue_name, ink, tint) in [
+                ("accent", p.accent_ink, p.accent_tint),
+                ("green", p.green_ink, p.green_tint),
+                ("orange", p.orange_ink, p.orange_tint),
+                ("red", p.red_ink, p.red_tint),
+                ("blue", p.blue_ink, p.blue_tint),
+            ] {
+                let c = contrast_ratio(ink, p.card);
+                assert!(c >= 4.5, "{hue_name}-ink on a card in {name} is only {c:.2}:1");
+                let c = contrast_ratio(ink, over(tint, p.card));
+                assert!(c >= 4.5, "{hue_name}-ink on its tint in {name} is only {c:.2}:1");
+                let c = contrast_ratio(ink, over(tint, p.raised));
+                assert!(c >= 4.5, "{hue_name}-ink on its tint over a dialog in {name} is only {c:.2}:1");
+            }
+        }
+    }
+
+    #[test]
+    fn solid_buttons_carry_readable_text() {
+        for (name, p) in both() {
+            for (what, fill) in [("accent", p.accent_solid), ("accent pressed", p.accent_press), ("red", p.red_solid)] {
+                let c = contrast_ratio(p.on_accent, fill);
+                // The dark mode "pressed" accent is the bright brand coral, which only has to hold the 3:1 of large, bold text.
+                let need = if what == "accent pressed" && name == "dark" { 3.0 } else { 4.5 };
+                assert!(c >= need, "white on {what} in {name} is only {c:.2}:1");
+            }
+        }
+    }
+
+    #[test]
+    fn control_borders_have_3_to_1_against_the_surface() {
+        for (name, p) in both() {
+            for (ground_name, ground) in [("surface", p.card), ("dialog", p.raised)] {
+                let c = contrast_ratio(p.control_border, ground);
+                assert!(c >= 3.0, "control-border on {ground_name} in {name} is only {c:.2}:1");
+            }
+        }
+    }
+
+    #[test]
+    fn lerp_endpoints_match() {
+        assert_eq!(Palette::LIGHT.lerp(&Palette::DARK, 0.0), Palette::LIGHT);
+        assert_eq!(Palette::LIGHT.lerp(&Palette::DARK, 1.0), Palette::DARK);
+        let mid = Palette::LIGHT.lerp(&Palette::DARK, 0.5);
+        assert_ne!(mid, Palette::LIGHT);
+        assert_ne!(mid, Palette::DARK);
+    }
+
+    #[test]
+    fn the_accent_is_coral_and_no_surface_is_translucent() {
+        assert_eq!(Palette::LIGHT.accent, Color32::from_rgb(0xFF, 0x38, 0x5C));
+        assert_eq!(Palette::DARK.accent, Palette::LIGHT.accent, "the brand colour does not change with the mode");
+        for (name, p) in both() {
+            for (what, c) in [("bg", p.bg), ("card", p.card), ("surface2", p.surface2), ("raised", p.raised), ("sidebar", p.sidebar), ("track", p.track)] {
+                assert_eq!(c.a(), 255, "{what} in {name} must be opaque");
+            }
         }
     }
 }

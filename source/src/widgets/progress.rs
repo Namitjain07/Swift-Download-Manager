@@ -33,7 +33,7 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
         p.rect_filled(fill, capsule(fill), tint);
     }
     if let Some(t) = text {
-        p.text(rect.center(), Align2::CENTER_CENTER, t, FontId::proportional(theme::design(&ctx).caption), pal.label);
+        p.text(rect.center(), Align2::CENTER_CENTER, t, FontId::new(theme::design(&ctx).caption, theme::semibold()), pal.label);
     }
 }
 
@@ -41,8 +41,8 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
 pub fn segment_bar(ui: &mut Ui, frac: f32, total: u64, segs: &[Segment]) {
     let id = ui.next_auto_id();
     let pal = theme::current(ui.ctx());
-    capsule_bar(ui, id, frac, pal.green_ink, 18.0, Some(&format!("{:.1}%", frac * 100.0)));
-    ui.add_space(4.0);
+    capsule_bar(ui, id, frac, pal.accent, 8.0, None);
+    ui.add_space(2.0);
     let w = ui.available_width();
     let (strip, _) = ui.allocate_exact_size(egui::vec2(w, 10.0), Sense::hover());
     let p = ui.painter();
@@ -66,7 +66,7 @@ pub fn segment_bar(ui: &mut Ui, frac: f32, total: u64, segs: &[Segment]) {
                 cr.ne = 5;
                 cr.se = 5;
             }
-            p.rect_filled(r.shrink2(egui::vec2(0.5, 0.0)), cr, pal.blue_ink);
+            p.rect_filled(r.shrink2(egui::vec2(0.5, 0.0)), cr, pal.accent_ink);
         }
     }
 }

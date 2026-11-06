@@ -13,8 +13,8 @@ mod view;
 
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
-use crate::theme::{self, ThemeMode, ThemeStyle};
-use eframe::egui::{self, Color32};
+use crate::theme::{self, ThemeMode};
+use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -211,8 +211,6 @@ pub struct Settings {
     pub site_logins: Vec<SiteLogin>,
     /// Automatic, Light or Dark (View > Appearance).
     pub theme: ThemeMode,
-    /// Drishti or iOS (View > Appearance).
-    pub theme_style: ThemeStyle,
     /// Cards or the classic table (View > Show downloads as).
     pub view: layout::ViewMode,
     /// What closing the window does (Options > Background).
@@ -253,8 +251,7 @@ impl Default for Settings {
             queues: vec![QueueDef::default()],
             categories: default_categories(),
             site_logins: Vec::new(),
-            theme: ThemeMode::Dark,
-            theme_style: ThemeStyle::Drishti,
+            theme: ThemeMode::System,
             view: layout::ViewMode::Cards,
             background: closing::BackgroundMode::Ask,
             launch_at_login: false,
@@ -517,8 +514,6 @@ pub struct Launch {
     pub start_url: Option<String>,
     /// Forces a theme for this run only.
     pub theme: Option<ThemeMode>,
-    /// Forces a design for this run only.
-    pub style: Option<ThemeStyle>,
     /// Opens one window at start-up (screenshots).
     pub show: Option<String>,
     /// No window: the engine runs for an MCP client. No browser listener or clipboard watching.
@@ -571,7 +566,6 @@ pub struct App {
     toast: Option<(String, Instant)>,
     /// Forces a theme for this run only (`--theme`), without touching the saved choice.
     theme_override: Option<ThemeMode>,
-    style_override: Option<ThemeStyle>,
     config_dir: PathBuf,
     /// Running without a window (MCP engine).
     headless: bool,
@@ -591,6 +585,8 @@ pub struct App {
     quitting: bool,
     /// The "keep downloading?" question is showing.
     ask_close: bool,
+    /// `--show menus`: draw the rows of some menus on the page, for screenshots (menus are pop-ups, which a screenshot cannot open).
+    menu_preview: bool,
     remember_close: bool,
     ctx: egui::Context,
 }
@@ -599,6 +595,8 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
+        // The bundled fonts are ready before the first frame, so nothing is ever drawn in a stand-in font.
+        theme::install_fonts(&cc.egui_ctx);
         Self::build(cc.egui_ctx.clone(), launch)
     }
 
@@ -608,7 +606,7 @@ impl App {
     }
 
     pub(crate) fn build(ctx: egui::Context, launch: Launch) -> Self {
-        let Launch { screenshot, demo, start_url, theme: theme_override, style: style_override, show, headless, config_dir } = launch;
+        let Launch { screenshot, demo, start_url, theme: theme_override, show, headless, config_dir } = launch;
         let mut app = App {
             items: Vec::new(),
             next_id: 1,
@@ -636,6 +634,7 @@ impl App {
             drawer_open: false,
             quitting: false,
             ask_close: false,
+            menu_preview: false,
             remember_close: false,
             browser_open: false,
             show_categories: true,
@@ -649,10 +648,10 @@ impl App {
             last_schedule_check: Instant::now(),
             inbox: Arc::new(Mutex::new(Vec::new())),
             clipboard_on: Arc::new(AtomicBool::new(false)),
-            listener: Err("off".into()),
+            // The sample window (--demo, screenshots) shows the add-on as connected.
+            listener: if demo { Ok(()) } else { Err("off".into()) },
             toast: None,
             theme_override,
-            style_override,
             config_dir: config_dir.unwrap_or_else(default_config_dir),
             headless,
             control_rx: None,
@@ -736,6 +735,10 @@ impl App {
             "ai" => self.ai_open = true,
             "drawer" => self.drawer_open = true,
             "close" => self.ask_close = true,
+            "menus" => {
+                self.menu_preview = true;
+                self.toast("Address copied");
+            }
             "table" => self.settings.view = layout::ViewMode::Table,
             "grabber" => self.open_grabber(),
             other => eprintln!("unknown window: {other}"),
@@ -925,19 +928,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn old_settings_without_theme_still_load_with_the_new_defaults() {
+    fn old_settings_without_theme_still_load_and_follow_the_system() {
         let s: Settings = serde_json::from_str(r#"{"connections":4}"#).unwrap();
-        assert_eq!(s.theme, crate::theme::ThemeMode::Dark, "the design system is dark first");
-        assert_eq!(s.theme_style, crate::theme::ThemeStyle::Drishti, "Drishti is the default design");
+        assert_eq!(s.theme, crate::theme::ThemeMode::System, "a new install follows the system's light or dark");
         assert_eq!(s.connections, 4);
     }
 
     #[test]
-    fn a_saved_choice_of_the_ios_design_and_light_mode_is_kept() {
-        let s: Settings = serde_json::from_str(r#"{"theme":"Light","theme_style":"Ios"}"#).unwrap();
-        assert_eq!((s.theme, s.theme_style), (crate::theme::ThemeMode::Light, crate::theme::ThemeStyle::Ios));
+    fn a_saved_mode_is_kept() {
+        let s: Settings = serde_json::from_str(r#"{"theme":"Light"}"#).unwrap();
+        assert_eq!(s.theme, crate::theme::ThemeMode::Light);
         let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
-        assert_eq!((back.theme, back.theme_style), (s.theme, s.theme_style));
+        assert_eq!(back.theme, s.theme);
+    }
+
+    #[test]
+    fn settings_saved_by_the_two_design_versions_still_load() {
+        // Versions 1.3 to 1.6 stored a design name ("Drishti" or "Ios"). It is ignored now, and the
+        // rest of the file (above all the download list) must still be read.
+        for old in [r#"{"theme":"Dark","theme_style":"Drishti","connections":6}"#, r#"{"theme":"Dark","theme_style":"Ios","connections":6}"#] {
+            let s: Settings = serde_json::from_str(old).unwrap();
+            assert_eq!((s.theme, s.connections), (crate::theme::ThemeMode::Dark, 6), "{old}");
+        }
+        let state: SavedState = serde_json::from_str(r#"{"settings":{"theme_style":"Ios"},"next_id":5,"items":[]}"#).unwrap();
+        assert_eq!(state.next_id, 5);
     }
 
     #[test]

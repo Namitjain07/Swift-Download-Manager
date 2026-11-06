@@ -4,13 +4,38 @@ use super::layout::{card_columns, card_width, Breakpoint, CARD_GAP};
 use super::view::row_menu;
 use super::*;
 use crate::icons::{self, Icon};
-use crate::widgets::{anim, capsule_bar, empty_state, icon_button_at, paint_state_chip, spinner, stat_tile, Hue};
-use eframe::egui::{Align2, CornerRadius, FontId, Rect, Sense, Stroke, StrokeKind, Vec2};
+use crate::theme::Elevation;
+use crate::widgets::{anim, capsule_bar, empty_state, icon_button_at, paint_state_chip, spinner, stat_tile, truncated, Hue};
+use eframe::egui::{CornerRadius, FontId, Rect, Sense, Stroke, StrokeKind, Vec2};
 
 /// Height of one download card.
-const CARD_H: f32 = 112.0;
+pub const CARD_H: f32 = 120.0;
 const PAD: f32 = 16.0;
 const TILE: f32 = 44.0;
+/// Side of the round buttons at the bottom right of a card.
+const BUTTON: f32 = 32.0;
+/// Gap between the round buttons.
+const BUTTON_GAP: f32 = 2.0;
+/// Top and height of the progress bar, measured from the top of the card.
+const BAR_Y: f32 = 68.0;
+const BAR_H: f32 = 6.0;
+/// Space under the row of buttons.
+const BOTTOM_PAD: f32 = 10.0;
+
+/// The vertical middle of the status line and of the buttons next to it.
+fn line_center_y(card: Rect) -> f32 {
+    card.bottom() - BOTTOM_PAD - BUTTON / 2.0
+}
+
+/// Where the three round buttons of a card go, left to right.
+fn button_rects(card: Rect) -> [Rect; 3] {
+    let right = card.right() - PAD;
+    let cy = line_center_y(card);
+    std::array::from_fn(|n| {
+        let x = right - BUTTON * (3 - n) as f32 - BUTTON_GAP * (2 - n) as f32;
+        Rect::from_center_size(egui::pos2(x + BUTTON / 2.0, cy), Vec2::splat(BUTTON))
+    })
+}
 
 /// What happened in the cards this frame. The state is changed after drawing.
 #[derive(Default)]
@@ -35,10 +60,10 @@ impl App {
         let w = card_width(ui.available_width(), 4);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = CARD_GAP;
-            stat_tile(ui, w, "Speed", &speed_text, &unit, pal.blue_ink);
-            stat_tile(ui, w, "Active", &active.len().to_string(), "downloads", pal.green_ink);
-            stat_tile(ui, w, "Queued", &count(Status::Queued).to_string(), "waiting", pal.label);
-            stat_tile(ui, w, "Finished", &count(Status::Complete).to_string(), "done", pal.label);
+            stat_tile(ui, w, Icon::Speed, "Speed", &speed_text, &unit, pal.accent_ink);
+            stat_tile(ui, w, Icon::Download, "Active", &active.len().to_string(), "downloading", pal.green_ink);
+            stat_tile(ui, w, Icon::Hourglass, "Queued", &count(Status::Queued).to_string(), "waiting", pal.orange_ink);
+            stat_tile(ui, w, Icon::CheckCircle, "Finished", &count(Status::Complete).to_string(), "done", pal.blue_ink);
         });
     }
 
@@ -70,6 +95,8 @@ impl App {
         let mut ev = CardEvents::default();
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(CARD_GAP);
+            // Room for the shadows at the top and the bottom.
+            ui.add_space(2.0);
             for chunk in rows.chunks(columns) {
                 ui.horizontal(|ui| {
                     for &idx in chunk {
@@ -77,6 +104,7 @@ impl App {
                     }
                 });
             }
+            ui.add_space(8.0);
         });
         if let Some((id, m)) = ev.clicked {
             self.apply_click(&rows, id, m);
@@ -99,36 +127,38 @@ impl App {
         let hover = anim::fade(&ctx, resp.id.with("hover"), resp.hovered(), 0.15);
         let radius = CornerRadius::same(d.radius_lg);
         let p = ui.painter().clone();
-        p.rect_filled(rect, radius, pal.card);
-        if d.card_border && !selected {
-            p.rect_stroke(rect, radius, Stroke::new(1.0, theme::hairline(&ctx)), StrokeKind::Inside);
+        // The shadow grows a little under the pointer.
+        p.add(theme::shadow(&ctx, Elevation::Rest).as_shape(rect, radius));
+        if hover > 0.0 {
+            let mut s = theme::shadow(&ctx, Elevation::Hover);
+            s.color = s.color.gamma_multiply(hover);
+            p.add(s.as_shape(rect, radius));
         }
-        p.rect_filled(rect, radius, pal.hover.gamma_multiply(hover));
+        p.rect_filled(rect, radius, pal.card);
         if selected {
-            p.rect_filled(rect, radius, pal.blue_tint);
-            p.rect_stroke(rect, radius, Stroke::new(1.5, pal.blue), StrokeKind::Inside);
+            p.rect_filled(rect, radius, pal.accent_tint.gamma_multiply(0.22));
+            p.rect_stroke(rect, radius, Stroke::new(2.0, pal.accent), StrokeKind::Inside);
+        } else {
+            p.rect_stroke(rect, radius, Stroke::new(1.0, pal.separator.lerp_to_gamma(pal.separator_strong, hover)), StrokeKind::Inside);
         }
 
-        // File tile: the category colour with the file ending on it.
+        // File tile: the category colour with the category icon on it.
         let tile = Rect::from_min_size(rect.min + Vec2::splat(PAD), Vec2::splat(TILE));
-        let cat = icons::category_color(&item.category);
-        p.rect_filled(tile, CornerRadius::same(d.radius_md), cat.gamma_multiply(0.18));
-        let ext = item.name.rsplit_once('.').map(|(_, e)| e.to_uppercase()).filter(|e| !e.is_empty() && e.len() <= 4).unwrap_or_else(|| "FILE".into());
-        p.text(tile.center(), Align2::CENTER_CENTER, ext, FontId::proportional(d.caption), cat);
+        icons::file_tile(&p, tile, &item.category);
 
         let left = tile.right() + 12.0;
         let right = rect.right() - PAD;
         let (hue, status_word) = match st {
-            Status::Downloading => (Hue::Green, "Downloading"),
+            Status::Downloading => (Hue::Accent, "Downloading"),
             Status::Connecting => (Hue::Orange, "Connecting"),
             Status::Paused => (Hue::Orange, "Paused"),
-            Status::Complete => (Hue::Blue, "Complete"),
+            Status::Complete => (Hue::Green, "Complete"),
             Status::Error => (Hue::Red, "Error"),
             Status::Queued => (Hue::Neutral, "Queued"),
         };
-        let chip_w = paint_state_chip(&p, egui::pos2(right, rect.top() + PAD - 1.0), &pal, &d, hue, status_word);
+        let chip_w = paint_state_chip(&p, egui::pos2(right, rect.top() + PAD - 2.0), &pal, &d, hue, status_word);
 
-        let name = truncated(&p, &item.name, FontId::proportional(d.body), pal.label, (right - left - chip_w - 10.0).max(40.0));
+        let name = truncated(&p, &item.name, FontId::new(15.0, theme::semibold()), pal.label, (right - left - chip_w - 10.0).max(40.0));
         p.galley(egui::pos2(left, rect.top() + PAD), name, pal.label);
         let mut meta = if item.total() > 0 { human_size(item.total()) } else { "Size unknown".to_string() };
         meta.push_str(&format!(" · {}", item.category));
@@ -138,14 +168,14 @@ impl App {
         let meta = truncated(&p, &meta, FontId::proportional(d.caption), pal.tertiary, right - left);
         p.galley(egui::pos2(left, rect.top() + PAD + 24.0), meta, pal.tertiary);
 
-        // Progress.
+        // Progress, the full width of the card.
         let with_bar = st == Status::Downloading || (st == Status::Paused && item.total() > 0);
         if with_bar {
-            let bar = Rect::from_min_size(egui::pos2(left, rect.top() + PAD + 50.0), Vec2::new(right - left, 6.0));
-            let color = if st == Status::Downloading { pal.green_ink } else { pal.orange_ink };
+            let bar = Rect::from_min_size(egui::pos2(rect.left() + PAD, rect.top() + BAR_Y), Vec2::new(rect.width() - 2.0 * PAD, BAR_H));
+            let color = if st == Status::Downloading { pal.accent } else { pal.orange };
             // new_child, not scope_builder: a scope would also advance the grid's layout cursor.
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(bar));
-            capsule_bar(&mut child, egui::Id::unique(("card_bar", id)), item.progress(), color, 6.0, None);
+            capsule_bar(&mut child, egui::Id::unique(("card_bar", id)), item.progress(), color, BAR_H, None);
         }
 
         // The line under the bar: what is happening right now.
@@ -158,12 +188,13 @@ impl App {
             Status::Error => (item.live.error.lock().unwrap().clone().unwrap_or_else(|| "Something went wrong".into()), pal.red_ink),
             Status::Queued => (format!("Waiting in {}", item.queue.as_deref().unwrap_or("the list")), pal.secondary),
         };
-        let line_y = rect.top() + PAD + if with_bar || st == Status::Connecting { 66.0 } else { 52.0 };
-        let button_row = 3.0 * 32.0 + 2.0 * 4.0;
-        let line = truncated(&p, &line, FontId::proportional(d.caption), line_color, (right - left - button_row - 8.0).max(60.0));
-        p.galley(egui::pos2(left, line_y), line, line_color);
+        let line_cy = line_center_y(rect);
+        let button_row = 3.0 * BUTTON + 2.0 * BUTTON_GAP;
+        let line_x = rect.left() + PAD + if st == Status::Connecting { 22.0 } else { 0.0 };
+        let line = truncated(&p, &line, FontId::proportional(d.caption + 0.5), line_color, (right - line_x - button_row - 8.0).max(60.0));
+        p.galley(egui::pos2(line_x, line_cy - line.size().y / 2.0), line, line_color);
         if st == Status::Connecting {
-            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(egui::pos2(left, rect.top() + PAD + 48.0), Vec2::splat(16.0))));
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_center_size(egui::pos2(rect.left() + PAD + 8.0, line_cy), Vec2::splat(16.0))));
             spinner(&mut child, 14.0);
         }
 
@@ -171,12 +202,11 @@ impl App {
         let primary = match st {
             Status::Downloading | Status::Connecting => (Icon::Pause, "Pause", "stop"),
             Status::Complete => (Icon::File, "Open file", "open"),
-            _ => (Icon::Play, "Start or resume", "resume"),
+            _ => (Icon::Resume, "Start or resume", "resume"),
         };
+        let buttons = button_rects(rect);
         for (n, (icon, tip, key)) in [primary, (Icon::Folder, "Open folder", "folder"), (Icon::Close, "Remove from the list", "remove")].into_iter().enumerate() {
-            let x = right - 32.0 * (3 - n) as f32 - 4.0 * (2 - n) as f32;
-            let button = Rect::from_min_size(egui::pos2(x, rect.bottom() - PAD - 28.0), Vec2::splat(32.0));
-            if icon_button_at(ui, button, icon, tip, egui::Id::unique(("card_btn", id, key))).clicked() {
+            if icon_button_at(ui, buttons[n], icon, tip, egui::Id::unique(("card_btn", id, key))).clicked() {
                 ev.action = Some((id, key.to_string()));
             }
         }
@@ -192,16 +222,6 @@ impl App {
         }
         resp.context_menu(|ui| row_menu(ui, id, st, queue_names, &mut ev.action));
     }
-}
-
-/// One line of text cut off with an ellipsis when it does not fit `max_width`.
-fn truncated(p: &egui::Painter, text: &str, font: FontId, color: egui::Color32, max_width: f32) -> std::sync::Arc<egui::Galley> {
-    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
-    job.wrap.max_width = max_width;
-    job.wrap.max_rows = 1;
-    job.wrap.break_anywhere = true;
-    job.wrap.overflow_character = Some('…');
-    p.layout_job(job)
 }
 
 /// "4.41" and "MB/s" for a speed in bytes per second ("0" and "B/s" when idle).
@@ -227,13 +247,12 @@ mod tests {
     /// The rectangles of the painted cards (the shapes of exactly card size and card fill).
     fn painted_cards(width: f32) -> Vec<Rect> {
         let ctx = egui::Context::default();
-        let (mode, style) = (crate::theme::ThemeMode::Dark, crate::theme::ThemeStyle::Drishti);
         let mut app = App::build(ctx.clone(), Launch { demo: true, ..Default::default() });
         let input = egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, Vec2::new(width, 900.0))), ..Default::default() };
         let mut cards = Vec::new();
         for _ in 0..3 {
             let mut out = ctx.run_ui(input.clone(), |ui| {
-                crate::theme::apply(ui.ctx(), mode, style);
+                crate::theme::apply(ui.ctx(), crate::theme::ThemeMode::Light);
                 egui::CentralPanel::default().show(ui, |ui| app.cards_view(ui));
             });
             out.textures_delta.clear();
@@ -261,5 +280,32 @@ mod tests {
         // And the rows are a gap apart too.
         let below = cards.iter().find(|r| r.top() > cards[0].top() + 1.0).unwrap();
         assert!((below.top() - cards[0].bottom() - CARD_GAP).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_buttons_sit_inside_the_card_on_one_line_below_the_progress_bar() {
+        for width in [440.0, 440.0 * 2.0, 1000.0] {
+            let card = Rect::from_min_size(egui::pos2(30.0, 50.0), Vec2::new(width, CARD_H));
+            let buttons = button_rects(card);
+            let bar = Rect::from_min_size(egui::pos2(card.left() + PAD, card.top() + BAR_Y), Vec2::new(card.width() - 2.0 * PAD, BAR_H));
+            for (n, b) in buttons.iter().enumerate() {
+                assert!(card.contains_rect(*b), "button {n} {b:?} sticks out of {card:?}");
+                assert!(b.top() >= bar.bottom() + 4.0, "button {n} {b:?} touches the progress bar {bar:?}");
+                assert_eq!(b.center().y, buttons[0].center().y, "the buttons share a line");
+                assert_eq!(b.size(), Vec2::splat(BUTTON));
+            }
+            for pair in buttons.windows(2) {
+                assert_eq!(pair[1].left() - pair[0].right(), BUTTON_GAP, "an even gap between the buttons");
+            }
+            assert_eq!(card.right() - buttons[2].right(), PAD, "the last button is a card padding from the edge");
+            assert!(buttons[0].left() > card.left() + PAD + TILE, "the buttons never reach over the file tile");
+            assert!(card.bottom() - buttons[0].bottom() >= BOTTOM_PAD - 0.001);
+        }
+    }
+
+    #[test]
+    fn the_status_line_shares_its_centre_with_the_buttons() {
+        let card = Rect::from_min_size(egui::pos2(0.0, 0.0), Vec2::new(500.0, CARD_H));
+        assert_eq!(line_center_y(card), button_rects(card)[1].center().y);
     }
 }

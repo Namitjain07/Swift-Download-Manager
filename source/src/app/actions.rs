@@ -26,6 +26,9 @@ impl App {
     pub(super) fn add_download(&mut self, d: &AddDialog, start_now: bool) -> Result<u64, String> {
         let url = d.url.trim().to_string();
         Self::check_url(&url)?;
+        if d.folder.trim().is_empty() {
+            return Err("Choose the folder to save the file in.".into());
+        }
         let sha = d.expected_sha.trim().to_ascii_lowercase();
         if !sha.is_empty() && (sha.len() != 64 || !sha.chars().all(|c| c.is_ascii_hexdigit())) {
             return Err("A SHA-256 checksum has 64 letters and digits (0-9, a-f).".into());
@@ -665,6 +668,26 @@ mod tests {
         assert!(expand_pattern("https://x.org/p.jpg", 1, 2, 1).is_err());
         assert_eq!(normalize_time("7:5"), "07:05");
         assert_eq!(normalize_time("25:00"), "");
+    }
+
+    #[test]
+    fn a_download_needs_a_web_address_and_a_folder_and_a_good_checksum() {
+        let mut app = App::build(egui::Context::default(), Launch { demo: true, ..Default::default() });
+        let before = app.items.len();
+        let good = |mutate: &dyn Fn(&mut AddDialog)| {
+            let mut d = AddDialog { url: "https://example.com/a.zip".into(), name: "a.zip".into(), folder: "/tmp/sdm-test".into(), category: "Compressed".into(), queue: MAIN_QUEUE.into(), ..Default::default() };
+            mutate(&mut d);
+            d
+        };
+        let err = |app: &mut App, d: AddDialog| app.add_download(&d, false).unwrap_err();
+        assert!(err(&mut app, good(&|d| d.url = "not a link".into())).contains("doesn't look like a web address"));
+        assert!(err(&mut app, good(&|d| d.url = "ftp://example.com/a.zip".into())).contains("http"));
+        assert!(err(&mut app, good(&|d| d.folder = "   ".into())).contains("folder"), "an empty folder is refused");
+        assert!(err(&mut app, good(&|d| d.expected_sha = "abc".into())).contains("64"));
+        assert_eq!(app.items.len(), before, "nothing was added by the failures");
+        let id = app.add_download(&good(&|_| {}), false).unwrap();
+        assert_eq!(app.items.len(), before + 1);
+        assert_eq!(app.items.iter().find(|i| i.id == id).unwrap().queue.as_deref(), Some(MAIN_QUEUE));
     }
 
     #[test]
