@@ -3,7 +3,10 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.8.0] - 2026-11-06
+
+**A regular release.** Colour themes (including one after the Files app for Windows 11), a title bar that matches the theme, a picture of a download's parts flowing into one file, smoother loaders and motion, and a redesigned browser add-on (version 1.5.0). The Docker image is published as `:latest` and `:1.8.0`.
+
 
 ### Colour themes
 - **14 themes**, each in light and dark: Coral (the default, the look of 1.7.0), **Files** (after the Files app for Windows 11: 4 px corners, 32 px

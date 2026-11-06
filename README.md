@@ -203,7 +203,7 @@ docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
   ghcr.io/namitjain07/swift-download-manager:latest
 ```
 
-Open <http://localhost:8080/> and sign in. (`:latest` follows the newest stable release and `:1.7.0` pins this one; pre-releases get the `:beta` tag instead.)
+Open <http://localhost:8080/> and sign in. (`:latest` follows the newest stable release and `:1.8.0` pins this one; pre-releases get the `:beta` tag instead.)
 Everything lives in the `/data` volume: settings, accounts, the download list and the files. The image is for 64-bit Intel/AMD machines for now.
 
 Add more people:
