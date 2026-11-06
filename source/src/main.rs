@@ -46,6 +46,11 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            // Lists the networks this computer could download over (to check that a USB phone or a second card is seen).
+            "--networks" => {
+                print!("{}", netroute::describe(&netroute::interfaces()));
+                return Ok(());
+            }
             // Keep the title bar of the system instead of the app's own (for a desktop where that works better).
             "--native-title-bar" => widgets::titlebar::use_native(true),
             // Starting size of the window, for screenshots of the narrow layouts: --size 900x600

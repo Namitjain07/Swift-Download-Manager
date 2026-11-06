@@ -164,6 +164,9 @@ pub struct Job {
     pub user_agent: String,
     /// Networks to download over at the same time (Wi-Fi, Ethernet, a phone ...). Empty: the normal way out.
     pub routes: Vec<Route>,
+    /// Where to look, while the download runs, for the networks that are connected now: a cable or a phone
+    /// plugged in later is taken into use, one that is unplugged is left alone. `None`: only `routes`.
+    pub net_source: Option<crate::netroute::NetSource>,
     /// Refuse links that lead to private or local addresses (for a server that other people use).
     pub block_private: bool,
 }
@@ -235,6 +238,25 @@ fn request(job: &Job, range: &str, lease: Option<&Lease>) -> Result<ureq::http::
         req = req.header("Authorization", &format!("Basic {token}"));
     }
     req.call().map_err(|e| ReqErr { network: lease.is_some() && network_problem(&e), msg: format!("Could not connect: {e}") })
+}
+
+/// How often a running download looks again at which networks are connected.
+const NET_LOOK: Duration = if cfg!(test) { Duration::from_millis(250) } else { Duration::from_secs(2) };
+
+/// Look again at the connected networks (at most once per `NET_LOOK`) and tell the router. Returns how many
+/// networks are newly usable. An empty answer is taken as "could not tell", not as "everything was unplugged":
+/// a card that really went away shows itself by failing to connect.
+fn refresh_networks(job: &Job, router: &Router, last: &mut Instant) -> usize {
+    let Some(source) = &job.net_source else { return 0 };
+    if last.elapsed() < NET_LOOK {
+        return 0;
+    }
+    *last = Instant::now();
+    let now = source();
+    if now.is_empty() {
+        return 0;
+    }
+    router.refresh(&now)
 }
 
 /// A network for one connection. `None` when no networks were chosen: use the normal way out.
@@ -357,9 +379,12 @@ fn header(resp: &ureq::http::Response<ureq::Body>, name: &str) -> Option<String>
 fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool, String> {
     let have_segments = !live.segments.lock().unwrap().is_empty();
     let router = Router::new(job.routes.clone());
-    if router.len() > 0 {
+    if router.len() > 0 || job.net_source.is_some() {
         *live.router.lock().unwrap() = Some(router.clone());
     }
+    // A network that comes up while the download is still being set up is taken into use too.
+    let mut last_look = Instant::now() - NET_LOOK;
+    refresh_networks(job, &router, &mut last_look);
 
     // A previously split download whose part file still exists: just resume the parts.
     if have_segments && temp_path(&job.target).exists() && live.resumable.load(Ordering::SeqCst) {
@@ -370,6 +395,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
     // Probe the server (with retries). The probe goes out through one of the chosen networks.
     let mut attempt = 0;
     let (resp, mut lease) = loop {
+        refresh_networks(job, &router, &mut last_look);
         let r = take_route(&router).map_err(ReqErr::from).and_then(|lease| match request(job, "bytes=0-", lease.as_ref()) {
             Ok(r) if r.status().as_u16() >= 400 => Err(ReqErr::from(format!("Server answered {}", r.status().as_u16()))),
             Ok(r) => Ok((r, lease)),
@@ -553,8 +579,28 @@ fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, router
     drop(first);
 
     let mut err: Option<String> = None;
+    let mut last_look = Instant::now();
     while !running.is_empty() {
-        let (idx, res) = rx.recv().map_err(|_| "Internal error".to_string())?;
+        let (idx, res) = match rx.recv_timeout(NET_LOOK) {
+            Ok(done) => done,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Nothing finished for a moment: a good time to see whether a cable or a phone was plugged in.
+                if !live.stopped() && err.is_none() {
+                    let added = refresh_networks(job, router, &mut last_look);
+                    if added > 0 {
+                        // A new network is a new way out (often a new address, which a busy server may not count against us).
+                        max += added;
+                        while running.len() < max {
+                            let Some(n) = next_unstarted(&running).or_else(|| split_largest(live)) else { break };
+                            spawn(n, None);
+                            running.push(n);
+                        }
+                    }
+                }
+                continue;
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => return Err("Internal error".to_string()),
+        };
         running.retain(|i| *i != idx);
         match res {
             End::Failed(e) => {
@@ -666,7 +712,14 @@ fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: 
         let (busy, e, wait) = match reader {
             Ok(mut r) => match pump(idx, &mut r, &mut f, pos, live, limiter, &mut attempt, lease.as_ref()) {
                 Ok(()) => return End::Done,
-                Err(e) => (false, e, None),
+                Err(e) => {
+                    // The link broke while data was flowing: with other networks about, give this one a short rest
+                    // (a write error on the disk says nothing about the network, so those are left out).
+                    if router.len() > 1 && (e.starts_with("connection lost") || e.starts_with("connection closed")) {
+                        lease.iter().for_each(|l| l.fail_soft());
+                    }
+                    (false, e, None)
+                }
             },
             Err(x) => x,
         };

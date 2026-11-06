@@ -238,7 +238,7 @@ fn people_log_in_and_the_app_hears_who_they_are() {
     let a = login(&s, "anna", "correct horse");
     assert_eq!(a.code, 200);
     let cookie = a.cookie().unwrap();
-    assert_eq!(get(&s, "/api/me", &cookie).json(), json!({ "user": "anna", "admin": false, "shared": true }));
+    assert_eq!(get(&s, "/api/me", &cookie).json(), json!({ "user": "anna", "admin": false, "shared": true, "tokens": true }));
 
     // A person cannot claim to be somebody else.
     post(&s, "/api/downloads", &cookie, r#"{"url":"https://e.com/a.zip","owner":"root","who":"root","user":"root"}"#);
@@ -365,6 +365,8 @@ fn the_path_of_a_file_comes_only_from_the_app() {
     let c = personal_session(&s);
     assert_eq!(get(&s, "/files/1?path=/etc/passwd", &c).code, 404, "the file the app named is missing");
 }
+
+include!("api_tests.rs");
 
 #[test]
 fn dropping_the_handle_closes_the_door() {

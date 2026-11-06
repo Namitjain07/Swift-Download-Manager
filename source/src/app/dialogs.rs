@@ -208,7 +208,7 @@ impl App {
                         // With several networks chosen: what each one is carrying.
                         let nets = item.live.router.lock().unwrap().as_ref().map(|r| r.status());
                         for n in nets.into_iter().flatten() {
-                            let text = if n.resting { "not working, resting".to_string() } else { format!("{} · {} connections", human_speed(n.bytes_per_sec), n.connections) };
+                            let text = if n.gone { "not connected".to_string() } else if n.resting { "not working, resting".to_string() } else { format!("{} · {} connections", human_speed(n.bytes_per_sec), n.connections) };
                             kv_text(ui, &format!("Network {}", n.name), &text);
                         }
                         kv_text(
@@ -529,24 +529,32 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
         if !s.multi_network {
             return;
         }
+        g.toggle("Use every connected network automatically", Some("Also a network you plug in later, such as a phone with USB tethering. Stands back while a VPN is connected."), &mut s.networks_auto);
         if nets.is_empty() {
             g.custom(48.0, |ui| {
                 ui.label("No connected network found.");
             });
         }
         for n in &nets {
-            let mut on = s.networks.contains(&n.name);
+            // By hand the switch means "use it"; in automatic mode it means "do not leave it out".
+            let mut on = if s.networks_auto { !s.networks_off.contains(&n.name) } else { s.networks.contains(&n.name) };
             let sub = format!("{} · {}", n.kind.label(), n.addr);
             if g.row(&n.name, Some(&sub), switch_w, |ui| switch(ui, &mut on)).changed() {
-                s.networks.retain(|x| x != &n.name);
-                if on {
-                    s.networks.push(n.name.clone());
+                let list = if s.networks_auto { &mut s.networks_off } else { &mut s.networks };
+                list.retain(|x| x != &n.name);
+                if on != s.networks_auto {
+                    list.push(n.name.clone());
                 }
             }
         }
     });
     if s.multi_network {
-        hint(ui, "Pick two or more. Each download then uses every picked network at once and their speeds add up; a network that drops out is skipped. Takes effect when a download starts.");
+        let text = if s.networks_auto {
+            "Every download uses all the connected networks at once and their speeds add up. Switch a network off to leave it out (for a phone on a metered plan). A network that is plugged in or drops out while a download runs is picked up or skipped within a few seconds."
+        } else {
+            "Pick two or more. Each download then uses every picked network at once and their speeds add up. A picked network that is plugged in or drops out while a download runs is picked up or skipped within a few seconds."
+        };
+        hint(ui, text);
     }
 }
 

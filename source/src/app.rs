@@ -225,6 +225,10 @@ pub struct Settings {
     pub multi_network: bool,
     /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
     pub networks: Vec<String>,
+    /// Use every connected network, also ones plugged in later, except those in `networks_off` (Options > Networks).
+    pub networks_auto: bool,
+    /// Networks that automatic mode never uses (a phone on a metered plan, say).
+    pub networks_off: Vec<String>,
     /// Let a browser on this computer use the downloads (Options > Web interface).
     pub web_enabled: bool,
     pub web_port: u16,
@@ -261,6 +265,8 @@ impl Default for Settings {
             mcp_enabled: true,
             multi_network: false,
             networks: Vec::new(),
+            networks_auto: false,
+            networks_off: Vec::new(),
             web_enabled: false,
             web_port: 9615,
             block_private: false,

@@ -487,3 +487,72 @@ fn private_addresses_are_fine_when_not_refused() {
     go(job(srv.url("/range/file.bin"), out.clone()), &live, &Arc::new(Limiter::new()));
     assert_eq!(wait(&live, 30), Status::Complete);
 }
+
+// --- networks that come and go while a download runs ----------------------------------------------
+
+fn named(name: &str, ip: &str) -> Route {
+    Route { name: name.into(), addr: ip.parse().unwrap(), index: None }
+}
+
+#[test]
+fn a_network_plugged_in_while_the_download_runs_is_taken_into_use() {
+    if !aliases_work() {
+        eprintln!("skipped: no 127.0.0.2 / 127.0.0.3 here");
+        return;
+    }
+    let srv = server();
+    let out = dir("hot-plug").join("file.bin");
+    let live = fresh();
+    let (wifi, usb) = (named("Wi-Fi", "127.0.0.2"), named("USB", "127.0.0.3"));
+    // At first only Wi-Fi is there; half a second into the download the phone is plugged in.
+    let t0 = Instant::now();
+    let source: crate::netroute::NetSource = {
+        let (wifi, usb) = (wifi.clone(), usb.clone());
+        Arc::new(move || if t0.elapsed() > Duration::from_millis(500) { vec![wifi.clone(), usb.clone()] } else { vec![wifi.clone()] })
+    };
+    // The "slow" server paces every connection, so the download lasts long enough for the phone to matter.
+    let j = Job { routes: vec![wifi], net_source: Some(source), connections: 2, ..job(srv.url("/slow/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 60), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data, "byte for byte, whichever network carried it");
+    assert!(srv.sent_to("127.0.0.2") > 0, "Wi-Fi carried part of it");
+    assert!(srv.sent_to("127.0.0.3") > 0, "the phone, plugged in later, carried part of it: {:?}", srv.peers());
+    assert!(!srv.peers().contains(&"127.0.0.1".parse().unwrap()), "nothing went out the normal way");
+}
+
+#[test]
+fn a_network_source_that_cannot_tell_changes_nothing() {
+    if !aliases_work() {
+        eprintln!("skipped: no 127.0.0.2 / 127.0.0.3 here");
+        return;
+    }
+    let srv = server();
+    let out = dir("source-silent").join("file.bin");
+    let live = fresh();
+    // The source always answers with an empty list (the system could not list its cards): that must not be read as
+    // "everything was unplugged".
+    let source: crate::netroute::NetSource = Arc::new(Vec::new);
+    let j = Job { routes: vec![named("Wi-Fi", "127.0.0.2"), named("USB", "127.0.0.3")], net_source: Some(source), connections: 2, ..job(srv.url("/slow/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 60), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+    assert!(srv.sent_to("127.0.0.2") > 0 && srv.sent_to("127.0.0.3") > 0, "both networks kept working");
+}
+
+#[test]
+fn a_download_that_starts_with_no_network_chosen_still_uses_one_that_appears_before_the_first_request() {
+    if !aliases_work() {
+        eprintln!("skipped: no 127.0.0.2 here");
+        return;
+    }
+    let srv = server();
+    let out = dir("appears-at-start").join("file.bin");
+    let live = fresh();
+    // Nothing was connected when the download was started, but by the time it looks, Wi-Fi is there.
+    let source: crate::netroute::NetSource = Arc::new(|| vec![named("Wi-Fi", "127.0.0.2")]);
+    let j = Job { routes: Vec::new(), net_source: Some(source), ..job(srv.url("/range/file.bin"), out.clone()) };
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 30), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+    assert!(srv.peers().iter().all(|p| *p == "127.0.0.2".parse::<IpAddr>().unwrap()), "{:?}", srv.peers());
+}

@@ -18,6 +18,22 @@ pub enum Command {
     Remove { id: u64 },
     /// Not a tool: where a finished file is, so the web interface can send it to a browser.
     Locate { id: u64 },
+    /// Not a tool (web interface): several links at once. Each one gets its own answer.
+    AddMany { urls: Vec<String>, category: Option<String>, queue: Option<String>, start: Option<bool> },
+    /// Not a tool (web interface): pause everything of this person's that is running or waiting.
+    PauseAll,
+    /// Not a tool (web interface): carry on with everything of this person's that is paused or failed.
+    ResumeAll,
+    /// Not a tool (web interface): take this person's finished downloads off the list (files are never touched).
+    ClearCompleted,
+    /// Not a tool (web interface, administrators): the networks of this computer and how they are used.
+    ListNetworks,
+    /// Not a tool (web interface, administrators): choose which networks downloads use.
+    SetNetworks { on: Option<bool>, auto: Option<bool>, names: Option<Vec<String>>, off: Option<Vec<String>> },
+    /// Not a tool (web interface, administrators): the overall speed limit in KB/s; 0 or nothing switches it off.
+    SetSpeedLimit { kbps: Option<u64> },
+    /// Not a tool (web interface, administrators): what each person has downloaded.
+    Usage,
     /// Not a tool: a window that is starting asks a windowless engine to let go of the downloads.
     Handoff,
 }

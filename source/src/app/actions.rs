@@ -90,17 +90,26 @@ impl App {
         Ok(urls.len())
     }
 
-    /// The networks to download over: the cards chosen in Options > Networks that are connected right now.
-    fn chosen_routes(&self) -> Vec<crate::netroute::Route> {
-        if !self.settings.multi_network || self.demo {
-            return Vec::new();
+    /// What Options > Networks says (nothing at all in the sample window).
+    pub(crate) fn net_choice(&self) -> crate::netroute::Choice {
+        let s = &self.settings;
+        crate::netroute::Choice { on: s.multi_network && !self.demo, auto: s.networks_auto, names: s.networks.clone(), off: s.networks_off.clone() }
+    }
+
+    /// The networks to download over: the ones Options > Networks asks for that are connected right now, and
+    /// a way for the download to look again later (a cable or a phone plugged in while it runs is used too).
+    fn chosen_routes(&self) -> (Vec<crate::netroute::Route>, Option<crate::netroute::NetSource>) {
+        let choice = self.net_choice();
+        if !choice.on {
+            return (Vec::new(), None);
         }
-        crate::netroute::resolve(&self.settings.networks, &crate::netroute::interfaces())
+        let routes = choice.routes(&crate::netroute::interfaces());
+        (routes, Some(std::sync::Arc::new(move || choice.routes(&crate::netroute::interfaces()))))
     }
 
     pub(super) fn start_item(&mut self, id: u64) {
         let logins = self.settings.site_logins.clone();
-        let routes = self.chosen_routes();
+        let (routes, net_source) = self.chosen_routes();
         let Some(item) = self.items.iter_mut().find(|i| i.id == id) else { return };
         if item.status().is_active() || item.status() == Status::Complete {
             return;
@@ -131,6 +140,7 @@ impl App {
             cookies: item.cookies.clone(),
             user_agent: item.user_agent.clone(),
             routes,
+            net_source,
             block_private: self.settings.block_private,
         };
         engine::start(job, item.live.clone(), item.limiter.clone(), self.ctx.clone());
