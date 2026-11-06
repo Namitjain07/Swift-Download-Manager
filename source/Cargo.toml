@@ -1,6 +1,6 @@
 [package]
 name = "swift_download_manager"
-version = "1.7.0"
+version = "1.8.0"
 edition = "2024"
 description = "Swift Download Manager: a fast download manager with split downloads, pause/resume, queues, scheduler and browser add-on"
 license = "MIT"
