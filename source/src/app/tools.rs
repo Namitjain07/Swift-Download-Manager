@@ -593,7 +593,7 @@ impl App {
                     let icon = about_icon.get_or_insert_with(|| ctx.load_texture("about-icon", egui::ColorImage::from_rgba_unmultiplied([128, 128], &crate::appicon::rgba(128)), egui::TextureOptions::LINEAR));
                     ui.add(egui::Image::new((icon.id(), egui::vec2(80.0, 80.0))));
                     ui.add_space(8.0);
-                    ui.label(RichText::new(APP_NAME).size(theme::DESIGN.heading - 2.0).family(theme::semibold()).color(pal.label));
+                    ui.label(RichText::new(APP_NAME).size(theme::design(ctx).heading - 2.0).family(theme::semibold()).color(pal.label));
                     ui.label(RichText::new(format!("Version {}, written in Rust", env!("CARGO_PKG_VERSION"))).color(pal.tertiary));
                     ui.add_space(10.0);
                     ui.add(egui::Label::new(RichText::new("Splits each download into several connections, re-splits as parts finish, retries broken connections, pauses and resumes, keeps a scheduled queue and works with your browser and clipboard.").color(pal.secondary)).wrap());

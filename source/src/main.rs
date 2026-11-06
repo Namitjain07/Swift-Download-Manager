@@ -34,6 +34,7 @@ fn main() -> eframe::Result<()> {
     let mut screenshot: Option<PathBuf> = None;
     let mut demo = false;
     let mut theme: Option<theme::ThemeMode> = None;
+    let mut color_theme: Option<theme::ColorTheme> = None;
     let mut show: Option<String> = None;
     let mut size = [1180.0f32, 680.0];
     let mut start_url: Option<String> = None;
@@ -65,6 +66,14 @@ fn main() -> eframe::Result<()> {
                     "dark" => Some(theme::ThemeMode::Dark),
                     _ => None,
                 };
+                i += 1;
+            }
+            // Forces a colour theme for this run, for screenshots: --color-theme files|carbon|blue|green|black|purple|pink|...
+            "--color-theme" if i + 1 < args.len() => {
+                color_theme = theme::ColorTheme::from_id(&args[i + 1]);
+                if color_theme.is_none() {
+                    eprintln!("unknown colour theme {:?}; try one of: {}", args[i + 1], theme::ColorTheme::ALL.map(|t| t.id()).join(", "));
+                }
                 i += 1;
             }
             "--write-icon" if i + 1 < args.len() => {
@@ -107,7 +116,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         app::APP_NAME,
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, show, ..Default::default() })))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, color_theme, show, ..Default::default() })))),
     )
 }
 

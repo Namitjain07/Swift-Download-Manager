@@ -7,14 +7,13 @@ use crate::icons::{self, Icon};
 use crate::theme::{self, Elevation};
 use eframe::egui::{self, vec2, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, Ui, Vec2};
 
-/// Size of an icon button's hit area.
-pub const ICON_BUTTON: f32 = 36.0;
 /// Height of a summary tile.
 pub const STAT_TILE_H: f32 = 84.0;
 
 /// A round button with an icon. Hover shows a soft grey disc; the tooltip says what it does.
 pub fn icon_button(ui: &mut Ui, icon: Icon, tip: &str) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(ICON_BUTTON), if ui.is_enabled() { Sense::click() } else { Sense::hover() });
+    let side = theme::design(ui.ctx()).icon_btn;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(side), if ui.is_enabled() { Sense::click() } else { Sense::hover() });
     paint_icon_button(ui, rect, &resp, icon, None);
     resp.on_hover_text(tip)
 }
@@ -27,9 +26,9 @@ pub fn icon_button_primary(ui: &mut Ui, icon: Icon, tip: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(d.control_h), if enabled { Sense::click() } else { Sense::hover() });
     let hover = fade(&ctx, resp.id.with("hover"), enabled && resp.hovered(), 0.12);
     let press = fade(&ctx, resp.id.with("press"), enabled && resp.is_pointer_button_down_on(), 0.08);
-    let r = rect.width() / 2.0 * (1.0 - 0.03 * press);
+    let side = rect.width() * (1.0 - 0.03 * press);
     let p = ui.painter();
-    p.circle_filled(rect.center(), r, pal.accent_solid.lerp_to_gamma(pal.accent_press, hover.max(press)));
+    p.rect_filled(Rect::from_center_size(rect.center(), Vec2::splat(side)), CornerRadius::same(d.round(side)), pal.accent_solid.lerp_to_gamma(pal.accent_press, hover.max(press)));
     icons::draw_weight(p, Rect::from_center_size(rect.center(), Vec2::splat(22.0)), icon, pal.on_accent, enabled, false);
     resp.on_hover_text(tip)
 }
@@ -48,9 +47,10 @@ fn paint_icon_button(ui: &Ui, rect: Rect, resp: &Response, icon: Icon, tint: Opt
     let hover = fade(ctx, resp.id.with("hover"), enabled && resp.hovered(), 0.12);
     let press = fade(ctx, resp.id.with("press"), enabled && resp.is_pointer_button_down_on(), 0.08);
     let c = rect.center();
-    let r = rect.width().min(rect.height()) / 2.0 * (1.0 - 0.04 * press);
+    let side = rect.width().min(rect.height()) * (1.0 - 0.04 * press);
+    let d = theme::design(ctx);
     let p = ui.painter();
-    p.circle_filled(c, r, pal.hover.gamma_multiply(hover).lerp_to_gamma(pal.press, press));
+    p.rect_filled(Rect::from_center_size(c, Vec2::splat(side)), CornerRadius::same(d.round(side)), pal.hover.gamma_multiply(hover).lerp_to_gamma(pal.press, press));
     icons::draw(p, Rect::from_center_size(c, Vec2::splat(20.0)), icon, tint.unwrap_or(pal.secondary.lerp_to_gamma(pal.label, hover)), enabled);
 }
 
@@ -73,11 +73,11 @@ pub fn icon_segmented<T: PartialEq + Copy>(ui: &mut Ui, options: &[(T, Icon, &st
     let selected = options.iter().position(|(v, _, _)| v == value).unwrap_or(0);
     let x = super::anim::glide(&ctx, resp.id.with("thumb"), inner.left() + item.x * selected as f32, 0.16);
     let p = ui.painter();
-    let full = CornerRadius::same((d.control_h / 2.0) as u8);
+    let full = CornerRadius::same(d.round(d.control_h));
     p.rect_filled(rect, full, pal.surface2);
     let thumb = Rect::from_min_size(egui::pos2(x, inner.top()), item);
-    p.add(theme::shadow(&ctx, Elevation::Rest).as_shape(thumb, CornerRadius::same((item.y / 2.0) as u8)));
-    p.rect_filled(thumb, CornerRadius::same((item.y / 2.0) as u8), pal.segment_on);
+    p.add(theme::shadow(&ctx, Elevation::Rest).as_shape(thumb, CornerRadius::same(d.round(item.y))));
+    p.rect_filled(thumb, CornerRadius::same(d.round(item.y)), pal.segment_on);
     for (i, (_, icon, _)) in options.iter().enumerate() {
         let c = Pos2::new(inner.left() + item.x * (i as f32 + 0.5), inner.center().y);
         let tint = if i == selected { pal.label } else { pal.tertiary };
@@ -159,7 +159,7 @@ mod tests {
             });
             out.textures_delta.clear();
         }
-        assert_eq!(a.size(), Vec2::splat(ICON_BUTTON));
+        assert_eq!(a.size(), Vec2::splat(theme::DESIGN.icon_btn));
         assert_eq!(b.height(), theme::DESIGN.control_h, "the segmented control is as tall as a button");
         assert!((a.center().y - b.center().y).abs() < 0.01, "and they share a centre line");
     }

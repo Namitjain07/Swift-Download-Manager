@@ -11,6 +11,7 @@ pub mod field;
 #[cfg(test)]
 mod interaction;
 pub mod menu;
+pub mod picker;
 pub mod progress;
 pub mod segmented;
 pub mod spinner;
@@ -23,6 +24,7 @@ pub use components::{empty_state, icon_button, icon_button_at, icon_button_prima
 pub use dialog::{check_row, plain_button, primary_button, secondary_button, sheet, truncated};
 pub use field::{dropdown, field, field_full, field_multiline, number_field, search_field, stepper};
 pub use menu::{menu_caption, menu_check_row, menu_danger_item, menu_icon_item, menu_item, menu_separator, menu_submenu, menu_toggle, menu_width};
+pub use picker::theme_picker;
 pub use progress::{capsule_bar, segment_bar};
 pub use segmented::{segmented, segmented_width};
 pub use spinner::spinner;
@@ -138,7 +140,14 @@ pub fn sidebar_pill(ui: &mut egui::Ui) {
     let Some((top, left, width, height)) = ctx.data(|d| d.get_temp::<(f32, f32, f32, f32)>(pill_target_id())) else { return };
     let y = anim::glide(&ctx, egui::Id::unique("sdm_sidebar_pill_y"), top, 0.18);
     let (pal, d) = (theme::current(&ctx), theme::design(&ctx));
-    ui.painter().rect_filled(Rect::from_min_size(Pos2::new(left, y), vec2(width, height)), CornerRadius::same(d.radius_md), pal.surface2);
+    let rect = Rect::from_min_size(Pos2::new(left, y), vec2(width, height));
+    ui.painter().rect_filled(rect, CornerRadius::same(d.radius_md), pal.surface2);
+    // Files and Carbon mark the chosen row with a short accent bar; it fades in as the capsule shape fades out.
+    let k = (1.0 - d.pill).clamp(0.0, 1.0);
+    if d.nav_indicator && k > 0.0 {
+        let bar = Rect::from_center_size(Pos2::new(rect.left() + 3.0, rect.center().y), vec2(3.0, height * 0.45));
+        ui.painter().rect_filled(bar, CornerRadius::same(2), pal.accent.gamma_multiply(k));
+    }
 }
 
 /// A small status-bar entry: optional coloured dot, then caption text. Clickable. It paints
@@ -189,7 +198,7 @@ pub fn paint_state_chip(p: &egui::Painter, right_top: Pos2, pal: &Palette, d: &t
     let galley = p.layout_no_wrap(text.to_owned(), FontId::new(d.caption, theme::semibold()), Color32::PLACEHOLDER);
     let w = chip_width(galley.size().x);
     let rect = Rect::from_min_size(Pos2::new(right_top.x - w, right_top.y), vec2(w, 24.0));
-    p.rect_filled(rect, CornerRadius::same(12), fill);
+    p.rect_filled(rect, CornerRadius::same(d.round(24.0)), fill);
     p.circle_filled(Pos2::new(rect.left() + 12.0 + 3.0, rect.center().y), 3.0, dot);
     p.galley(Pos2::new(rect.left() + 12.0 + 6.0 + 6.0, rect.center().y - galley.size().y / 2.0), galley, ink);
     w
@@ -204,7 +213,7 @@ pub fn state_chip(ui: &mut egui::Ui, hue: Hue, text: &str) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(chip_width(galley.size().x), 24.0), Sense::hover());
     let (fill, dot, ink) = hue.colors(&pal);
     let p = ui.painter();
-    p.rect_filled(rect, CornerRadius::same(12), fill);
+    p.rect_filled(rect, CornerRadius::same(d.round(24.0)), fill);
     p.circle_filled(Pos2::new(rect.left() + 12.0 + 3.0, rect.center().y), 3.0, dot);
     p.galley(Pos2::new(rect.left() + 12.0 + 6.0 + 6.0, rect.center().y - galley.size().y / 2.0), galley, ink);
     resp

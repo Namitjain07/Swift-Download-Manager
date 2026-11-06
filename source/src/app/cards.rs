@@ -252,7 +252,7 @@ mod tests {
         let mut cards = Vec::new();
         for _ in 0..3 {
             let mut out = ctx.run_ui(input.clone(), |ui| {
-                crate::theme::apply(ui.ctx(), crate::theme::ThemeMode::Light);
+                crate::theme::apply(ui.ctx(), crate::theme::ThemeMode::Light, crate::theme::ColorTheme::default());
                 egui::CentralPanel::default().show(ui, |ui| app.cards_view(ui));
             });
             out.textures_delta.clear();

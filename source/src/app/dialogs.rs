@@ -500,6 +500,7 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
     }
     section_title(ui, "Networks");
     let nets = connected_networks(ui);
+    let switch_w = crate::widgets::switch::switch_size(ui.ctx()).x;
     card(ui, |g| {
         g.toggle("Download over several networks at once", Some("Combine Wi-Fi, Ethernet, a phone's hotspot and more into one faster download."), &mut s.multi_network);
         if !s.multi_network {
@@ -513,7 +514,7 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
         for n in &nets {
             let mut on = s.networks.contains(&n.name);
             let sub = format!("{} · {}", n.kind.label(), n.addr);
-            if g.row(&n.name, Some(&sub), crate::widgets::switch::switch_size().x, |ui| switch(ui, &mut on)).changed() {
+            if g.row(&n.name, Some(&sub), switch_w, |ui| switch(ui, &mut on)).changed() {
                 s.networks.retain(|x| x != &n.name);
                 if on {
                     s.networks.push(n.name.clone());
@@ -595,10 +596,19 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
         g.enable(s.browser_listen);
         g.toggle("Start browser downloads straight away", Some("Without asking first."), &mut s.browser_start_now);
     });
+    // Screenshots (--show appearance) start with this card in view.
+    if ui.data(|d| d.get_temp::<bool>(egui::Id::unique("sdm_scroll_appearance"))).unwrap_or(false) {
+        ui.scroll_to_cursor(Some(egui::Align::TOP));
+    }
     section_title(ui, "Appearance");
     let mode_w = segmented_width(ui, &["Automatic", "Light", "Dark"]);
     card(ui, |g| {
         g.row("Mode", None, mode_w, |ui| segmented(ui, &[(ThemeMode::System, "Automatic"), (ThemeMode::Light, "Light"), (ThemeMode::Dark, "Dark")], &mut s.theme));
+        g.free(|ui| {
+            ui.label(egui::RichText::new("Theme").size(theme::design(ui.ctx()).body).color(theme::current(ui.ctx()).label));
+            ui.add_space(10.0);
+            crate::widgets::theme_picker(ui, &mut s.color_theme);
+        });
     });
     networks_card(ui, s);
     web_card(ui, s, web_link);

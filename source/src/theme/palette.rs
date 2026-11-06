@@ -26,6 +26,8 @@ pub struct Palette {
     pub raised: Color32,
     /// Navigation rail ground.
     pub sidebar: Color32,
+    /// The header, toolbar and status bar: white in the Airbnb look, the window ground in Files.
+    pub chrome: Color32,
     /// Selected thumb inside a segmented control.
     pub segment_on: Color32,
     /// Track behind progress bars and meters.
@@ -101,6 +103,7 @@ impl Palette {
         surface3: rgb(0xE8E8E8),
         raised: rgb(0xFFFFFF),
         sidebar: rgb(0xFFFFFF),
+        chrome: rgb(0xFFFFFF),
         segment_on: rgb(0xFFFFFF),
         track: rgb(0xEBEBEB),
         scrim: rgba(0x000000, 102),
@@ -130,7 +133,7 @@ impl Palette {
         red_tint: rgba(0xC13515, 26),
         red_solid: rgb(0xB32D0E),
         blue: rgb(0x007AFF),
-        blue_ink: rgb(0x005ECB),
+        blue_ink: rgb(0x0058BE),
         blue_tint: rgba(0x007AFF, 28),
         shadow: rgb(0x000000),
     };
@@ -142,6 +145,7 @@ impl Palette {
         surface3: rgb(0x3A3A3C),
         raised: rgb(0x262628),
         sidebar: rgb(0x151517),
+        chrome: rgb(0x1C1C1E),
         segment_on: rgb(0x636366),
         track: rgb(0x3A3A3C),
         scrim: rgba(0x000000, 153),
@@ -180,14 +184,13 @@ impl Palette {
     pub fn lerp(&self, other: &Palette, t: f32) -> Palette {
         let t = t.clamp(0.0, 1.0);
         lerp_fields!(
-            self, other, t, bg, card, surface2, surface3, raised, sidebar, segment_on, track, scrim, hover, press, separator, separator_strong,
+            self, other, t, bg, card, surface2, surface3, raised, sidebar, chrome, segment_on, track, scrim, hover, press, separator, separator_strong,
             control_border, label, secondary, tertiary, disabled, accent, accent_ink, accent_solid, accent_press, on_accent, accent_tint, green,
             green_ink, green_tint, orange, orange_ink, orange_tint, red, red_ink, red_tint, red_solid, blue, blue_ink, blue_tint, shadow
         )
     }
 }
 
-#[cfg(test)]
 fn luminance(c: Color32) -> f32 {
     let lin = |v: u8| {
         let v = v as f32 / 255.0;
@@ -196,15 +199,13 @@ fn luminance(c: Color32) -> f32 {
     0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
 }
 
-/// WCAG contrast ratio between two colours (1 to 21). Used by the tests.
-#[cfg(test)]
+/// WCAG contrast ratio between two colours (1 to 21).
 pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
     let (la, lb) = (luminance(a), luminance(b));
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
-/// `top` (possibly translucent) painted over the opaque `bottom`. Used by the tests.
-#[cfg(test)]
+/// `top` (possibly translucent) painted over the opaque `bottom`.
 pub fn over(top: Color32, bottom: Color32) -> Color32 {
     let k = 1.0 - top.a() as f32 / 255.0;
     let mix = |t: u8, b: u8| (t as f32 * top.a() as f32 / 255.0 + b as f32 * k).round().min(255.0) as u8;
