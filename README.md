@@ -39,8 +39,8 @@ sooner and a broken connection never means starting over.
 
 **A calm, native-feeling window**
 - **Responsive**: downloads are cards in a grid that gains columns as the window widens (or the classic table, one click away); the sidebar becomes an icon rail and then a drawer, and the toolbar collapses to icons and an overflow menu on narrow windows
-- **In a web browser and for a whole team** *(pre-release 1.6.0-beta.1)*: a page on a localhost address, and a Docker image that serves several people from one machine
-- **Several networks at once** *(pre-release 1.5.0-beta.1)*: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
+- **In a web browser and for a whole team**: a page on a localhost address, and a Docker image that serves several people from one machine
+- **Several networks at once**: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
 - One consistent design, inspired by Airbnb and drawn with iOS-style controls: white surfaces on a soft grey page, one coral accent, 16 px rounded cards with soft shadows, capsule buttons, an iOS switch, stepper and segmented control, and line icons from [Phosphor](https://phosphoricons.com). Text is set in [Inter](https://rsms.me/inter/). Flat colours only, no gradients. Light and dark, following your system (or choose under **View → Appearance**)
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in. The window stays idle when nothing moves
 
@@ -89,8 +89,6 @@ runs in the background; start it again to open the window.
 
 ## Use it from a web browser
 
-*Pre-release (1.6.0-beta.1).*
-
 Open **Options → Web interface**, turn it on and press **Open**. The page lists your downloads as cards, and lets you add links, pause, resume,
 remove and download finished files. It follows your system's light or dark setting and works on a phone as well.
 
@@ -101,8 +99,6 @@ remove and download finished files. It follows your system's light or dark setti
 - It runs inside the window, or in the background when only the tray icon is left
 
 ## Run it for your organisation
-
-*Pre-release (1.6.0-beta.1).*
 
 `swift_download_manager --server` runs as a download server with no window. People sign in to the web page with their own accounts, add links, and the **server**
 downloads them; they fetch the finished files through the same address. Each person sees only their own downloads and gets a folder of their own
@@ -115,10 +111,10 @@ downloads them; they fetch the finished files through the same address. Each per
 ```sh
 docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
   -e SDM_ADMIN_USER=admin -e SDM_ADMIN_PASSWORD='a long password' \
-  ghcr.io/namitjain07/swift-download-manager:beta
+  ghcr.io/namitjain07/swift-download-manager:latest
 ```
 
-Open <http://localhost:8080/> and sign in. (`:beta` follows the newest pre-release; `:1.7.0-beta.1` pins one. Stable versions also get `:latest`.)
+Open <http://localhost:8080/> and sign in. (`:latest` follows the newest stable release and `:1.7.0` pins this one; pre-releases get the `:beta` tag instead.)
 Everything lives in the `/data` volume: settings, accounts, the download list and the files. The image is for 64-bit Intel/AMD machines for now.
 
 Add more people:
@@ -135,7 +131,7 @@ With docker compose:
 ```yaml
 services:
   sdm:
-    image: ghcr.io/namitjain07/swift-download-manager:beta
+    image: ghcr.io/namitjain07/swift-download-manager:latest
     restart: unless-stopped
     ports: ["8080:8080"]
     volumes: ["sdm-data:/data"]
@@ -166,8 +162,6 @@ Options (each also has an environment variable): `--bind` (`SDM_BIND`, default `
 - Accounts are managed from the command line; there is no page for it yet. It is a pre-release: please report what you find
 
 ## Download over several networks at once
-
-*Pre-release (1.5.0-beta.1): get it from the releases page, where it is marked as a pre-release.*
 
 Open **Options → Networks**, turn on **Download over several networks at once** and tick the network cards to use: Wi-Fi, Ethernet, a phone's
 USB or hotspot connection. A download is then spread over all of them.
@@ -355,7 +349,7 @@ Want one of them? [Open an issue](https://github.com/Namitjain07/Swift-Download-
 - [x] SHA-256 checksum check, and refreshing a link that has expired
 - [x] Overall and per-download speed limits
 - [x] Proxy, saved site logins, and a referrer and login per download
-- [x] Download over several networks at once (Wi-Fi, Ethernet, a phone's hotspot) *(pre-release 1.5.0-beta.1)*
+- [x] Download over several networks at once (Wi-Fi, Ethernet, a phone's hotspot)
 
 **Organising**
 - [x] Queues with schedules (start and stop times, daily or once, close the app when done)
@@ -388,11 +382,11 @@ Want one of them? [Open an issue](https://github.com/Namitjain07/Swift-Download-
 - [x] Safety rules: an off switch, a secret token, no file deletion, no choosing folders, no passwords shown
 
 **Web interface and server**
-- [x] Web page on `127.0.0.1` to add, pause, resume, remove and fetch files, on a phone or a desktop *(pre-release 1.6.0-beta.1)*
-- [x] `--server` mode with accounts, a folder per person, and administrators who see everybody's downloads *(pre-release 1.6.0-beta.1)*
-- [x] Docker image on GitHub Container Registry *(pre-release 1.6.0-beta.1)*
-- [x] Refuses links to private and local addresses (also after redirects), salted password hashes, sign-in rate limit *(pre-release 1.6.0-beta.1)*
-- [x] Finished files are sent in pieces so a broken transfer can carry on *(pre-release 1.6.0-beta.1)*
+- [x] Web page on `127.0.0.1` to add, pause, resume, remove and fetch files, on a phone or a desktop
+- [x] `--server` mode with accounts, a folder per person, and administrators who see everybody's downloads
+- [x] Docker image on GitHub Container Registry
+- [x] Refuses links to private and local addresses (also after redirects), salted password hashes, sign-in rate limit
+- [x] Finished files are sent in pieces so a broken transfer can carry on
 
 **Packaging**
 - [x] Signed Windows `.exe` and `.zip` with the add-on; `.deb` for Ubuntu, Debian and Mint
