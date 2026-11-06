@@ -15,7 +15,7 @@ A fast desktop download manager written in Rust (with the egui toolkit).
 - Browser add-on (Chrome, Edge, Brave, Firefox) in `browser-extension/`: catches downloads, passes your browser login (cookies) along, adds a right-click "Download with…" item and spots videos and sounds a page plays
 - Clipboard watching: copy a download link and the app offers to download it
 - MCP server (`--mcp`) so AI assistants such as Claude can list, add, pause, resume and remove downloads (never deleting files)
-- A responsive window with download cards, and two designs (Drishti by default, or iOS), each in light and dark
+- A responsive window with download cards, in one consistent design (inspired by Airbnb, with iOS-style controls), light and dark
 - Keeps downloading in the background, with a tray icon on Windows, macOS and Linux
 
 ## Building it yourself
@@ -44,7 +44,7 @@ On Linux the app also needs the usual desktop libraries (they are already there 
 - `src/background.rs` and `src/background/`: running without a window, with a tray icon
 - `src/mcp/`: the MCP server (`--mcp`) for AI assistants: protocol, the private control door, the lock and hand-over
 - `src/app.rs` and `src/app/`: the window, dialogs, queues, scheduler and link grabber
-- `src/theme/` and `src/widgets/`: the two designs (Drishti, the default, and iOS) in light and dark, and the widget kit (buttons, switch, wheel picker, progress bars)
+- `src/theme/`, `src/widgets/` and `src/icons.rs`: the design (colours, sizes, fonts) in light and dark, the widget kit (buttons, inputs, menus, dialogs, switch, wheel picker, progress bars) and the icon set. `assets/fonts/` holds the bundled Inter and Phosphor fonts with their licences
 - `browser-extension/`: the browser add-on
 - `packaging/`: installer scripts for Linux, Windows and Mac
 

@@ -1,7 +1,7 @@
 //! What happens when the window is closed: quit, or keep downloading in the background.
 
 use super::*;
-use crate::widgets::{button_row, dialog_window, plain_button, primary_button, tinted_button, toggle};
+use crate::widgets::{check_row, plain_button, primary_button, secondary_button, sheet};
 use serde::{Deserialize, Serialize};
 
 /// What the setting says to do when the window is closed.
@@ -89,28 +89,31 @@ impl App {
         let mut remember = self.remember_close;
         let mut choice: Option<CloseAction> = None;
         let mut cancel = false;
-        dialog_window(ctx, "Keep downloading?")
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, -20.0])
-            .default_width(crate::widgets::fit_width(ctx, 440.0))
-            .show(ctx, |ui| {
-                ui.label("Downloads are still running. Swift Download Manager can keep going in the background, with an icon in the system tray, and open again from there.");
-                ui.add_space(8.0);
-                toggle(ui, &mut remember, "Remember my choice");
-                ui.add_space(8.0);
-                button_row(ui, |ui| {
-                    if primary_button(ui, "Keep in background").clicked() {
-                        choice = Some(CloseAction::Background);
-                    }
-                    if tinted_button(ui, "Quit").clicked() {
-                        choice = Some(CloseAction::Quit);
-                    }
+        let pal = theme::current(ctx);
+        let out = sheet("close", "Keep downloading?").width(480.0).show(ctx, |s| {
+            s.body(|ui| {
+                ui.add(egui::Label::new(egui::RichText::new("Downloads are still running. Swift Download Manager can keep going in the background, with an icon in the system tray, and open again from there.").color(pal.secondary)).wrap());
+                ui.add_space(10.0);
+                check_row(ui, &mut remember, "Remember my choice");
+            });
+            s.footer_split(
+                |ui| {
                     if plain_button(ui, "Cancel").clicked() {
                         cancel = true;
                     }
-                });
-            });
+                },
+                |ui| {
+                    if primary_button(ui, "Keep in background").clicked() {
+                        choice = Some(CloseAction::Background);
+                    }
+                    if secondary_button(ui, "Quit").clicked() {
+                        choice = Some(CloseAction::Quit);
+                    }
+                },
+            );
+        });
         self.remember_close = remember;
-        if cancel || ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if cancel || out.close {
             self.ask_close = false;
         }
         if let Some(c) = choice {

@@ -1,43 +1,94 @@
-//! Monoline icons (1.5 px strokes, no images bundled). They take a tint, so they work in
-//! light and dark mode.
+//! Icons: the Phosphor icon font (bundled, MIT licensed), in its line and solid weights.
+//!
+//! Every icon is one character of the font, drawn as text, so icons are crisp at every size and
+//! follow the theme through their tint. The line weight is the default; play, pause and stop are
+//! drawn solid, the way iOS draws its media controls.
 
-use crate::theme::Palette;
-use eframe::egui::{pos2, vec2, Color32, CornerRadius, Painter, Pos2, Rect, Shape, Stroke, StrokeKind};
+use crate::theme::{self, Palette};
+use eframe::egui::{Align2, Color32, CornerRadius, FontId, Painter, Rect, Vec2};
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum Icon {
-    AddUrl,
-    Resume,
-    Stop,
-    StopAll,
-    Delete,
-    DeleteDone,
-    Options,
-    StartQueue,
-    StopQueue,
-    Batch,
-    Scheduler,
-    Play,
-    Pause,
-    Folder,
-    File,
-    Close,
-    Menu,
-    More,
-    Cards,
-    List,
-    Search,
+/// Every icon the app uses, with the Phosphor character it is drawn from.
+macro_rules! icons {
+    ($($name:ident = $cp:expr),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum Icon {
+            $($name),+
+        }
+
+        impl Icon {
+            /// The character of this icon in the Phosphor font.
+            pub const fn glyph(self) -> char {
+                let cp: u32 = match self {
+                    $(Icon::$name => $cp),+
+                };
+                match char::from_u32(cp) {
+                    Some(c) => c,
+                    None => '?',
+                }
+            }
+
+            /// Every icon, for tests.
+            #[cfg(test)]
+            pub const ALL: &'static [Icon] = &[$(Icon::$name),+];
+        }
+    };
 }
 
-/// The tint a toolbar button gives each icon: blue to add, green to go, red to stop or remove.
+icons! {
+    AddUrl = 0xe2e6,
+    Plus = 0xe3d4,
+    Batch = 0xe2f8,
+    Resume = 0xe3d0,
+    Pause = 0xe39e,
+    PauseAll = 0xe3a0,
+    Delete = 0xe4a6,
+    ClearDone = 0xec54,
+    Options = 0xe270,
+    Scheduler = 0xe19a,
+    StartQueue = 0xe3d2,
+    StopQueue = 0xe46e,
+    Folder = 0xe25a,
+    File = 0xe230,
+    FileText = 0xe23a,
+    FileZip = 0xe958,
+    Music = 0xe340,
+    Program = 0xe5da,
+    Video = 0xe792,
+    Close = 0xe4f6,
+    Menu = 0xe2f0,
+    Cards = 0xe464,
+    List = 0xe5a2,
+    Search = 0xe30c,
+    Check = 0xe182,
+    CheckCircle = 0xe184,
+    WarningCircle = 0xe4e2,
+    Info = 0xe2ce,
+    CaretDown = 0xe136,
+    CaretRight = 0xe13a,
+    CaretUp = 0xe13c,
+    Copy = 0xe1ca,
+    Robot = 0xe762,
+    Download = 0xe20c,
+    Hourglass = 0xe2b2,
+    Queue = 0xe6ac,
+    Minus = 0xe32a,
+    Speed = 0xee74,
+    Sidebar = 0xec24,
+}
+
+impl Icon {
+    /// Icons that read better solid, like the media controls on an iPhone.
+    pub const fn solid(self) -> bool {
+        matches!(self, Icon::Resume | Icon::Pause | Icon::PauseAll | Icon::StartQueue | Icon::StopQueue | Icon::CheckCircle | Icon::WarningCircle)
+    }
+}
+
+/// The colour a toolbar button gives each icon: the accent for adding, red for removing, ink for the rest.
 pub fn tint(icon: Icon, pal: &Palette) -> Color32 {
     match icon {
-        Icon::AddUrl | Icon::Batch | Icon::Scheduler => pal.blue_ink,
-        Icon::Resume | Icon::StartQueue => pal.green_ink,
-        Icon::Stop | Icon::StopAll | Icon::StopQueue | Icon::Delete | Icon::DeleteDone => pal.red_ink,
-        Icon::Play => pal.green_ink,
-        Icon::Pause => pal.orange_ink,
-        Icon::Options | Icon::Folder | Icon::File | Icon::Close | Icon::Menu | Icon::More | Icon::Cards | Icon::List | Icon::Search => pal.secondary,
+        Icon::AddUrl | Icon::Plus => pal.accent_ink,
+        Icon::Delete | Icon::ClearDone => pal.red_ink,
+        _ => pal.label,
     }
 }
 
@@ -46,167 +97,26 @@ fn dim_for(tint: Color32, enabled: bool) -> Color32 {
     if enabled { tint } else { tint.gamma_multiply(0.35) }
 }
 
-fn line(p: &Painter, pts: Vec<Pos2>, s: Stroke) {
-    p.add(Shape::line(pts, s));
-}
-
-fn closed(p: &Painter, pts: Vec<Pos2>, s: Stroke) {
-    p.add(Shape::closed_line(pts, s));
-}
-
-fn trash(p: &Painter, c: Pos2, s: f32, st: Stroke) {
-    let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
-    line(p, vec![pt(-0.38, -0.26), pt(0.38, -0.26)], st);
-    line(p, vec![pt(-0.12, -0.26), pt(-0.12, -0.40), pt(0.12, -0.40), pt(0.12, -0.26)], st);
-    line(p, vec![pt(-0.28, -0.26), pt(-0.24, 0.42), pt(0.24, 0.42), pt(0.28, -0.26)], st);
-    for x in [-0.09, 0.09] {
-        line(p, vec![pt(x, -0.12), pt(x, 0.28)], st);
-    }
-}
-
-fn arrow_down(p: &Painter, c: Pos2, s: f32, st: Stroke) {
-    let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
-    line(p, vec![pt(0.0, -0.40), pt(0.0, 0.14)], st);
-    line(p, vec![pt(-0.2, -0.06), pt(0.0, 0.14), pt(0.2, -0.06)], st);
-}
-
-fn queue_lines(p: &Painter, c: Pos2, s: f32, st: Stroke) {
-    for y in [-0.28, 0.0, 0.28] {
-        line(p, vec![pos2(c.x - 0.42 * s, c.y + y * s), pos2(c.x + 0.02 * s, c.y + y * s)], st);
-    }
-}
-
+/// Draws `icon` centred in `rect`. The icon is as big as the smaller side of `rect`.
 pub fn draw(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool) {
-    let c = rect.center();
-    let s = rect.width().min(rect.height());
-    let st = Stroke::new(crate::theme::design(p.ctx()).icon_stroke, dim_for(tint, enabled));
-    let pt = |x: f32, y: f32| pos2(c.x + x * s, c.y + y * s);
-    match icon {
-        Icon::AddUrl => {
-            let g = pt(-0.06, -0.06);
-            let r = 0.34 * s;
-            p.circle_stroke(g, r, st);
-            line(p, vec![pos2(g.x - r, g.y), pos2(g.x + r, g.y)], st);
-            p.add(Shape::ellipse_stroke(g, vec2(r * 0.45, r), st));
-            line(p, vec![pt(0.20, 0.30), pt(0.44, 0.30)], st);
-            line(p, vec![pt(0.32, 0.18), pt(0.32, 0.42)], st);
-        }
-        Icon::Resume => {
-            arrow_down(p, c, s, st);
-            line(p, vec![pt(-0.38, 0.20), pt(-0.38, 0.40), pt(0.38, 0.40), pt(0.38, 0.20)], st);
-        }
-        Icon::Stop => {
-            p.circle_stroke(c, 0.42 * s, st);
-            p.rect_stroke(Rect::from_center_size(c, vec2(0.28 * s, 0.28 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
-        }
-        Icon::StopAll => {
-            line(p, vec![pt(-0.10, 0.10), pt(-0.40, 0.10), pt(-0.40, -0.40), pt(0.10, -0.40), pt(0.10, -0.10)], st);
-            p.rect_stroke(Rect::from_center_size(pt(0.15, 0.15), vec2(0.5 * s, 0.5 * s)), CornerRadius::same(3), st, StrokeKind::Middle);
-        }
-        Icon::Delete => trash(p, c, s, st),
-        Icon::DeleteDone => {
-            trash(p, pt(-0.12, -0.04), s * 0.82, st);
-            line(p, vec![pt(0.14, 0.28), pt(0.24, 0.38), pt(0.42, 0.14)], st);
-        }
-        Icon::Options => {
-            let mut pts = Vec::new();
-            for k in 0..8 {
-                let a = k as f32 / 8.0 * std::f32::consts::TAU;
-                for (da, r) in [(-0.30, 0.33), (-0.14, 0.45), (0.14, 0.45), (0.30, 0.33)] {
-                    pts.push(pos2(c.x + (a + da).cos() * r * s, c.y + (a + da).sin() * r * s));
-                }
-            }
-            closed(p, pts, st);
-            p.circle_stroke(c, 0.14 * s, st);
-        }
-        Icon::StartQueue => {
-            queue_lines(p, c, s, st);
-            closed(p, vec![pt(0.14, -0.30), pt(0.46, 0.0), pt(0.14, 0.30)], st);
-        }
-        Icon::StopQueue => {
-            queue_lines(p, c, s, st);
-            p.rect_stroke(Rect::from_center_size(pt(0.30, 0.0), vec2(0.32 * s, 0.32 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
-        }
-        Icon::Batch => {
-            for (i, y) in [-0.28f32, 0.0, 0.28].iter().enumerate() {
-                let x = (i as f32 - 1.0) * 0.06;
-                p.rect_stroke(Rect::from_center_size(pt(x, *y), vec2(0.64 * s, 0.22 * s)), CornerRadius::same(4), st, StrokeKind::Middle);
-            }
-        }
-        Icon::Play => closed(p, vec![pt(-0.22, -0.36), pt(0.38, 0.0), pt(-0.22, 0.36)], st),
-        Icon::Pause => {
-            for x in [-0.2, 0.2] {
-                p.rect_stroke(Rect::from_center_size(pt(x, 0.0), vec2(0.18 * s, 0.62 * s)), CornerRadius::same(2), st, StrokeKind::Middle);
-            }
-        }
-        Icon::Folder => closed(p, vec![pt(-0.44, 0.32), pt(-0.44, -0.30), pt(-0.12, -0.30), pt(0.0, -0.18), pt(0.44, -0.18), pt(0.44, 0.32)], st),
-        Icon::File => {
-            closed(p, vec![pt(-0.28, -0.42), pt(0.08, -0.42), pt(0.30, -0.20), pt(0.30, 0.42), pt(-0.28, 0.42)], st);
-            line(p, vec![pt(0.08, -0.42), pt(0.08, -0.20), pt(0.30, -0.20)], st);
-        }
-        Icon::Close => {
-            line(p, vec![pt(-0.26, -0.26), pt(0.26, 0.26)], st);
-            line(p, vec![pt(0.26, -0.26), pt(-0.26, 0.26)], st);
-        }
-        Icon::Menu => {
-            for y in [-0.26, 0.0, 0.26] {
-                line(p, vec![pt(-0.36, y), pt(0.36, y)], st);
-            }
-        }
-        Icon::More => {
-            for x in [-0.28, 0.0, 0.28] {
-                p.circle_filled(pt(x, 0.0), 0.055 * s + 0.4, st.color);
-            }
-        }
-        Icon::Cards => {
-            for (x, y) in [(-0.2, -0.2), (0.2, -0.2), (-0.2, 0.2), (0.2, 0.2)] {
-                p.rect_stroke(Rect::from_center_size(pt(x, y), vec2(0.3 * s, 0.3 * s)), CornerRadius::same(3), st, StrokeKind::Middle);
-            }
-        }
-        Icon::List => {
-            for y in [-0.28, 0.0, 0.28] {
-                line(p, vec![pt(-0.08, y), pt(0.42, y)], st);
-                p.circle_filled(pt(-0.34, y), 0.04 * s + 0.4, st.color);
-            }
-        }
-        Icon::Search => {
-            p.circle_stroke(pt(-0.08, -0.08), 0.28 * s, st);
-            line(p, vec![pt(0.13, 0.13), pt(0.4, 0.4)], st);
-        }
-        Icon::Scheduler => {
-            p.circle_stroke(c, 0.42 * s, st);
-            line(p, vec![c, pt(0.0, -0.24)], st);
-            line(p, vec![c, pt(0.17, 0.08)], st);
-        }
-    }
+    draw_weight(p, rect, icon, tint, enabled, icon.solid());
 }
 
-/// Small folder outline for the categories list.
-pub fn folder(p: &Painter, rect: Rect, col: Color32) {
-    let r = Rect::from_center_size(rect.center(), vec2(rect.width() * 0.9, rect.height() * 0.72));
-    let tab = r.width() * 0.42;
-    closed(
-        p,
-        vec![
-            pos2(r.left(), r.bottom()),
-            pos2(r.left(), r.top()),
-            pos2(r.left() + tab, r.top()),
-            pos2(r.left() + tab + 2.0, r.top() + 2.5),
-            pos2(r.right(), r.top() + 2.5),
-            pos2(r.right(), r.bottom()),
-        ],
-        Stroke::new(1.3, col),
-    );
+/// The same, choosing the solid or the line weight.
+pub fn draw_weight(p: &Painter, rect: Rect, icon: Icon, tint: Color32, enabled: bool, solid: bool) {
+    let size = rect.width().min(rect.height());
+    let family = if solid { theme::icon_fill_font() } else { theme::icon_font() };
+    p.text(rect.center(), Align2::CENTER_CENTER, icon.glyph(), FontId::new(size, family), dim_for(tint, enabled));
 }
 
 /// Colour used for a category / file type.
 pub fn category_color(cat: &str) -> Color32 {
     match cat {
-        "Compressed" => Color32::from_rgb(196, 140, 40),
+        "Compressed" => Color32::from_rgb(214, 130, 20),
         "Documents" => Color32::from_rgb(52, 120, 210),
         "Music" => Color32::from_rgb(170, 80, 190),
-        "Programs" => Color32::from_rgb(70, 150, 90),
-        "Video" => Color32::from_rgb(210, 70, 70),
+        "Programs" => Color32::from_rgb(40, 160, 100),
+        "Video" => Color32::from_rgb(226, 60, 80),
         "General" => Color32::from_rgb(120, 130, 145),
         other => {
             // Your own categories get a steady colour from their name.
@@ -218,71 +128,105 @@ pub fn category_color(cat: &str) -> Color32 {
     }
 }
 
-/// File-type badge drawn in the first column of the list.
-pub fn file_badge(p: &Painter, rect: Rect, cat: &str) {
-    let r = Rect::from_center_size(rect.center(), vec2(rect.height() * 0.7, rect.height() * 0.85));
+/// The icon of a category / file type.
+pub fn category_icon(cat: &str) -> Icon {
+    match cat {
+        "Compressed" => Icon::FileZip,
+        "Documents" => Icon::FileText,
+        "Music" => Icon::Music,
+        "Programs" => Icon::Program,
+        "Video" => Icon::Video,
+        "General" => Icon::File,
+        _ => Icon::Folder,
+    }
+}
+
+/// A rounded square in the category's colour with the category's icon on it: the picture of a file.
+pub fn file_tile(p: &Painter, rect: Rect, cat: &str) {
     let col = category_color(cat);
-    let card = crate::theme::current(p.ctx()).card;
-    p.rect_filled(r, CornerRadius::same(2), card);
-    p.rect_stroke(r, CornerRadius::same(2), Stroke::new(1.0, col), StrokeKind::Inside);
-    let band = Rect::from_min_max(pos2(r.left(), r.bottom() - r.height() * 0.4), r.max);
-    p.rect_filled(band, CornerRadius::same(1), col);
+    let radius = (rect.width().min(rect.height()) * 0.28).round().clamp(6.0, 14.0) as u8;
+    p.rect_filled(rect, CornerRadius::same(radius), col.gamma_multiply(0.16));
+    let side = rect.width().min(rect.height()) * 0.5;
+    draw(p, Rect::from_center_size(rect.center(), Vec2::splat(side)), category_icon(cat), col, true);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::Palette;
-    use eframe::egui;
-
-    const ALL: [Icon; 21] = [
-        Icon::AddUrl,
-        Icon::Resume,
-        Icon::Stop,
-        Icon::StopAll,
-        Icon::Delete,
-        Icon::DeleteDone,
-        Icon::Options,
-        Icon::StartQueue,
-        Icon::StopQueue,
-        Icon::Batch,
-        Icon::Scheduler,
-        Icon::Play,
-        Icon::Pause,
-        Icon::Folder,
-        Icon::File,
-        Icon::Close,
-        Icon::Menu,
-        Icon::More,
-        Icon::Cards,
-        Icon::List,
-        Icon::Search,
-    ];
+    use crate::theme::testing::themed;
+    use crate::theme::ThemeMode;
+    use eframe::egui::{self, pos2, vec2};
 
     #[test]
-    fn every_icon_paints_in_both_states_with_finite_geometry() {
-        for icon in ALL {
+    fn every_icon_is_in_the_font_in_both_weights() {
+        let ctx = themed(ThemeMode::Light);
+        for &icon in Icon::ALL {
+            for family in [theme::icon_font(), theme::icon_fill_font()] {
+                let ok = ctx.fonts_mut(|f| f.has_glyph(&FontId::new(16.0, family.clone()), icon.glyph()));
+                assert!(ok, "{icon:?} (U+{:04X}) is not in {family:?}", icon.glyph() as u32);
+            }
+        }
+    }
+
+    #[test]
+    fn no_two_icons_share_a_glyph() {
+        let mut seen = std::collections::BTreeMap::new();
+        for &icon in Icon::ALL {
+            seen.entry(icon.glyph()).or_insert_with(Vec::new).push(icon);
+        }
+        for (glyph, icons) in seen {
+            assert_eq!(icons.len(), 1, "U+{:04X} is shared by {icons:?}", glyph as u32);
+        }
+    }
+
+    #[test]
+    fn every_icon_paints_in_both_states_and_stays_in_its_box() {
+        let ctx = themed(ThemeMode::Light);
+        for &icon in Icon::ALL {
             for enabled in [true, false] {
-                let ctx = egui::Context::default();
                 let mut out = ctx.run_ui(Default::default(), |ui| {
-                    let rect = Rect::from_center_size(pos2(40.0, 40.0), vec2(30.0, 30.0));
-                    draw(ui.painter(), rect, icon, tint(icon, &Palette::IOS_LIGHT), enabled);
+                    let rect = Rect::from_center_size(pos2(40.0, 40.0), vec2(24.0, 24.0));
+                    draw(ui.painter(), rect, icon, tint(icon, &Palette::LIGHT), enabled);
                 });
                 out.textures_delta.clear();
-                assert!(!out.shapes.is_empty(), "icon painted nothing (enabled={enabled})");
+                assert!(!out.shapes.is_empty(), "{icon:?} painted nothing (enabled={enabled})");
                 for s in &out.shapes {
                     let r = s.shape.visual_bounding_rect();
                     assert!(r.min.x.is_finite() && r.max.y.is_finite(), "non-finite geometry");
-                    // Stays inside its 30x30 box (plus the stroke width).
-                    assert!(r.width() <= 32.0 && r.height() <= 32.0, "icon spills out of its box: {r:?}");
+                    assert!(r.width() <= 40.0 && r.height() <= 40.0, "{icon:?} spills out of its box: {r:?}");
                 }
             }
         }
     }
 
     #[test]
-    fn disabled_tint_is_dimmer_than_enabled() {
-        let on = tint(Icon::Stop, &Palette::IOS_LIGHT);
+    fn a_disabled_icon_is_dimmer_than_an_enabled_one() {
+        let on = tint(Icon::Delete, &Palette::LIGHT);
         assert!(dim_for(on, false).a() < dim_for(on, true).a());
+    }
+
+    #[test]
+    fn media_controls_are_solid_and_the_rest_are_line_icons() {
+        assert!(Icon::Pause.solid() && Icon::Resume.solid() && Icon::StopQueue.solid());
+        assert!(!Icon::Folder.solid() && !Icon::Search.solid() && !Icon::Options.solid());
+    }
+
+    #[test]
+    fn categories_have_a_colour_and_an_icon_of_their_own() {
+        let names = ["Compressed", "Documents", "Music", "Programs", "Video", "General"];
+        let icons: std::collections::BTreeSet<u32> = names.iter().map(|n| category_icon(n).glyph() as u32).collect();
+        assert_eq!(icons.len(), names.len(), "each built-in category has its own icon");
+        assert_eq!(category_color("Mine"), category_color("Mine"), "a custom category keeps its colour");
+        assert_eq!(category_icon("Mine"), Icon::Folder);
+    }
+
+    #[test]
+    fn a_file_tile_paints_a_tint_and_an_icon() {
+        let ctx = themed(ThemeMode::Light);
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            file_tile(ui.painter(), Rect::from_min_size(egui::Pos2::ZERO, vec2(44.0, 44.0)), "Video");
+        });
+        out.textures_delta.clear();
+        assert!(out.shapes.len() >= 2, "a rounded square and a glyph");
     }
 }

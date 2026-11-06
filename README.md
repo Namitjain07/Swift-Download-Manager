@@ -13,14 +13,14 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
-  <img src="docs/images/screenshot.png" alt="Swift Download Manager in the Drishti design: a sidebar rail with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with progress, state chips and actions" width="900">
+  <img src="docs/images/screenshot.png" alt="Swift Download Manager: a header with the menus and a search box, a toolbar, a sidebar with categories and queues, summary tiles for speed, active, queued and finished downloads, and a grid of download cards with coral progress bars, state chips and round action buttons" width="900">
 </picture>
 
-<sub>The main window in the default **Drishti** design, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
+<sub>The main window, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
 
-<img src="docs/images/responsive-medium.png" alt="The same window at a medium width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="The window at a narrow width: tools in an overflow menu and one column of cards" width="230"> <img src="docs/images/screenshot-ios.png" alt="The optional iOS design" width="300">
+<img src="docs/images/responsive-medium.png" alt="The same window at a medium width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="The window at a narrow width: the menus in one button, a scrolling toolbar of icons and one column of cards" width="230"> <img src="docs/images/options-light.png" alt="Options: grouped settings with switches, steppers and a segmented control" width="300">
 
-<sub>It adapts to the window: full layout, an icon rail at medium widths, a drawer and overflow menu when narrow. Right: the optional iOS design.</sub>
+<sub>It adapts to the window: full layout, an icon rail at medium widths, a drawer and one menu button when narrow. Right: the Options window.</sub>
 
 </div>
 
@@ -41,7 +41,7 @@ sooner and a broken connection never means starting over.
 - **Responsive**: downloads are cards in a grid that gains columns as the window widens (or the classic table, one click away); the sidebar becomes an icon rail and then a drawer, and the toolbar collapses to icons and an overflow menu on narrow windows
 - **In a web browser and for a whole team** *(pre-release 1.6.0-beta.1)*: a page on a localhost address, and a Docker image that serves several people from one machine
 - **Several networks at once** *(pre-release 1.5.0-beta.1)*: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
-- Two designs, switchable under **View → Appearance** (or in **Options**): **Drishti** (the default), built from the Drishti design system with a dark-first palette, 36 px rounded controls, a sidebar rail and state chips that always carry a word, and the flat **iOS** look with capsule buttons and grouped cards. Both come in light and dark and follow your system
+- One consistent design, inspired by Airbnb and drawn with iOS-style controls: white surfaces on a soft grey page, one coral accent, 16 px rounded cards with soft shadows, capsule buttons, an iOS switch, stepper and segmented control, and line icons from [Phosphor](https://phosphoricons.com). Text is set in [Inter](https://rsms.me/inter/). Flat colours only, no gradients. Light and dark, following your system (or choose under **View → Appearance**)
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars glide, and windows fade in. The window stays idle when nothing moves
 
 **Runs in the background**
@@ -69,6 +69,8 @@ sooner and a broken connection never means starting over.
 - Passes your browser login (cookies) along, so downloads behind a login work
 - Adds **Download with Swift Download Manager** to the right-click menu
 - Spots videos and sounds that a page plays
+
+What is finished and what is still planned (integrations with package managers, other tools and more) is in the [roadmap](#roadmap-and-feature-checklist).
 
 ## Run it in the background
 
@@ -116,7 +118,7 @@ docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
   ghcr.io/namitjain07/swift-download-manager:beta
 ```
 
-Open <http://localhost:8080/> and sign in. (`:beta` follows the newest pre-release; `:1.6.0-beta.1` pins one. Stable versions also get `:latest`.)
+Open <http://localhost:8080/> and sign in. (`:beta` follows the newest pre-release; `:1.7.0-beta.1` pins one. Stable versions also get `:latest`.)
 Everything lives in the `/data` volume: settings, accounts, the download list and the files. The image is for 64-bit Intel/AMD machines for now.
 
 Add more people:
@@ -307,9 +309,8 @@ The app can draw itself with sample data and save a picture of its window, which
 cd source
 cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
 cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
-cargo run --release -- --screenshot ../docs/images/screenshot-ios.png --theme light --style ios
-# the other design: --style ios   (drishti is the default)
-# a window other than the main one: --show add|batch|options|networks|scheduler|queues|properties|progress|delete|about|browser|grabber
+# a window other than the main one: --show add|batch|options|networks|scheduler|queues|properties|progress|delete|about|browser|ai|grabber|close|table|drawer|menus
+# a narrower window: --size 900x640   (or 600x760)
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
 
@@ -325,7 +326,7 @@ On a machine without a screen, put `xvfb-run -a` in front of the program.
 | [`source/src/background.rs`](source/src/background.rs), [`source/src/background/`](source/src/background/) | Running without a window: the tray icon and the loop behind it |
 | [`source/src/mcp/`](source/src/mcp/) | The MCP server for AI assistants: protocol, the private control door, the lock and hand-over |
 | [`source/src/app.rs`](source/src/app.rs), [`source/src/app/`](source/src/app/) | The window, dialogs, queues, scheduler and link grabber |
-| [`source/src/theme/`](source/src/theme/), [`source/src/widgets/`](source/src/widgets/) | The two designs (Drishti and iOS) in light and dark, and the widget kit (buttons, switch, wheel picker, progress bars) |
+| [`source/src/theme/`](source/src/theme/), [`source/src/widgets/`](source/src/widgets/), [`source/src/icons.rs`](source/src/icons.rs) | The design (colours, sizes, fonts) in light and dark, the widget kit (buttons, inputs, menus, dialogs, switch, wheel picker, progress bars) and the icon set |
 | [`browser-extension/`](browser-extension/) | The browser add-on, packaged for Chrome and Firefox |
 | `mac/` | How to get the Mac version |
 | [`docs/`](docs/) | Images used by this read-me |
@@ -338,6 +339,150 @@ and in `%APPDATA%\swift-download-manager\` on Windows.
 Releases are listed on the [releases page](https://github.com/Namitjain07/Swift-Download-Manager/releases), and what changed
 in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0` builds, signs and publishes a release (a version with a dash, such as `1.5.0-beta.1`, is published as a pre-release); see
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+## Roadmap and feature checklist
+
+A ticked box (`[x]`) is built and in the program; an empty box (`[ ]`) is planned or still an idea. Items marked *(pre-release)* are in a pre-release
+build and not yet in the stable version. The unticked items are ideas in a rough order, not promises: the list changes as people tell us what they need.
+Want one of them? [Open an issue](https://github.com/Namitjain07/Swift-Download-Manager/issues/new/choose) first, so we can agree on the shape (see
+[Contributing](#contributing)).
+
+### Done
+
+**Downloading**
+- [x] Up to 32 connections per download; a free connection takes half of the biggest remaining part
+- [x] Pause and resume, also after closing the app; retries, and fewer connections on busy servers
+- [x] SHA-256 checksum check, and refreshing a link that has expired
+- [x] Overall and per-download speed limits
+- [x] Proxy, saved site logins, and a referrer and login per download
+- [x] Download over several networks at once (Wi-Fi, Ethernet, a phone's hotspot) *(pre-release 1.5.0-beta.1)*
+
+**Organising**
+- [x] Queues with schedules (start and stop times, daily or once, close the app when done)
+- [x] Categories with your own file types and folders; search; sorting by any column
+- [x] Batch downloads: a list of links, or numbered links such as `img*.jpg`
+- [x] Import and export of link lists; drop link files onto the window
+- [x] Link grabber that lists the files a web page links to
+- [x] Clipboard watching: copy a link and the app offers to download it
+
+**The window**
+- [x] Cards in a responsive grid, or the classic table
+- [x] Sidebar that becomes an icon rail and then a drawer; toolbar that collapses to icons and an overflow menu
+- [x] Two designs (Drishti and iOS), each in light, dark and automatic
+- [x] Summary tiles, smooth animations, and a download-complete window
+
+**Running in the background**
+- [x] Keep downloading with no window, with a system tray icon (Windows, macOS, Linux)
+- [x] Queues, schedules and the browser add-on keep working with no window
+- [x] Optional start with the system
+
+**Browser add-on**
+- [x] Chrome, Edge, Brave, Opera and Firefox
+- [x] Catches browser downloads and passes the browser login (cookies) along
+- [x] "Download with Swift Download Manager" in the right-click menu
+- [x] Spots videos and sounds that a page plays
+
+**AI assistants (MCP)**
+- [x] MCP server with ten tools to list, add, pause, resume and remove downloads and to run queues
+- [x] Works with or without the window, and hands downloads over mid-download
+- [x] Safety rules: an off switch, a secret token, no file deletion, no choosing folders, no passwords shown
+
+**Web interface and server**
+- [x] Web page on `127.0.0.1` to add, pause, resume, remove and fetch files, on a phone or a desktop *(pre-release 1.6.0-beta.1)*
+- [x] `--server` mode with accounts, a folder per person, and administrators who see everybody's downloads *(pre-release 1.6.0-beta.1)*
+- [x] Docker image on GitHub Container Registry *(pre-release 1.6.0-beta.1)*
+- [x] Refuses links to private and local addresses (also after redirects), salted password hashes, sign-in rate limit *(pre-release 1.6.0-beta.1)*
+- [x] Finished files are sent in pieces so a broken transfer can carry on *(pre-release 1.6.0-beta.1)*
+
+**Packaging**
+- [x] Signed Windows `.exe` and `.zip` with the add-on; `.deb` for Ubuntu, Debian and Mint
+- [x] Mac build script, `SHA256SUMS` with every release, and builds and tests on Linux, Windows and macOS for every pull request
+
+### Planned: building blocks for integrations
+
+These come first because every other integration is built on them.
+
+- [ ] **Command-line client**: `sdm add <url>`, `sdm list`, `sdm pause` and so on, so scripts, Makefiles and npm scripts can use the program
+- [ ] **Documented local API** with an OpenAPI description (the web page uses an internal one today that is not documented or stable)
+- [ ] **API keys** for scripts and tools, separate from the browser sign-in
+- [ ] **Live events** (server-sent events or WebSocket) for progress, instead of polling
+- [ ] **`sdm://add?url=...` links**, so any web page can offer a "Download with Swift Download Manager" button
+- [ ] **When a download finishes, run a command**
+- [ ] **Webhooks** for started, finished and failed downloads
+- [ ] **aria2 JSON-RPC compatibility**, so tools that already talk to aria2 (yt-dlp, AriaNg, many browser extensions) work without changes
+- [ ] **Metalink** (`.meta4`) files: several mirrors for one file
+- [ ] **Installable web page** with a share target, to send a link from a phone to your computer
+
+### Planned: package managers and developer sources
+
+Most packages are small, so the point here is big files (PyTorch and CUDA wheels, models, container layers, SDKs), verified hashes, resuming on a
+bad connection, and offline copies.
+
+- [ ] **Lockfile import**: `package-lock.json`, `requirements.txt`, `uv.lock` / `poetry.lock`, `Cargo.lock`, `go.sum`; download everything in parallel and check the registry hashes
+- [ ] **Offline bundle**: save every file of a lockfile into one folder for a machine with no internet
+- [ ] **Package names as links**: `npm:`, `pypi:`, `crates:`, `maven:`, `nuget:`, `go:`
+- [ ] **GitHub Releases** (`github:owner/repo@latest`, pick the right file for your system)
+- [ ] **Hugging Face** models and datasets, with the checksums the site publishes
+- [ ] **Docker / OCI image layers**
+- [ ] **Registry cache mode**: point pip, npm or cargo at the program and it fetches, checks and keeps what they ask for
+- [ ] **Python package** (`pip install ...`) to add and watch downloads from a script
+- [ ] **npm package** (`npm install ...`) to do the same from Node
+- [ ] **GitHub Action** that downloads and caches big files in a build
+
+### Planned: more places to download from
+
+- [ ] **FTP, FTPS and SFTP** links (only `http` and `https` are accepted today)
+- [ ] **yt-dlp bridge**: a page address, then a choice of formats, then the program's engine does the downloading
+- [ ] **HLS and DASH** streams in the browser add-on
+- [ ] **Share links** from Google Drive, Dropbox, MediaFire and similar, turned into direct links
+- [ ] **RSS and release feeds**: download new items automatically
+- [ ] **Watch folder**: drop a file of links into a folder and they are added
+- [ ] Torrents and magnet links *(undecided: a large feature of its own)*
+
+### Planned: after a download finishes
+
+- [ ] **Rules**: for example "videos over 1 GB go to this folder and queue"
+- [ ] **Unpack archives** automatically
+- [ ] **Scan for viruses** (Microsoft Defender, ClamAV)
+- [ ] **Notifications** through ntfy, Discord, Slack, Telegram, Pushover
+- [ ] **Upload the finished file** to S3, WebDAV or anywhere rclone can reach
+- [ ] **Tell Plex or Jellyfin** to look for the new file
+
+### Planned: remote control and automation
+
+- [ ] **Telegram and Discord bot**: send a link, the server at home downloads it
+- [ ] **Home Assistant**, **n8n** and **Zapier** connectors
+- [ ] **Explorer "Send to"**, and plug-ins for Raycast, Alfred and PowerToys Run
+- [ ] More **MCP tools**: resolve a package name, verify a checksum, set a speed limit, search a feed
+
+### Planned: a plugin system
+
+So people can add integrations without changing the program itself.
+
+- [ ] **Resolver files** (TOML or JSON): "this kind of link, ask this address, take the link and checksum from here". No code, so adding a site or registry is a small pull request
+- [ ] **External plug-ins** in any language (Python, Node, ...) that talk to the program over standard input and output
+- [ ] **Plug-in index** with an in-app "Browse integrations" page and hash-checked installs
+- [ ] **Permissions** for plug-ins (which sites, which folders) and a plug-in section in [`SECURITY.md`](SECURITY.md)
+- [ ] **Starter templates**, for example `sdm plugin new`
+- [ ] Sandboxed WebAssembly plug-ins *(undecided: only if people write many plug-ins)*
+
+### Planned: known gaps in what exists
+
+- [ ] Stable release of the pre-release features (several networks, web interface, server mode)
+- [ ] Several networks tried on real Windows and macOS hardware (so far tested on Linux with separate local addresses)
+- [ ] A ready-made Mac download, signed and notarised (today you build it on a Mac)
+- [ ] The browser add-on in the Chrome Web Store and Firefox Add-ons (today you load it by hand, and Firefox needs a signed file to keep it)
+- [ ] Docker image for ARM (64-bit Intel/AMD only for now)
+- [ ] A page to manage accounts in server mode (today only `--add-user`, `--remove-user` and `--list-users`)
+- [ ] HTTPS built into the server (today you put a reverse proxy in front of it)
+
+### Suggested order
+
+1. The command-line client, the documented API and `sdm://` links
+2. Finished-download commands and webhooks
+3. Lockfile import, GitHub Releases and Hugging Face
+4. aria2 JSON-RPC compatibility
+5. Resolver files and the plug-in index, once the first few resolvers show what the format needs
 
 ## Contributing
 
@@ -356,3 +501,7 @@ them privately.
 ## License
 
 Released under the Apache License 2.0. See [`LICENSE`](LICENSE).
+
+The program bundles two open fonts, so it looks the same on every system: [Inter](https://github.com/rsms/inter) (SIL Open Font License 1.1,
+[`Inter-LICENSE.txt`](source/assets/fonts/Inter-LICENSE.txt)) for text and [Phosphor Icons](https://github.com/phosphor-icons/web) (MIT,
+[`Phosphor-LICENSE.txt`](source/assets/fonts/Phosphor-LICENSE.txt)) for icons.
