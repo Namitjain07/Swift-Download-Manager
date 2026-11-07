@@ -366,15 +366,19 @@ Get the files from the [**latest release**](https://github.com/Namitjain07/Swift
 
 | Platform | File | How to install |
 | --- | --- | --- |
-| **Windows 10/11** (64-bit) | `SwiftDownloadManager.exe` | Double-click it. No installer needed. It is signed with the project's own certificate, so Windows may say the publisher is unknown: choose **More info**, then **Run anyway** (see [Windows warnings](#windows-warnings-and-antivirus)). |
-| **Windows**, with browser add-on | `SwiftDownloadManager-<version>-windows-x64.zip` | The same program together with the browser add-on, the certificate and a short read-me. |
-| **Ubuntu 22.04+, Debian 12+, Mint 21+** (64-bit) | `swift-download-manager_<version>_amd64.deb` | Double-click it, or run `sudo apt install ./swift-download-manager_<version>_amd64.deb`. |
+| **Windows 10/11**, Intel or AMD (64-bit) | `SwiftDownloadManager-<version>-setup-x64.exe` | **The installer.** Double-click it and follow the steps: it installs for you (no administrator needed) or for everybody, adds a Start menu entry and an uninstaller, and can add a desktop icon. Quiet install: `setup.exe /VERYSILENT`. It is signed with the project's own certificate, so Windows may say the publisher is unknown: choose **More info**, then **Run anyway** (see [Windows warnings](#windows-warnings-and-antivirus)). |
+| **Windows 11 on ARM** (Snapdragon and others) | `SwiftDownloadManager-<version>-setup-arm64.exe` | The same installer, with the program built for ARM so that it runs natively. (The x64 installer also works there, through Windows' emulation.) |
+| **Windows**, no installing | `SwiftDownloadManager.exe` (x64) or `SwiftDownloadManager-arm64.exe` | Just the program: double-click it. |
+| **Windows**, portable with browser add-on | `SwiftDownloadManager-<version>-windows-x64.zip` (or `-arm64.zip`) | The program together with the browser add-on, the certificate and a short read-me. |
+| **Ubuntu 22.04+, Debian 12+, Mint 21+**, Intel or AMD (64-bit) | `swift-download-manager_<version>_amd64.deb` | Double-click it, or run `sudo apt install ./swift-download-manager_<version>_amd64.deb`. |
+| **The same on ARM** (Raspberry Pi 4/5 with a 64-bit OS, ARM servers and laptops) | `swift-download-manager_<version>_arm64.deb` | `sudo apt install ./swift-download-manager_<version>_arm64.deb`. |
+| **Arch Linux, Manjaro, EndeavourOS** (x86_64), **Arch Linux ARM** (aarch64) | `swift-download-manager-<version>-1-x86_64.pkg.tar.zst` or `...-aarch64.pkg.tar.zst`, with its `.sig` | `sudo pacman -U swift-download-manager-<version>-1-x86_64.pkg.tar.zst`. To have pacman check the signature, add the project's key first (see [Security](SECURITY.md#checking-the-linux-packages-and-the-checksums-gpg)). Or build it yourself: `makepkg -si` with [`source/packaging/arch/PKGBUILD`](source/packaging/arch/PKGBUILD) or `make arch`. |
 | **macOS** | build it, see below | A Mac app can only be built on a Mac. See [`mac/HOW TO GET THE MAC VERSION.txt`](mac/HOW%20TO%20GET%20THE%20MAC%20VERSION.txt). On first start, right-click the app and choose **Open**, because it is not signed with a paid Apple developer account. |
-| **Other Linux** | build it, see below | `bash packaging/linux/build-deb.sh` in [`source/`](source/). |
+| **Other Linux** | build it, see below | `make build && sudo make install` (to `/usr/local`; `PREFIX=/usr` to change), or `make deb` / `make arch` for a package. `make help` lists everything. |
 
-All files are built and, for Windows, signed by GitHub from the release's source code (see [`release.yml`](.github/workflows/release.yml)).
+All files are built by GitHub from the release's source code (see [`release.yml`](.github/workflows/release.yml)). The Windows programs and installers, the Arch packages and the `SHA256SUMS` file are signed with keys that belong to this project; see [SECURITY.md](SECURITY.md) for the fingerprints and how to check them.
 
-Every release also lists a `SHA256SUMS` file so you can check what you downloaded.
+Every release also lists a `SHA256SUMS` file (and `SHA256SUMS.asc`, its signature) so you can check what you downloaded.
 
 ### Browser add-on
 

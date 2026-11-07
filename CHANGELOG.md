@@ -5,6 +5,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Installers and packages, for Intel/AMD and for ARM
+- **A Windows installer** (`SwiftDownloadManager-<version>-setup-x64.exe` and `...-setup-arm64.exe`, built with Inno Setup): installs for the current
+  user without an administrator or for everybody, adds a Start menu entry and an uninstaller (both signed), an optional desktop icon, the browser
+  add-on folder and the licence; a running copy is asked to close; settings and the download list are kept when you uninstall. Quiet install:
+  `setup.exe /VERYSILENT`. The program is also built natively for **Windows on ARM**
+- **Debian packages for amd64 and arm64** (Raspberry Pi 4/5 with a 64-bit OS, ARM servers and laptops), now with a copyright file, a changelog,
+  checksums for every installed file and a proper maintainer line
+- **Arch Linux packages** (`.pkg.tar.zst`) for x86_64 and, on Arch Linux ARM, aarch64, with a `PKGBUILD` in `source/packaging/arch/`
+- **A `Makefile`**: `make build test`, `make install` / `uninstall` (with `PREFIX` and `DESTDIR`), `make deb`, `make arch`, `make windows-installer`,
+  `make checksums` and `make sign-checksums`; `make help` lists them all
+- **A new signing key**: a new Windows code-signing certificate (SHA-256 `1F:6A:E5:BB:…:B8:A1:5D`, valid until 2031-11-07) signs the programs and
+  the installers, and a new GPG key (`0EBC C36E 6AC4 83A3 7A61 EA5B B217 B8AB B696 672D`) signs `SHA256SUMS` (`SHA256SUMS.asc`) and the Arch packages. The
+  earlier Windows key signed everything up to 1.8.0 and was replaced, not because of any known exposure. Public parts are in `source/packaging`; the
+  fingerprints and how to check them are in SECURITY.md
+- The release workflow builds all of it in parallel, tries each package (installs it, starts the program, removes it again), signs, and publishes
+
 ### Several networks at once, made more reliable
 - **A network plugged in while a download runs is used**: a USB-tethered phone or a cable is picked up within a few seconds and gets a connection
   of its own; a network that is unplugged gets no new connections, and a card whose address changed gets the new one. An empty answer from the system

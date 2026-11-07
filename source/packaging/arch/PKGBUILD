@@ -1,0 +1,64 @@
+# Maintainer: Namitjain07 <119175433+Namitjain07@users.noreply.github.com>
+#
+# Swift Download Manager for Arch Linux (x86_64, and aarch64 on Arch Linux ARM).
+#
+# This builds from the source tarball that build-arch.sh makes next to it (see packaging/arch/build-arch.sh,
+# or `make arch` in the repository). For the AUR, use the tarball of a tagged release instead:
+#   source=("$pkgname-$pkgver.tar.gz::https://github.com/Namitjain07/Swift-Download-Manager/archive/refs/tags/v$pkgver.tar.gz")
+# and run `updpkgsums`; the program is then in the "source" folder of that tarball.
+
+pkgname=swift-download-manager
+pkgver=1.9.0
+pkgrel=1
+pkgdesc='Fast, free download manager: split downloads, resume, queues, scheduler, browser add-on, web interface, several networks at once'
+arch=('x86_64' 'aarch64')
+url='https://github.com/Namitjain07/Swift-Download-Manager'
+license=('Apache-2.0')
+depends=('gcc-libs' 'glibc')
+# The window is drawn with OpenGL and talks to X11 or Wayland through libraries that are loaded when they are needed.
+optdepends=(
+  'libxkbcommon: keyboard input'
+  'wayland: Wayland support'
+  'libx11: X11 support'
+  'libxcursor: mouse pointers on X11'
+  'libxrandr: screen changes on X11'
+  'libxi: input devices on X11'
+  'mesa: OpenGL for the window'
+  'xdg-desktop-portal: file dialogs'
+  'xdg-utils: opening folders and links'
+)
+makedepends=('cargo' 'pkgconf' 'libxkbcommon' 'wayland' 'libx11' 'libxcursor' 'libxrandr' 'libxi')
+# Rust code and link-time optimisation in makepkg's defaults do not mix; the program is built with its own settings.
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+# The tests start local servers and depend on timing, so they are run by the project's own checks and not here.
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/swift_download_manager "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 "packaging/linux/$pkgname.desktop" "$pkgdir/usr/share/applications/$pkgname.desktop"
+  for size in 32 48 64 128 256 512; do
+    target/release/swift_download_manager --write-icon "icon-$size.png" "$size"
+    install -Dm644 "icon-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/$pkgname.png"
+  done
+  # The browser add-on, for "Load unpacked" in the browser.
+  install -d "$pkgdir/usr/share/$pkgname"
+  cp -r browser-extension "$pkgdir/usr/share/$pkgname/"
+  chmod -R u=rwX,go=rX "$pkgdir/usr/share/$pkgname/browser-extension"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
