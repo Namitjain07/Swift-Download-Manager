@@ -290,8 +290,9 @@ jobs:
           docker run --rm -v "$PWD:/work" "${{ matrix.image }}" bash -euxc '
             pacman-key --init || true
             pacman-key --populate || true
-            pacman -Syu --noconfirm --needed base-devel git rust sudo
+            pacman -Syu --noconfirm --needed base-devel git rust sudo pkgconf libxkbcommon wayland libx11 libxcursor libxrandr libxi
             useradd -m builder
+            echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
             git config --system --add safe.directory "*"
             chown -R builder:builder /work
             su builder -c "cd /work/source && bash packaging/arch/build-arch.sh"

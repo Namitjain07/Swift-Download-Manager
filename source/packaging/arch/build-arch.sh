@@ -18,7 +18,8 @@ mkdir -p "$OUT/build"
 git -C .. archive --format=tar.gz --prefix="$NAME-$PKGVER/" -o "$OUT/build/$NAME-$PKGVER.tar.gz" HEAD:source
 sed "s/^pkgver=.*/pkgver=$PKGVER/" packaging/arch/PKGBUILD > "$OUT/build/PKGBUILD"
 
-(cd "$OUT/build" && makepkg --force --noconfirm --clean)
+# --syncdeps installs the build dependencies (it asks for sudo only when something is missing).
+(cd "$OUT/build" && makepkg --force --noconfirm --clean --syncdeps)
 cp "$OUT"/build/*.pkg.tar.zst "$OUT/"
 rm -rf "$OUT/build"
 ls -1 "$OUT"/*.pkg.tar.zst
