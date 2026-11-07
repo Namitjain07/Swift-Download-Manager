@@ -29,7 +29,7 @@ optdepends=(
 )
 makedepends=('cargo' 'pkgconf' 'libxkbcommon' 'wayland' 'libx11' 'libxcursor' 'libxrandr' 'libxi')
 # Rust code and link-time optimisation in makepkg's defaults do not mix; the program is built with its own settings.
-options=('!lto')
+options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz")
 sha256sums=('SKIP')
 

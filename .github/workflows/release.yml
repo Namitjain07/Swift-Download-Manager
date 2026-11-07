@@ -303,7 +303,7 @@ jobs:
             git config --system --add safe.directory "*"
             chown -R builder:builder /work
             su builder -c "cd /work/source && bash packaging/arch/build-arch.sh"
-            pkg=$(ls /work/source/dist/arch/*.pkg.tar.zst)
+            pkg=$(ls /work/source/dist/arch/swift-download-manager-[0-9]*.pkg.tar.zst)
             pacman -Qp "$pkg"
             pacman -U --noconfirm "$pkg"
             test "$(pacman -Q swift-download-manager | cut -d" " -f1)" = swift-download-manager
