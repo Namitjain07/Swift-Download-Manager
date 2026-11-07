@@ -258,7 +258,8 @@ jobs:
           (cd / && md5sum --quiet -c /var/lib/dpkg/info/swift-download-manager.md5sums)
           file "$(command -v swift-download-manager)"
           sudo dpkg -r swift-download-manager
-          ! command -v swift-download-manager
+          # (command -v would still answer from bash's own memory of the path)
+          test ! -e /usr/bin/swift-download-manager
       - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
@@ -303,7 +304,7 @@ jobs:
             swift-download-manager --networks
             pacman -Ql swift-download-manager | grep -E "usr/bin/swift-download-manager|\.desktop|browser-extension/manifest.json"
             pacman -R --noconfirm swift-download-manager
-            if command -v swift-download-manager; then echo "still installed after removing" >&2; exit 1; fi
+            if [ -e /usr/bin/swift-download-manager ]; then echo "still installed after removing" >&2; exit 1; fi
             chown -R "$(stat -c %u:%g /work)" /work/source/dist
           '
           ls -l source/dist/arch
