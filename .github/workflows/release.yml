@@ -259,7 +259,7 @@ jobs:
           sudo dpkg -i "$deb"
           swift-download-manager --networks
           dpkg -L swift-download-manager | grep -c .
-          (cd / && md5sum --quiet -c /var/lib/dpkg/info/swift-download-manager.md5sums)
+          dpkg --verify swift-download-manager
           file "$(command -v swift-download-manager)"
           sudo dpkg -r swift-download-manager
           # (command -v would still answer from bash's own memory of the path)

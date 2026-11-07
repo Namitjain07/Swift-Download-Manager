@@ -17,7 +17,7 @@ ARCH=${DEB_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}
 NAME=swift-download-manager
 PKG="dist/deb/${NAME}_${FILE_VERSION}_${ARCH}"
 
-if [ "${SKIP_BUILD:-}" != "1" ]; then
+if [[ "${SKIP_BUILD:-}" != "1" ]]; then
   cargo build --release
 fi
 
@@ -53,7 +53,7 @@ License: Apache-2.0
  found in the file /usr/share/common-licenses/Apache-2.0.
 EOF
 chmod 644 "$PKG/usr/share/doc/$NAME/copyright"
-if [ -f ../CHANGELOG.md ]; then
+if [[ -f ../CHANGELOG.md ]]; then
   gzip -9n -c ../CHANGELOG.md > "$PKG/usr/share/doc/$NAME/changelog.gz"
   chmod 644 "$PKG/usr/share/doc/$NAME/changelog.gz"
 fi
