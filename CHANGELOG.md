@@ -3,6 +3,35 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Several networks at once, made more reliable
+- **A network plugged in while a download runs is used**: a USB-tethered phone or a cable is picked up within a few seconds and gets a connection
+  of its own; a network that is unplugged gets no new connections, and a card whose address changed gets the new one. An empty answer from the system
+  is read as "could not tell", never as "everything was unplugged"
+- **Automatic mode** (Options > Networks): use every connected network, also ones plugged in later, with a switch to leave one out. It stands back
+  while a VPN is connected so traffic is not sent round it
+- **USB networks are recognised** (`usb0`, `rndis0`, `enx…`, "Remote NDIS", "Apple Mobile Device Ethernet") and labelled *USB*, apart from phones
+  on the mobile network
+- **Windows names the card** the traffic must leave through (`IP_UNICAST_IF`): binding to a card's address alone does not decide it there. Tested
+  with the real adapters: the right one connects and a made-up one is refused
+- A connection that breaks in the middle of a transfer rests its network for 8 seconds, and the last working network is never rested
+- `--networks` lists the networks the app sees and what automatic mode would use. The progress window says *not connected* for a card that was unplugged
+
+### The web interface
+- **The page**: add many links at once (with a category and a queue), Pause all / Resume all / Clear finished, sorting, the speed in the tab title,
+  and a settings sheet: Networks and speed (several networks, automatic mode, every network's live speed, the overall speed limit), Access tokens and
+  Users
+- **Access tokens** for scripts and other programs on a server with accounts: each acts as its owner with the owner's rights, is shown once, can be
+  revoked at once, cannot make more tokens, and stops when the account is removed. Requests with a token are not turned away for their `Origin`
+- **Users** (administrators): see what each person has downloaded, add accounts, change passwords, remove accounts; there is always one administrator
+- `GET /healthz` (no sign-in) and `GET /metrics` (Prometheus format, administrators); new JSON calls for all of the above are listed in the README
+- A person using the web page is no longer announced in the window as "an AI assistant"
+
+### Other
+- The Options > Networks card says that a network plugged in or out while a download runs is picked up or skipped
+- Tests: 301 (was 261), including a real download that gains a second network half-way, and tests for every new web call
+
 ## [1.8.0] - 2026-11-06
 
 **A regular release.** Colour themes (including one after the Files app for Windows 11), a title bar that matches the theme, a picture of a download's parts flowing into one file, smoother loaders and motion, and a redesigned browser add-on (version 1.5.0). The Docker image is published as `:latest` and `:1.8.0`.

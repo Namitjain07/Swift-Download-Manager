@@ -6,7 +6,7 @@
 
 **Free, open-source download manager and download accelerator for Windows, Linux and macOS.**
 
-Split every file into up to 32 connections, pause and resume (even after a restart), queue and schedule downloads, and send downloads from Chrome, Edge, Firefox, Brave and Opera straight to the app. A modern, fast alternative to Internet Download Manager (IDM), written in Rust.
+Split every file into up to 32 connections, pause and resume (even after a restart), queue and schedule downloads, and send downloads from Chrome, Edge, Firefox, Brave and Opera straight to the app. It can even **combine Wi-Fi, Ethernet and a phone's USB tethering into one faster download**, and run as a **web-managed download server** for a team. A modern, free alternative to Internet Download Manager (IDM) for Windows 11, Windows 10, Linux and macOS, written in Rust.
 
 [![Latest release](https://img.shields.io/github/v/release/Namitjain07/Swift-Download-Manager?label=release)](https://github.com/Namitjain07/Swift-Download-Manager/releases/latest)
 [![License](https://img.shields.io/github/license/Namitjain07/Swift-Download-Manager)](LICENSE)
@@ -38,6 +38,17 @@ Browsers download each file over a single connection, so a fast line often sits 
 - **Built for everyday use**: pause and resume, queues with schedules, categories, batch downloads, a link grabber, clipboard watching, speed limits and a proxy.
 - **Works with your browser**: an add-on for Chrome, Edge, Brave, Opera and Firefox catches downloads and passes your login along.
 - **More than a desktop app**: a web interface, a multi-user server with a Docker image, and a built-in MCP server so AI assistants such as Claude can manage downloads.
+- **Faster than one connection can be**: download over Wi-Fi, Ethernet and a phone's USB tethering at the same time, so the speeds add up. A cable or phone plugged in while a download runs is taken into use within seconds.
+
+| | Swift Download Manager | Internet Download Manager (IDM) | aria2 |
+| --- | --- | --- | --- |
+| Price and licence | Free, open source (Apache-2.0) | Paid, closed source | Free, open source |
+| Runs on | Windows, Linux, macOS | Windows | Windows, Linux, macOS |
+| Graphical window | Yes | Yes | No (command line; separate front-ends exist) |
+| Browser add-on | Chrome, Edge, Brave, Opera, Firefox | Yes | Not included |
+| Web interface and multi-user server | Yes, with a Docker image | No | Not included (RPC only) |
+
+<sub>Based on what each project documents; check the other projects' sites for their current features and prices.</sub>
 
 ## Features
 
@@ -152,6 +163,12 @@ No. There is no telemetry, no analytics and no update check in the program. It o
 **Can an AI assistant use it?**
 Yes. Claude and other assistants that speak the Model Context Protocol (MCP) can list, add, pause, resume and remove downloads, but never delete files or choose folders. See [Use it from an AI assistant](#use-it-from-an-ai-assistant-mcp).
 
+**Does downloading over several networks work with a VPN?**
+If you pick the cards by hand, that is a decision and it is respected: those cards carry the traffic, which means it does not pass through the VPN. Automatic mode stands back while a VPN is connected, so nothing is sent round it by accident.
+
+**Can I send downloads from my browser to a server instead of my own computer?**
+You can send links to a server from any script with an access token (see [Manage the downloads of a whole server from the page](#manage-the-downloads-of-a-whole-server-from-the-page)). Pointing the browser add-on at a server is on the [ideas list](docs/IDEAS.md).
+
 **Can I change how it looks?**
 Yes. Under **Options → Appearance** you choose light, dark or automatic, and one of 14 colour themes (Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha). The choice is saved and applies at once, with a short glide from the old look to the new one. See [Colour themes](#colour-themes).
 
@@ -186,6 +203,32 @@ remove and download finished files. It follows your system's light or dark setti
 - Only this computer can reach it (`127.0.0.1`, port 9615 unless you change it). The link carries a secret key, so treat it like a password; the browser
   swaps it for a cookie and the key disappears from the address bar
 - It runs inside the window, or in the background when only the tray icon is left
+
+### Manage the downloads of a whole server from the page
+
+<p align="center"><img src="docs/images/web-networks.png" alt="The web interface's settings sheet: several networks at once with a switch, a speed and a connection count for each network, and the overall speed limit" width="560"> <img src="docs/images/web-tokens.png" alt="The web interface's access tokens: a list of tokens, a new token shown once with a copy button and a ready curl command" width="560"></p>
+
+- **Add many links at once**: paste a list (one per line, `#` lines are skipped), pick a category and a queue, and every link gets its own answer, so one bad link does not spoil the rest
+- **Pause all, Resume all, Clear finished** (files are never deleted), search, filter, and sort by newest, name, size, progress or state; the browser tab shows the current speed
+- **Networks and speed** (administrators): switch downloading over several networks on, see every network of the server with its live speed and connections, leave one out, and set an overall speed limit
+- **Access tokens**: each person can make keys for scripts and other programs. A token acts as its owner with the owner's rights, is shown once, can be revoked at once, cannot make more tokens, and dies with the account
+- **Users** (administrators): see what each person has downloaded, add accounts, change passwords and remove accounts; there is always at least one administrator
+- **Monitoring**: `GET /healthz` (no sign-in, says nothing about the downloads) for load balancers, and `GET /metrics` in the Prometheus format for administrators
+
+Everything the page does is a plain JSON call, so scripts can do it too. Send `Authorization: Bearer <token>` (or sign in and use the cookie, with the header `X-SDM-Request: 1` on changes):
+
+| Call | What it does |
+| --- | --- |
+| `GET /api/downloads?status=&q=&limit=` | List downloads (yours; everybody's for an administrator) |
+| `POST /api/downloads` with `{"url", "name", "category", "queue", "start"}` | Add one download |
+| `POST /api/downloads/batch` with `{"urls": [...]}` or `{"text": "one link per line"}` | Add many, one answer each |
+| `POST /api/downloads/{id}/pause`, `/resume`, `DELETE /api/downloads/{id}` | Act on one download (removing keeps the file) |
+| `POST /api/downloads/pause-all`, `/resume-all`, `/clear-completed` | Act on all of your downloads |
+| `GET /files/{id}` | Fetch a finished file (supports ranges, so a broken transfer can carry on) |
+| `GET`/`POST /api/networks`, `POST /api/speed-limit` with `{"kbps"}` | Networks and the overall limit (administrators) |
+| `GET`/`POST /api/tokens`, `DELETE /api/tokens/{id}` | Your access tokens (from a signed-in page only) |
+| `GET`/`POST /api/users`, `DELETE /api/users/{name}` | Accounts (administrators of a server with accounts) |
+| `GET /healthz`, `GET /metrics` | Health check, Prometheus numbers |
 
 ## Run it for your organisation
 
@@ -259,12 +302,16 @@ USB or hotspot connection. A download is then spread over all of them.
 
 - Each connection of a download is tied to one network card. Every card always gets a connection and the faster cards get more, so the speeds add
   up and a slow card never holds the others back
-- A card that stops working (cable pulled, phone out of range) is left alone for 30 seconds while the others carry on
+- **Plug in a phone or a cable while a download runs** and it is picked up within a few seconds, with a connection of its own; a network that is unplugged gets no new connections, and a card whose address changed gets the new one
+- **Automatic mode** (*Use every connected network automatically*) uses every connected network, also ones you plug in later, and has a switch to leave one out (a phone on a metered plan, say). It stands back while a VPN is connected, so traffic is not sent round it. Picking cards by hand is always respected
+- USB networks (a phone with USB tethering, a USB network adapter) are recognised and labelled *USB*; `swift_download_manager --networks` lists what the app sees and what automatic mode would use
+- A card that stops working (cable pulled, phone out of range) is left alone for 30 seconds while the others carry on; a connection that breaks in the middle of a transfer rests its card for 8 seconds, and the last working card is never rested
 - The progress window shows what each network is carrying
 - When networks are chosen, nothing falls back to the normal connection: if none of them works, the download says so
 - Linux ties the traffic to the card with `SO_BINDTODEVICE` (kernel 5.7 or newer; older kernels use the card's address), macOS with `IP_BOUND_IF`, and
-  Windows with the card's address. The logic is tested on Linux with separate local addresses standing in for networks; it has not yet been tried with
-  real phones and cables on Windows or macOS, so please report what you see
+  Windows with `IP_UNICAST_IF` (the card's number) plus the card's address, because on Windows an address alone does not decide which card the packets leave
+  through. The logic is tested with separate local addresses standing in for networks (including a card plugged in mid-download), and on Windows the card
+  choice is tested against the real adapters. It has not yet been tried with real phones and cables on all three systems, so please report what you see
 
 ## Use it from an AI assistant (MCP)
 
@@ -429,6 +476,8 @@ in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0`
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ## Roadmap and feature checklist
+
+Looking for what could come next? There is a brainstorm with effort and value marks in [docs/IDEAS.md](docs/IDEAS.md).
 
 A ticked box (`[x]`) is built and in the program; an empty box (`[ ]`) is planned or still an idea. Items marked *(pre-release)* are in a pre-release
 build and not yet in the stable version. The unticked items are ideas in a rough order, not promises: the list changes as people tell us what they need.
