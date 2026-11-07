@@ -301,6 +301,8 @@ jobs:
             useradd -m builder
             echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
             git config --system --add safe.directory "*"
+            # makepkg will not run as root, so the folder goes to a build user and is given back at the end.
+            owner=$(stat -c %u:%g /work)
             chown -R builder:builder /work
             su builder -c "cd /work/source && bash packaging/arch/build-arch.sh"
             pkg=$(ls /work/source/dist/arch/swift-download-manager-[0-9]*.pkg.tar.zst)
@@ -311,7 +313,7 @@ jobs:
             pacman -Ql swift-download-manager | grep -E "usr/bin/swift-download-manager|\.desktop|browser-extension/manifest.json"
             pacman -R --noconfirm swift-download-manager
             if [ -e /usr/bin/swift-download-manager ]; then echo "still installed after removing" >&2; exit 1; fi
-            chown -R "$(stat -c %u:%g /work)" /work/source/dist
+            chown -R "$owner" /work
           '
           ls -l source/dist/arch
       - name: Sign the package

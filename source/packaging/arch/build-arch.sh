@@ -19,7 +19,8 @@ git -C .. archive --format=tar.gz --prefix="$NAME-$PKGVER/" -o "$OUT/build/$NAME
 sed "s/^pkgver=.*/pkgver=$PKGVER/" packaging/arch/PKGBUILD > "$OUT/build/PKGBUILD"
 
 # --syncdeps installs the build dependencies (it asks for sudo only when something is missing).
-(cd "$OUT/build" && makepkg --force --noconfirm --clean --syncdeps)
+# Arch Linux ARM makes .pkg.tar.xz by default; the same .pkg.tar.zst as on Arch is wanted everywhere.
+(cd "$OUT/build" && PKGEXT=.pkg.tar.zst makepkg --force --noconfirm --clean --syncdeps)
 cp "$OUT"/build/*.pkg.tar.zst "$OUT/"
 rm -rf "$OUT/build"
 ls -1 "$OUT"/*.pkg.tar.zst
