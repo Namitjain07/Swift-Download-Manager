@@ -293,6 +293,8 @@ jobs:
       - name: Build and try the package inside Arch Linux
         run: |
           docker run --rm -v "$PWD:/work" "${{ matrix.image }}" bash -euxc '
+            # Inside a container pacman cannot set up its own download sandbox (Landlock), so it is switched off here.
+            sed -i "/^\[options\]/a DisableSandbox" /etc/pacman.conf
             pacman-key --init || true
             pacman-key --populate || true
             pacman -Syu --noconfirm --needed base-devel git rust sudo pkgconf libxkbcommon wayland libx11 libxcursor libxrandr libxi
