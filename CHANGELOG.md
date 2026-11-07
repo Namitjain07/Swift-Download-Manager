@@ -3,7 +3,10 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.9.0] - 2026-11-07
+
+**Installers for Windows (Intel/AMD and ARM), Debian packages and Arch packages for Intel/AMD and ARM, a Makefile, and signing with new keys**, together with the improvements to downloading over several networks and to the web interface that were made since 1.8.0. The Docker image is published as `:latest` and `:1.9.0`.
+
 
 ### Installers and packages, for Intel/AMD and for ARM
 - **A Windows installer** (`SwiftDownloadManager-<version>-setup-x64.exe` and `...-setup-arm64.exe`, built with Inno Setup): installs for the current
