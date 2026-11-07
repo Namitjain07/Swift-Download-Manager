@@ -172,8 +172,12 @@ jobs:
           foreach ($f in 'SwiftDownloadManager.exe', 'README.md', 'LICENSE', 'browser-extension\manifest.json', 'browser-extension\popup.html', 'swift-download-manager-codesign-2.cer', 'unins000.exe') {
             if (-not (Test-Path (Join-Path $dir $f))) { throw "The installation lacks $f" }
           }
-          & "$dir\SwiftDownloadManager.exe" --networks
-          if ($LASTEXITCODE -ne 0) { throw 'The installed program did not run' }
+          # A program with a window does not set $LASTEXITCODE when started with &, so start it and wait for it.
+          $out = Join-Path $env:RUNNER_TEMP 'networks.txt'
+          $r = Start-Process -FilePath "$dir\SwiftDownloadManager.exe" -ArgumentList '--networks' -Wait -PassThru -RedirectStandardOutput $out
+          Get-Content $out
+          if ($r.ExitCode -ne 0) { throw "The installed program did not run (exit code $($r.ExitCode))" }
+          if (-not (Select-String -Path $out -Pattern '^Name\s+Kind')) { throw 'The installed program did not list the networks' }
           if ($env:HAVE_KEY -eq 'true') {
             $u = Get-AuthenticodeSignature "$dir\unins000.exe"
             "Uninstaller signature: $($u.Status)"
