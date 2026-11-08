@@ -39,6 +39,7 @@ fn main() -> eframe::Result<()> {
     let mut color_theme: Option<theme::ColorTheme> = None;
     let mut show: Option<String> = None;
     let mut size = [1180.0f32, 680.0];
+    let mut scale: Option<f32> = None;
     let mut start_url: Option<String> = None;
     let mut i = 1;
     while i < args.len() {
@@ -48,6 +49,12 @@ fn main() -> eframe::Result<()> {
                 i += 1;
             }
             "--demo" => demo = true,
+            // Draw everything 2 (or 3) times larger in a window that many times bigger: sharp pictures for the website and
+            // the README. The layout is the one of the normal size: --size 1180x720 --scale 2 is a 2360 x 1440 picture.
+            "--scale" if i + 1 < args.len() => {
+                scale = args[i + 1].parse::<f32>().ok().map(|s| s.clamp(1.0, 4.0));
+                i += 1;
+            }
             // Lists the networks this computer could download over (to check that a USB phone or a second card is seen).
             "--networks" => {
                 print!("{}", netroute::describe(&netroute::interfaces()));
@@ -153,7 +160,7 @@ fn main() -> eframe::Result<()> {
             viewport: widgets::titlebar::viewport(
                 eframe::egui::ViewportBuilder::default()
                     .with_title(app::APP_NAME)
-                    .with_inner_size(size)
+                    .with_inner_size([size[0] * scale.unwrap_or(1.0), size[1] * scale.unwrap_or(1.0)])
                     .with_min_inner_size([420.0, 420.0])
                     .with_app_id("swift-download-manager")
                     .with_icon(appicon::egui_icon()),
@@ -166,7 +173,7 @@ fn main() -> eframe::Result<()> {
         result = eframe::run_native(
             app::APP_NAME,
             options,
-            Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, color_theme, show, ..Default::default() })))),
+            Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, color_theme, show, scale, ..Default::default() })))),
         );
         match &result {
             // The window never opened with this renderer: try the next one. (An error after the app has run is not retried.)

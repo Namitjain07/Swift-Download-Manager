@@ -554,10 +554,13 @@ cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme d
 # a window other than the main one: --show add|batch|options|networks|appearance|scheduler|queues|properties|progress|delete|about|browser|ai|grabber|close|table|drawer|menus|empty
 # a colour theme: --color-theme winui|files|carbon|blue|green|black|purple|pink|orange|teal|gold|nord|dracula|mocha|coral
 # a narrower window: --size 900x640   (or 600x760)
+# sharper: --scale 1.5 draws everything 1.5 times larger in a window 1.5 times bigger (a window cannot be bigger than the screen)
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
 
 On a machine without a screen, put `xvfb-run -a` in front of the program.
+
+`bash site/tools/render-docs.sh` retakes every picture of the app in this README at the largest scale the screen allows (set `SDM_SCREEN=3840x2160` on a 4K screen for pictures twice as sharp), and `site/tools/render-shots.sh` with `site/tools/encode-media.sh` make the website's pictures and the animations.
 
 ## What is in this repository
 

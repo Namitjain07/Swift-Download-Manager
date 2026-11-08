@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Turns the screenshots the app itself draws into the pictures, WebP files and GIFs of the website.
+# Turns the screenshots the app itself draws into the WebP files and GIFs of the website and the README.
 #
-#   bash site/tools/render-shots.sh <folder>      # 1. the app draws every theme (needs a build of the app)
-#   bash site/tools/encode-media.sh <folder>      # 2. this: resize, compress, animate (needs Docker)
+#   bash site/tools/render-shots.sh <folder>      # 1. the app draws every theme and tour frame (needs a build of the app)
+#   bash site/tools/encode-media.sh <folder>      # 2. this: compress and animate (needs Docker)
 #
-# <folder> holds themes/<id>-<light|dark>.png and sync/<name>.png from the first step.
-# Nothing here runs in CI: the finished pictures are committed under site/assets/img.
+# <folder> holds themes/, sync/, tour/ and onboarding/ from the first step. The stills keep the size they were
+# drawn at (up to 1800 wide); the animations are 1100 wide as GIFs and 1400 wide as animated WebP.
+# Nothing here runs in CI: the finished pictures are committed under site/assets/img (and docs/images for the README).
 set -euo pipefail
 
 SHOTS="${1:?folder with the screenshots (see render-shots.sh)}"
@@ -27,60 +28,63 @@ IMAGE="${FFMPEG_IMAGE:-linuxserver/ffmpeg:latest}"
 
 docker run --rm -i --entrypoint sh \
   -v "$(w "$SHOTS"):/shots:ro" \
-  -v "$(w "$ROOT/docs/images"):/docs:ro" \
+  -v "$(w "$ROOT/docs/images"):/docs" \
   -v "$(w "$OUT"):/out" \
   "$IMAGE" -s <<'INNER'
 set -eu
 F="ffmpeg -hide_banner -loglevel error -y"
 mkdir -p /out/themes /out/sync /out/product /tmp/frames
 
-# One WebP per theme and mode, for the gallery.
-for f in /shots/themes/*.png; do
-  n=$(basename "$f" .png)
-  $F -i "$f" -vf "scale=1180:-2:flags=lanczos" -c:v libwebp -quality 80 -compression_level 6 "/out/themes/$n.webp"
-done
-# ... and the WinUI 3 theme over each material and picture.
-for f in /shots/sync/*.png; do
-  n=$(basename "$f" .png)
-  $F -i "$f" -vf "scale=1180:-2:flags=lanczos" -c:v libwebp -quality 82 -compression_level 6 "/out/sync/$n.webp"
-done
+still() { # input output max-width quality
+  $F -i "$1" -vf "scale='min($3,iw)':-2:flags=lanczos" -c:v libwebp -quality "$4" -compression_level 6 "$2"
+}
 
-# The pictures of the product that were already in the repository (no wider than a retina column needs).
-for n in ai-assistants ai-assistants-controls add-download add-download-dark scheduler-dark networks-dark options-dark options-light \
-         table-view responsive-compact responsive-medium web-light web-dark web-mobile web-bulk web-networks web-tokens extension-popup \
-         winui-appearance winui-appearance-dark winui-options-dark winui-options themes-light themes-dark screenshot screenshot-dark download-flow; do
+# One WebP per theme and mode, for the gallery; and the WinUI 3 theme over each material and picture.
+for f in /shots/themes/*.png; do still "$f" "/out/themes/$(basename "$f" .png).webp" 1800 80; done
+for f in /shots/sync/*.png;   do still "$f" "/out/sync/$(basename "$f" .png).webp" 1800 82; done
+
+# The pictures of the product (the README's too), no wider than a big screen's column needs.
+for n in screenshot screenshot-dark add-download add-download-dark table-view scheduler-dark options-dark options-light networks-dark \
+         ai-assistants download-flow responsive-medium responsive-compact winui-light winui-dark winui-options winui-options-dark \
+         winui-appearance winui-appearance-dark updates-window progress-mini progress-window onboarding-welcome onboarding-setup \
+         extension-popup themes-light themes-dark web-light web-dark web-mobile web-bulk web-networks web-tokens ai-assistants-controls; do
   [ -f "/docs/$n.png" ] || continue
-  $F -i "/docs/$n.png" -vf "scale='min(1400,iw)':-2:flags=lanczos" -c:v libwebp -quality 82 -compression_level 6 "/out/product/$n.webp"
+  still "/docs/$n.png" "/out/product/$n.webp" 1800 84
 done
 
-# The GIF that goes through the 15 themes, light and then dark.
+# A GIF (for the README) and an animated WebP (for the site) from numbered frames in a folder.
+animate() { # name framerate folder gif-width webp-width
+  $F -framerate "$2" -i "$3/%02d.png" \
+    -vf "scale=$4:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=200:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=4" \
+    -loop 0 "/out/$1.gif"
+  $F -framerate "$2" -i "$3/%02d.png" -vf "scale=$5:-2:flags=lanczos" -c:v libwebp_anim -quality 74 -compression_level 6 -loop 0 "/out/$1.webp"
+}
+
+# Through the 15 themes, light and then dark.
 i=0
 for t in coral winui files carbon blue green black purple pink orange teal gold nord dracula mocha; do
   for m in light dark; do
-    i=$((i + 1))
-    cp "/shots/themes/$t-$m.png" "/tmp/frames/$(printf %02d $i).png"
+    i=$((i + 1)); cp "/shots/themes/$t-$m.png" "/tmp/frames/$(printf %02d $i).png"
   done
 done
-$F -framerate 1.25 -i /tmp/frames/%02d.png \
-  -vf "scale=760:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=160:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=5" \
-  -loop 0 /out/theme-cycle.gif
-$F -framerate 1.25 -i /tmp/frames/%02d.png -vf "scale=960:-2:flags=lanczos" \
-  -c:v libwebp_anim -quality 72 -compression_level 6 -loop 0 /out/theme-cycle.webp
+animate theme-cycle 1.25 /tmp/frames 1100 1400
 
-# The GIF of the WinUI 3 theme taking its colours from different pictures and materials.
+# The WinUI 3 theme taking its colours from different pictures and materials.
 rm -f /tmp/frames/*
 i=0
 for n in dark-bloom dark-sunset dark-aurora dark-graphite dark-acrylic light-dawn dark-solid; do
-  i=$((i + 1))
-  cp "/shots/sync/$n.png" "/tmp/frames/$(printf %02d $i).png"
+  i=$((i + 1)); cp "/shots/sync/$n.png" "/tmp/frames/$(printf %02d $i).png"
 done
-$F -framerate 0.9 -i /tmp/frames/%02d.png \
-  -vf "scale=760:-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=5" \
-  -loop 0 /out/winui-sync.gif
-$F -framerate 0.9 -i /tmp/frames/%02d.png -vf "scale=960:-2:flags=lanczos" \
-  -c:v libwebp_anim -quality 74 -compression_level 6 -loop 0 /out/winui-sync.webp
+animate winui-sync 0.9 /tmp/frames 1100 1400
+
+# A tour of the app, and the welcome window.
+[ -d /shots/tour ] && animate tour 0.7 /shots/tour 1100 1400
+[ -d /shots/onboarding ] && animate onboarding 0.55 /shots/onboarding 1000 1200
 
 ls -l /out | tail -n +2
 INNER
 
+# The README's animations are the same files.
+cp "$OUT/theme-cycle.gif" "$OUT/winui-sync.gif" "$ROOT/docs/images/"
+[[ -f "$OUT/tour.gif" ]] && cp "$OUT/tour.gif" "$OUT/onboarding.gif" "$ROOT/docs/images/"
 echo "Done: $OUT"
