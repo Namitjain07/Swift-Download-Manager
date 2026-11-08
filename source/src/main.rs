@@ -12,6 +12,7 @@ mod mcp;
 mod netroute;
 mod serve;
 mod theme;
+mod update;
 mod winui_link;
 mod web;
 mod widgets;
@@ -104,6 +105,13 @@ fn main() -> eframe::Result<()> {
                 winui_link::set_wallpaper_override(Some(PathBuf::from(&args[i + 1])));
                 i += 1;
             }
+            "--write-ico" if i + 1 < args.len() => {
+                // Used when making the Windows program and installer: --write-ico app.ico
+                if let Err(e) = appicon::save_ico(std::path::Path::new(&args[i + 1])) {
+                    eprintln!("could not write icon: {e}");
+                }
+                return Ok(());
+            }
             "--write-icon" if i + 1 < args.len() => {
                 // Used when making the installers: --write-icon icon.png [size]
                 let size = args.get(i + 2).and_then(|s| s.parse().ok()).unwrap_or(256);
@@ -120,6 +128,10 @@ fn main() -> eframe::Result<()> {
             _ => {}
         }
         i += 1;
+    }
+    // What an earlier update left behind (the program moved aside, downloaded files).
+    if !demo && screenshot.is_none() {
+        update::clean_up(&app::default_config_dir().join("updates"));
     }
     // The picture is taken with sample rows so the whole layout is visible.
     if screenshot.is_some() {

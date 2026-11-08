@@ -150,11 +150,15 @@ impl App {
                 self.progress_open.remove(&id);
                 continue;
             };
+            if self.progress_mini.contains(&id) {
+                self.mini_progress(ctx, id);
+                continue;
+            }
             let mut act: Option<&str> = None;
             let mut details = self.details_open.contains(&id);
             let mut lim_on = self.items[idx].limit_kbps > 0;
             let mut lim_val: u64 = if lim_on { self.items[idx].limit_kbps } else { 256 };
-            let mut close = {
+            let (mut close, minimize) = {
                 let item = &self.items[idx];
                 let st = item.status();
                 let pal = theme::current(ctx);
@@ -181,7 +185,7 @@ impl App {
                     Status::Error => FlowState::Failed,
                     Status::Queued | Status::Paused => FlowState::Waiting,
                 };
-                let out = sheet(("progress", id), title).width(500.0).floating(pos).show(ctx, |s| {
+                let out = sheet(("progress", id), title).width(500.0).floating(pos).minimizable().show(ctx, |s| {
                     s.body(|ui| {
                         crate::widgets::flow(ui, ("progress", id), &channels, item.progress(), flow_state, 112.0);
                         ui.add_space(12.0);
@@ -281,13 +285,17 @@ impl App {
                             } else if primary_button(ui, "Resume").clicked() {
                                 act = Some("resume");
                             }
-                            if plain_button(ui, "Cancel").on_hover_text("Stop and close").clicked() {
+                            if st == Status::Complete {
+                                if plain_button(ui, "Close").clicked() {
+                                    act = Some("close");
+                                }
+                            } else if plain_button(ui, "Cancel download").on_hover_text("Stop it and take it off the list (what was already fetched is deleted)").clicked() {
                                 act = Some("cancel");
                             }
                         },
                     );
                 });
-                out.close
+                (out.close, out.minimize)
             };
             let new_limit = if lim_on { lim_val.max(1) } else { 0 };
             if new_limit != self.items[idx].limit_kbps {
@@ -302,17 +310,120 @@ impl App {
             match act {
                 Some("pause") => self.stop_item(id),
                 Some("resume") => self.start_item(id),
+                // Cancel: stop it and ask to take it off the list (the question also deletes what was fetched).
                 Some("cancel") => {
                     self.stop_item(id);
                     close = true;
+                    self.ask_delete(vec![id]);
                 }
+                Some("close") => close = true,
                 Some("open") => open_path(&self.items[idx].path()),
                 Some("folder") => open_path(&self.items[idx].folder),
                 _ => {}
             }
+            if minimize && !close {
+                self.progress_mini.insert(id);
+            }
             if close {
                 self.progress_open.remove(&id);
+                self.progress_mini.remove(&id);
             }
+        }
+    }
+
+    /// A progress window shrunk to a small bar: the name, how far it is, the speed, and the buttons that matter.
+    /// Several of them stack up in the bottom right corner; they can be dragged anywhere.
+    fn mini_progress(&mut self, ctx: &egui::Context, id: u64) {
+        use crate::icons;
+        use crate::widgets::{capsule_bar, elided_tooltip, icon_button_at, indeterminate_bar, truncated};
+        use eframe::egui::{CornerRadius, FontId, Frame, Rect, Sense, Stroke, UiBuilder, Vec2};
+        let Some(item) = self.items.iter().find(|i| i.id == id) else {
+            self.progress_mini.remove(&id);
+            return;
+        };
+        let (pal, d) = (theme::current(ctx), theme::design(ctx));
+        let st = item.status();
+        let n = self.progress_mini.iter().position(|m| *m == id).unwrap_or(0) as f32;
+        let edge = if ctx.global_style().visuals.dark_mode { pal.separator_strong } else { pal.separator };
+        let frame = Frame::NONE.fill(pal.raised).corner_radius(CornerRadius::same(d.radius_lg)).stroke(Stroke::new(1.0, edge)).shadow(theme::shadow(ctx, crate::theme::Elevation::Dialog));
+        let mut act: Option<&str> = None;
+        egui::Window::new(format!("mini progress {id}"))
+            .id(egui::Id::unique(("sdm_mini_progress", id)))
+            .title_bar(false)
+            .frame(frame)
+            .resizable(false)
+            .collapsible(false)
+            .constrain(true)
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -(40.0 + n * 90.0)))
+            .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(340.0, 78.0), Sense::hover());
+                let p = ui.painter().clone();
+                icons::file_tile(&p, Rect::from_min_size(rect.min + Vec2::new(12.0, 10.0), Vec2::splat(32.0)), &item.category);
+                let left = rect.left() + 12.0 + 32.0 + 10.0;
+                let buttons = 3.0 * 28.0 + 8.0;
+                let name = truncated(&p, &item.name, FontId::new(d.body, theme::semibold()), pal.label, (rect.right() - left - buttons - 6.0).max(40.0));
+                let name_pos = egui::pos2(left, rect.top() + 11.0);
+                elided_tooltip(ui, &name, name_pos, &item.name, ("mini_name", id));
+                p.galley(name_pos, name, pal.label);
+                let (line, colour) = match st {
+                    Status::Downloading => (format!("{:.0}%  ·  {}  ·  {}", item.progress() * 100.0, human_speed(item.speed()), item.time_left()), pal.secondary),
+                    Status::Paused if item.total() > 0 => (format!("{:.0}%  ·  Paused", item.progress() * 100.0), pal.secondary),
+                    Status::Paused => ("Paused".to_string(), pal.secondary),
+                    Status::Connecting => ("Connecting…".to_string(), pal.secondary),
+                    Status::Queued => ("Waiting".to_string(), pal.secondary),
+                    Status::Complete => ("Complete".to_string(), pal.green_ink),
+                    Status::Error => (item.live.error.lock().unwrap().clone().unwrap_or_else(|| "Something went wrong".into()), pal.red_ink),
+                };
+                let line_text = line.clone();
+                let line = truncated(&p, &line, FontId::proportional(d.caption), colour, (rect.right() - left - 12.0).max(40.0));
+                let line_pos = egui::pos2(left, rect.top() + 33.0);
+                elided_tooltip(ui, &line, line_pos, &line_text, ("mini_line", id));
+                p.galley(line_pos, line, colour);
+                // The bar along the bottom.
+                let bar = Rect::from_min_size(egui::pos2(rect.left() + 12.0, rect.bottom() - 18.0), Vec2::new(rect.width() - 24.0, 6.0));
+                let mut child = ui.new_child(UiBuilder::new().max_rect(bar));
+                let colour = match st {
+                    Status::Complete => pal.green,
+                    Status::Error => pal.red,
+                    Status::Downloading => pal.accent,
+                    _ => pal.orange,
+                };
+                if st == Status::Connecting || (st == Status::Downloading && item.total() == 0) {
+                    indeterminate_bar(&mut child, 6.0);
+                } else {
+                    capsule_bar(&mut child, egui::Id::unique(("mini_bar", id)), if st == Status::Complete { 1.0 } else { item.progress() }, colour, 6.0, None);
+                }
+                // Buttons: pause or resume (or open), back to the full window, close.
+                let primary = match st {
+                    Status::Downloading | Status::Connecting => (Icon::Pause, "Pause", "pause"),
+                    Status::Complete => (Icon::File, "Open the file", "open"),
+                    _ => (Icon::Resume, "Resume", "resume"),
+                };
+                let right = rect.right() - 10.0;
+                for (k, (icon, tip, key)) in [primary, (Icon::CaretUp, "Back to the full window", "expand"), (Icon::Close, "Close (the download goes on)", "close")].into_iter().enumerate() {
+                    let r = Rect::from_center_size(egui::pos2(right - 14.0 - (2 - k) as f32 * 28.0 + 0.0, rect.top() + 24.0), Vec2::splat(28.0));
+                    if icon_button_at(ui, r, icon, tip, egui::Id::unique(("mini_btn", id, key))).clicked() {
+                        act = Some(key);
+                    }
+                }
+            });
+        match act {
+            Some("pause") => self.stop_item(id),
+            Some("resume") => self.start_item(id),
+            Some("open") => {
+                if let Some(i) = self.items.iter().find(|i| i.id == id) {
+                    open_path(&i.path());
+                }
+            }
+            Some("expand") => {
+                self.progress_mini.remove(&id);
+            }
+            Some("close") => {
+                self.progress_mini.remove(&id);
+                self.progress_open.remove(&id);
+            }
+            _ => {}
         }
     }
 
@@ -375,9 +486,15 @@ impl App {
         let Some(mut d) = self.delete.take() else { return };
         let chosen = std::cell::Cell::new(None::<bool>);
         let any_done = d.ids.iter().any(|id| self.items.iter().any(|i| i.id == *id && i.status() == Status::Complete));
+        // Unfinished downloads: how much of them is on the disk and goes with them.
+        let partial: u64 = d.ids.iter().filter_map(|id| self.items.iter().find(|i| i.id == *id)).filter(|i| i.status() != Status::Complete).map(|i| i.done()).sum();
         let out = sheet("delete", "Remove from the list?").width(440.0).show(ctx, |s| {
             s.body(|ui| {
                 ui.label(if d.ids.len() == 1 { "This download will be removed from the list.".to_string() } else { format!("These {} downloads will be removed from the list.", d.ids.len()) });
+                if partial > 0 {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(format!("The part that was already fetched ({}) is deleted too.", human_size(partial))).color(theme::current(ui.ctx()).secondary));
+                }
                 if any_done {
                     ui.add_space(8.0);
                     check_row(ui, &mut d.delete_files, "Also delete the downloaded files from disk");
@@ -722,6 +839,10 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
         g.toggle("Start with the system, in the background", None, &mut s.launch_at_login);
     });
     hint(ui, "Running in the background keeps downloads, queues and the browser add-on going, with an icon in the tray.");
+    section_title(ui, "Updates");
+    card(ui, |g| {
+        g.toggle("Look for updates by itself", Some("Once a day. Help > Check for updates lists every version, also older ones to go back to."), &mut s.update_check);
+    });
     section_title(ui, "AI assistants");
     card(ui, |g| {
         g.toggle("Let AI assistants add, pause and remove downloads (MCP)", Some("They cannot delete files or choose folders. What they may do, limits and setup: Help > AI assistants…"), &mut s.mcp_enabled);

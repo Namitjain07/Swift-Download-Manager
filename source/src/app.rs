@@ -9,6 +9,7 @@ mod grabber;
 pub(crate) mod layout;
 pub(crate) mod mcp_cmds;
 mod tools;
+mod updates;
 mod view;
 mod winui;
 
@@ -254,6 +255,19 @@ pub struct Settings {
     pub web_port: u16,
     /// Refuse links that lead to private or local addresses (set by `--server`).
     pub block_private: bool,
+    /// Look for a newer version once a day (Help > Check for updates). Off until the person says so: the program
+    /// otherwise talks only to the servers it downloads from.
+    pub update_check: bool,
+    /// Download an update in the background once it is found (it still waits for a restart).
+    pub update_download: bool,
+    /// Only finished versions, or also betas.
+    pub update_channel: crate::update::Channel,
+    /// Where the list of versions comes from, and the address of it when it is the person's own server.
+    pub update_server: crate::update::Server,
+    pub update_url: String,
+    /// When the list was last read (seconds since 1970), and a version the person chose not to be told about.
+    pub update_last: i64,
+    pub update_skip: String,
 }
 
 impl Default for Settings {
@@ -300,6 +314,13 @@ impl Default for Settings {
             web_enabled: false,
             web_port: 9615,
             block_private: false,
+            update_check: false,
+            update_download: false,
+            update_channel: crate::update::Channel::Stable,
+            update_server: crate::update::Server::GitHub,
+            update_url: String::new(),
+            update_last: 0,
+            update_skip: String::new(),
         }
     }
 }
@@ -580,6 +601,13 @@ pub struct App {
     add: Option<AddDialog>,
     batch: Option<BatchDialog>,
     progress_open: BTreeSet<u64>,
+    /// Progress windows that were minimized to a small bar.
+    progress_mini: BTreeSet<u64>,
+    updates: updates::Updates,
+    /// The icon in the system tray (made on the first frame) and when it was last refreshed.
+    tray: Option<crate::background::Tray>,
+    tray_tried: bool,
+    tray_shown: Instant,
     details_open: BTreeSet<u64>,
     options: Option<Settings>,
     /// Scheduler window: which queue, and its schedule being edited.
@@ -681,6 +709,11 @@ impl App {
             add: None,
             batch: None,
             progress_open: BTreeSet::new(),
+            progress_mini: BTreeSet::new(),
+            updates: updates::Updates::new(),
+            tray: None,
+            tray_tried: false,
+            tray_shown: Instant::now(),
             details_open: BTreeSet::new(),
             options: None,
             scheduler: None,
@@ -816,6 +849,17 @@ impl App {
             "properties" => self.properties = Some(2),
             "progress" => {
                 self.progress_open.insert(1);
+            }
+            "progress-mini" => {
+                for id in [1, 3] {
+                    self.progress_open.insert(id);
+                    self.progress_mini.insert(id);
+                }
+            }
+            "updates" => self.show_sample_updates(),
+            "check-updates" => {
+                self.updates.open = true;
+                self.check_updates(true);
             }
             "about" => self.about_open = true,
             "browser" => self.browser_open = true,

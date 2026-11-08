@@ -26,17 +26,20 @@ pub struct Sheet {
     width: f32,
     backdrop_closes: bool,
     floating_at: Option<Pos2>,
+    minimizable: bool,
 }
 
 /// What came of showing a sheet.
 pub struct SheetOut {
     /// The close button was pressed, or Escape (or, if allowed, the backdrop).
     pub close: bool,
+    /// The minimize button was pressed (only on sheets made `minimizable`).
+    pub minimize: bool,
 }
 
 /// Starts a sheet. `id_salt` must be unique among the sheets shown at the same time.
 pub fn sheet(id_salt: impl Hash + std::fmt::Debug, title: impl Into<String>) -> Sheet {
-    Sheet { id: Id::unique(("sdm_sheet", id_salt)), title: title.into(), width: 520.0, backdrop_closes: false, floating_at: None }
+    Sheet { id: Id::unique(("sdm_sheet", id_salt)), title: title.into(), width: 520.0, backdrop_closes: false, floating_at: None, minimizable: false }
 }
 
 impl Sheet {
@@ -49,6 +52,12 @@ impl Sheet {
     /// A click outside the sheet closes it (for sheets that only show information).
     pub fn backdrop_closes(mut self) -> Self {
         self.backdrop_closes = true;
+        self
+    }
+
+    /// A minimize button next to the close button (for windows that can shrink to a small bar).
+    pub fn minimizable(mut self) -> Self {
+        self.minimizable = true;
         self
     }
 
@@ -65,8 +74,8 @@ impl Sheet {
         let body_max = (screen.height() - 32.0 - HEADER_H - FOOTER_H - 32.0).max(120.0);
         let edge = if ctx.global_style().visuals.dark_mode { pal.separator_strong } else { pal.separator };
         let frame = Frame::NONE.fill(pal.raised).corner_radius(CornerRadius::same(d.radius_xl)).stroke(Stroke::new(1.0, edge)).shadow(theme::shadow(ctx, Elevation::Dialog));
-        let mut close = false;
-        let Sheet { id, title, backdrop_closes, floating_at, .. } = self;
+        let (mut close, mut minimize) = (false, false);
+        let Sheet { id, title, backdrop_closes, floating_at, minimizable, .. } = self;
         // A dialog fades in over a fifth of a second (egui's own fade is a twelfth) and rises into place.
         let opened = super::anim::entrance(ctx, id.with("open"), OPEN_SECS);
         let normal_fade = ctx.global_style().animation_time;
@@ -80,33 +89,41 @@ impl Sheet {
                 .collapsible(false)
                 .constrain(true)
                 .default_pos(pos)
-                .show(ctx, |ui| contents(ui, &title, width, body_max, id, &mut close, add));
+                .show(ctx, |ui| contents(ui, &title, width, body_max, id, (&mut close, minimizable.then_some(&mut minimize)), add));
             None
         } else {
             let area = egui::Modal::default_area(id).anchor(egui::Align2::CENTER_CENTER, [0.0, super::anim::rise(opened)]);
-            Some(egui::Modal::new(id).area(area).frame(frame).backdrop_color(pal.scrim).show(ctx, |ui| contents(ui, &title, width, body_max, id, &mut close, add)))
+            Some(egui::Modal::new(id).area(area).frame(frame).backdrop_color(pal.scrim).show(ctx, |ui| contents(ui, &title, width, body_max, id, (&mut close, minimizable.then_some(&mut minimize)), add)))
         };
         ctx.global_style_mut(|s| s.animation_time = normal_fade);
         // A floating window has no modal to listen to Escape, so only the button closes it.
-        let Some(modal) = shown else { return SheetOut { close } };
+        let Some(modal) = shown else { return SheetOut { close, minimize } };
         let esc = modal.is_top_modal && !modal.any_popup_open && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape));
         if esc || (backdrop_closes && modal.backdrop_response.clicked()) {
             close = true;
         }
-        SheetOut { close }
+        SheetOut { close, minimize }
     }
 }
 
-fn contents(ui: &mut Ui, title: &str, width: f32, body_max: f32, id: Id, close: &mut bool, add: impl FnOnce(&mut SheetUi)) {
+fn contents(ui: &mut Ui, title: &str, width: f32, body_max: f32, id: Id, (close, minimize): (&mut bool, Option<&mut bool>), add: impl FnOnce(&mut SheetUi)) {
     let (pal, d) = (theme::current(ui.ctx()), theme::design(ui.ctx()));
     ui.set_width(width);
     // The three sections stack with no gap between them; each one sets its own inner spacing.
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-    // Header: the title at the left, the close button at the right.
+    // Header: the title at the left, the close button at the right (and a minimize button before it, when there is one).
     let (hdr, _) = ui.allocate_exact_size(vec2(width, HEADER_H), Sense::hover());
     let close_rect = Rect::from_center_size(Pos2::new(hdr.right() - 14.0 - 18.0, hdr.center().y), vec2(36.0, 36.0));
-    let galley = truncated(ui.painter(), title, FontId::new(d.title + 3.0, theme::semibold()), pal.label, width - 2.0 * SIDE as f32 - 36.0 - 8.0);
-    ui.painter().galley(Pos2::new(hdr.left() + SIDE as f32, hdr.center().y - galley.size().y / 2.0), galley, pal.label);
+    let buttons_w = if minimize.is_some() { 36.0 + 36.0 + 8.0 } else { 36.0 };
+    let galley = truncated(ui.painter(), title, FontId::new(d.title + 3.0, theme::semibold()), pal.label, width - 2.0 * SIDE as f32 - buttons_w - 8.0);
+    let title_pos = Pos2::new(hdr.left() + SIDE as f32, hdr.center().y - galley.size().y / 2.0);
+    super::elided_tooltip(ui, &galley, title_pos, title, ("sheet_title", id));
+    ui.painter().galley(title_pos, galley, pal.label);
+    if let Some(minimize) = minimize {
+        if icon_button_at(ui, close_rect.translate(vec2(-40.0, 0.0)), Icon::Minus, "Minimize", id.with("minimize")).clicked() {
+            *minimize = true;
+        }
+    }
     if icon_button_at(ui, close_rect, Icon::Close, "Close", id.with("close")).clicked() {
         *close = true;
     }

@@ -83,6 +83,7 @@ impl App {
         self.properties_window(&ctx);
         self.browser_window(&ctx);
         self.ai_window(&ctx);
+        self.updates_window(&ctx);
         self.about_window(&ctx);
         self.close_window(&ctx);
         self.toast_area(&ctx);
@@ -465,6 +466,12 @@ impl App {
         if menu_item(ui, "AI assistants…", "", true).clicked() {
             self.ai_open = true;
         }
+        if menu_item(ui, "Check for updates…", "", true).clicked() {
+            self.updates.open = true;
+            if self.updates.checked.is_none() {
+                self.check_updates(true);
+            }
+        }
         if menu_item(ui, "About", "", true).clicked() {
             self.about_open = true;
         }
@@ -602,6 +609,11 @@ impl App {
                     if compact {
                         // Only the essentials fit.
                         return;
+                    }
+                    if let Some((txt, strong)) = self.update_hint() {
+                        if status_chip(ui, Some(pal.accent), &txt, if strong { pal.accent_ink } else { pal.secondary }).on_hover_text("Updates…").clicked() {
+                            self.updates.open = true;
+                        }
                     }
                     if !self.demo {
                         let (txt, dot, col) = match &self.listener {

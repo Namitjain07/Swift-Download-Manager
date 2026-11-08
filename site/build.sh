@@ -6,7 +6,8 @@
 # - copies the page, its styles, script and pictures
 # - makes the live previews: the page of the web interface (source/src/web/ui/index.html) of the current code and
 #   of every release tag that has one, each with the pretend server (site/demo/mock-api.js) added before its script
-# - writes data/releases.json from the GitHub API when `gh` is available (otherwise the committed copy is used),
+# - writes data/releases.json from the GitHub API when `gh` is available (otherwise the committed copy is used); the app can
+#   read its list of versions from there too (Help > Check for updates > Settings > Get them from),
 #   so the download and version lists show at once, even when the API is busy
 # - writes sitemap.xml and robots.txt
 #
@@ -60,7 +61,7 @@ echo "previews: latest build + ${#TAGS[@]} release(s) ${TAGS[*]+"(${TAGS[*]})"}"
 FRESH=""
 if command -v gh >/dev/null 2>&1; then
   if gh api "repos/$REPO/releases?per_page=100" --jq '[.[] | select(.draft | not) | {tag_name, name, published_at, prerelease, body, html_url,
-      assets: [.assets[] | {name, size, download_count, browser_download_url}]}]' > "$OUT/data/releases.json.new" 2>/dev/null \
+      assets: [.assets[] | {name, size, download_count, browser_download_url, digest}]}]' > "$OUT/data/releases.json.new" 2>/dev/null \
      && [ -s "$OUT/data/releases.json.new" ] && grep -q '^\[' "$OUT/data/releases.json.new"; then
     mv "$OUT/data/releases.json.new" "$OUT/data/releases.json"; FRESH=1
   fi
