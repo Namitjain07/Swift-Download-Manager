@@ -6,6 +6,7 @@ mod dialogs;
 mod cards;
 pub(crate) mod closing;
 mod grabber;
+mod onboarding;
 pub(crate) mod layout;
 pub(crate) mod mcp_cmds;
 mod tools;
@@ -268,6 +269,8 @@ pub struct Settings {
     /// When the list was last read (seconds since 1970), and a version the person chose not to be told about.
     pub update_last: i64,
     pub update_skip: String,
+    /// The welcome has been shown (and finished or skipped).
+    pub onboarded: bool,
 }
 
 impl Default for Settings {
@@ -321,6 +324,7 @@ impl Default for Settings {
             update_url: String::new(),
             update_last: 0,
             update_skip: String::new(),
+            onboarded: false,
         }
     }
 }
@@ -604,6 +608,7 @@ pub struct App {
     /// Progress windows that were minimized to a small bar.
     progress_mini: BTreeSet<u64>,
     updates: updates::Updates,
+    onboarding: Option<onboarding::Onboarding>,
     /// The icon in the system tray (made on the first frame) and when it was last refreshed.
     tray: Option<crate::background::Tray>,
     tray_tried: bool,
@@ -687,7 +692,13 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
         // The bundled fonts are ready before the first frame, so nothing is ever drawn in a stand-in font.
         theme::install_fonts(&cc.egui_ctx);
-        Self::build(cc.egui_ctx.clone(), launch)
+        // The first start (or the first with this feature): the welcome, unless this is a picture or a test.
+        let first = !launch.demo && launch.screenshot.is_none() && launch.show.is_none() && !launch.headless;
+        let mut app = Self::build(cc.egui_ctx.clone(), launch);
+        if first && !app.settings.onboarded {
+            app.onboarding = Some(onboarding::Onboarding::at_step(0));
+        }
+        app
     }
 
     /// An app with no window, for `--mcp` when nothing else owns the downloads.
@@ -711,6 +722,7 @@ impl App {
             progress_open: BTreeSet::new(),
             progress_mini: BTreeSet::new(),
             updates: updates::Updates::new(),
+            onboarding: None,
             tray: None,
             tray_tried: false,
             tray_shown: Instant::now(),
@@ -861,6 +873,12 @@ impl App {
                 self.updates.open = true;
                 self.check_updates(true);
             }
+            "onboarding" => self.onboarding = Some(onboarding::Onboarding::at_step(0)),
+            "onboarding-look" => self.onboarding = Some(onboarding::Onboarding::at_step(1)),
+            "onboarding-setup" => self.onboarding = Some(onboarding::Onboarding::at_step(2)),
+            "onboarding-browser" => self.onboarding = Some(onboarding::Onboarding::at_step(3)),
+            "onboarding-updates" => self.onboarding = Some(onboarding::Onboarding::at_step(4)),
+            "onboarding-tips" => self.onboarding = Some(onboarding::Onboarding::at_step(5)),
             "about" => self.about_open = true,
             "browser" => self.browser_open = true,
             "ai" => self.ai_open = true,

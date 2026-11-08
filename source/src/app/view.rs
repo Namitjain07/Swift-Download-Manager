@@ -83,6 +83,7 @@ impl App {
         self.properties_window(&ctx);
         self.browser_window(&ctx);
         self.ai_window(&ctx);
+        self.onboarding_window(&ctx);
         self.updates_window(&ctx);
         self.about_window(&ctx);
         self.close_window(&ctx);
