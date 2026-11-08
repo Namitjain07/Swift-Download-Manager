@@ -611,10 +611,10 @@ impl App {
                         // Only the essentials fit.
                         return;
                     }
-                    if let Some((txt, strong)) = self.update_hint() {
-                        if status_chip(ui, Some(pal.accent), &txt, if strong { pal.accent_ink } else { pal.secondary }).on_hover_text("Updates…").clicked() {
-                            self.updates.open = true;
-                        }
+                    if let Some((txt, strong)) = self.update_hint()
+                        && status_chip(ui, Some(pal.accent), &txt, if strong { pal.accent_ink } else { pal.secondary }).on_hover_text("Updates…").clicked()
+                    {
+                        self.updates.open = true;
                     }
                     if !self.demo {
                         let (txt, dot, col) = match &self.listener {

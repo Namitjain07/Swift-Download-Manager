@@ -5,6 +5,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-08
+
+### Downloads that stay smooth, a status that tells the truth, a tenth of the memory
+- **No more reconnecting every minute.** Every connection of a download was given 60 seconds in total for its whole body, so each part of a big file was torn down and reopened once a minute (with a two-second stall) and the window kept saying "Connection problem, retry 1…" while the download carried on. The limit is now on *silence* (30 seconds without a byte), not on the length of the transfer, and the wait before a retry grows (half a second up to 15) instead of always being two seconds. The retry note goes away as soon as every connection is fetching again.
+- **Pause is immediate.** The download shows "Paused" the moment the button is pressed; connections that were blocked in a read wind down by themselves, and a resume straight after a pause starts a new run that old connections cannot touch (no byte counted twice). **Cancel** in the progress window now stops the download and asks to take it off the list, deleting what was already fetched.
+- **Smooth bars with many downloads.** Progress bars, the speed tile and the file in the progress window started a new animation on every frame and asked for an immediate repaint each time, so several downloads at once drew every card as fast as the machine could and moved in jerks. They now ease by time (the same motion at any frame rate) and ask for 30 frames a second (4 behind other windows, none when minimized). The packets in the progress window were placed as time × speed, so they jumped whenever a speed changed; their position is now accumulated frame by frame. Only the cards in view are drawn.
+- **A tenth of the memory.** The window was drawn with wgpu (eframe's default), which woke the discrete graphics card and needed about 440 MB. OpenGL is now used first on Windows and Linux: about 50 MB of private memory, 12 threads instead of 40 and a 6 MB smaller program. wgpu stays the first choice on macOS and the fallback where OpenGL cannot start (a remote desktop, some virtual machines).
+- A shortened file name shows in full when you point at it (cards, the table, the finished window).
+
+### A welcome on the first start
+- Six animated steps with pictures: what it does, the look (the window behind changes as a theme is picked), how it should behave (folder, connections, closing to the tray, starting with the system, the clipboard), the browser add-on, updates and privacy, and a few tips. Every choice applies at once; every step can be skipped.
+
+### Updates, and going back to an older version
+- **Help > Check for updates** (and the tray menu): reads the list of versions from GitHub, from the project's website or from a server of your own (`https`, the shape of GitHub's API), shows what is new, downloads the file that fits how this copy was installed, **checks its SHA-256** and installs it: the Windows installer runs quietly and starts the new version, the single program replaces itself, a Debian package opens in the system's installer, an Arch package shows its command.
+- The same list offers **any other version, older ones too**, to go back to; downloads, queues and settings are kept. Optional daily check (off until you say so), betas optional, a version can be skipped. The website's `data/releases.json` carries checksums and is one of the sources.
+
+### The tray and the progress windows
+- The tray icon now also exists while the window is open. Its menu lists the **running downloads with their percentages** and has pause all, resume, add the link on the clipboard, open the download folder, check for updates, start with the system, and quit.
+- Progress windows can be **minimized to a small bar** (name, percentage, speed, pause and close) that stacks in the corner.
+
+### A new icon
+- Drawn in code at every size (the window, the tray, the taskbar, the installers, the add-on): a white arrow dropping into a tray, on coral.
+
+### Browser add-on 1.6
+- A pop-up with three tabs: **Downloads** (what the app is downloading, with pause and resume), **This page** (videos and sounds the page played, and the files it links to with filters and tick boxes) and **Settings** (only big files, only some file types, leave some sites to the browser). New right-click entries to download the selected links or all the files on a page; Alt+click leaves one download to the browser; a tick on the toolbar button when something was sent.
+- **Security:** the local listener (127.0.0.1:9614) answered any web page, so a page could have added downloads. It now only answers the add-on (an extension origin) or a program that sends no browser headers, and `Host` must be this computer. New: `GET /status`, `POST /add-many`, `POST /control`.
+
+### A website
+- A GitHub Pages site (https://namitjain07.github.io/Swift-Download-Manager/) with downloads chosen for the visitor's system, every version with its notes, a live preview of the web interface (for the current code and for each release that has one), the theme gallery, and a "report a bug" page that opens a ready-made GitHub issue. Built and published by `.github/workflows/pages.yml`.
+
+
 ### AI assistants (MCP): more tools, more control, safer
 - **21 tools** (were 10): `add_downloads` (up to 200 links at once), `pause_all`, `resume_all`, `move_download`, `probe_link` (look at a link before adding
   it: does it answer, size, type, name, can it be resumed), `verify_download` (check a finished file's SHA-256 in the background), `get_settings`,
@@ -44,7 +75,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   [`source/packaging/cross`](source/packaging/cross/README.md)
 - The tray icon is now built for the BSDs as well (it was limited to Linux, Windows and macOS)
 
-## [1.9.0] - 2026-11-07
 
 **Installers for Windows (Intel/AMD and ARM), Debian packages and Arch packages for Intel/AMD and ARM, a Makefile, and signing with new keys**, together with the improvements to downloading over several networks and to the web interface that were made since 1.8.0. The Docker image is published as `:latest` and `:1.9.0`.
 

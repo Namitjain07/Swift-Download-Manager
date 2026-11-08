@@ -92,9 +92,7 @@ pub fn rgba(size: u32) -> Vec<u8> {
             if a <= 0.0 {
                 out.extend_from_slice(&[0, 0, 0, 0]);
             } else {
-                for k in 0..3 {
-                    out.push((acc[k] / count / a * 255.0 + 0.5).clamp(0.0, 255.0) as u8);
-                }
+                out.extend(acc.iter().take(3).map(|c| (c / count / a * 255.0 + 0.5).clamp(0.0, 255.0) as u8));
                 out.push((a * 255.0 + 0.5).clamp(0.0, 255.0) as u8);
             }
         }

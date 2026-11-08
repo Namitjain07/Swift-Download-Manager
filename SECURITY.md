@@ -60,6 +60,12 @@ Reports about these are especially welcome:
 Problems that need an attacker who already controls the user's computer, or ordinary bugs without a security effect,
 should go through the normal [issue form](https://github.com/Namitjain07/Swift-Download-Manager/issues/new/choose).
 
+## How the program protects itself
+
+- **The local listener** (`127.0.0.1:9614`, used by the browser add-on) only answers the add-on (a request whose origin is an extension's) or a program that sends none of the headers a browser adds (the program itself, curl). A web page cannot reach it: its `Origin` and `Sec-Fetch-Site` say where it came from, and a name that was pointed at this computer (DNS rebinding) is refused because `Host` must be this computer. Before 1.9.0 any web page could have added a download through it; please update.
+- **Updates** (Help > Check for updates) are fetched over `https` only (or from this computer), come only from the addresses in the list of versions, and are installed only when their SHA-256 matches the one in that list. A custom update server is yours to protect: whoever controls it controls what is installed. Nothing about the person is sent.
+- **AI assistants** (MCP): the access level, the private-address guard, the site lists and the limits are enforced by the program on every call; see the README.
+
 ## Windows signing and antivirus
 
 Windows releases are signed with a code-signing key that belongs to this project.

@@ -13,6 +13,8 @@ Split every file into up to 32 connections, pause and resume (even after a resta
 ![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)
 
+**Website, a live preview of the web interface and every version: [namitjain07.github.io/Swift-Download-Manager](https://namitjain07.github.io/Swift-Download-Manager/)** · [Report a bug](https://namitjain07.github.io/Swift-Download-Manager/report-bug/)
+
 [**Download the latest release**](https://github.com/Namitjain07/Swift-Download-Manager/releases/latest) · [Features](#features) · [Screenshots](#screenshots) · [Browser add-on](#browser-add-on) · [Web interface and Docker](#run-it-for-your-organisation) · [FAQ](#frequently-asked-questions)
 
 <picture>
@@ -21,6 +23,12 @@ Split every file into up to 32 connections, pause and resume (even after a resta
 </picture>
 
 <sub>The main window, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
+
+<p align="center"><img src="docs/images/tour.gif" alt="A tour of the app: the main window in the Coral and WinUI 3 themes, a progress window, progress windows shrunk to small bars, the Updates window, the networks options, the AI assistants window and the table view" width="760"></p>
+
+<p align="center"><sub>A short tour, drawn by the app itself. Below: all fifteen themes, light and then dark.</sub></p>
+
+<p align="center"><img src="docs/images/theme-cycle.gif" alt="An animation that steps through the main window in all fifteen colour themes, light and dark" width="640"></p>
 
 <img src="docs/images/responsive-medium.png" alt="Swift Download Manager at a medium window width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="Swift Download Manager at a narrow window width: the menus in one button, a scrolling toolbar of icons and one column of download cards" width="230"> <img src="docs/images/options-light.png" alt="The Options window: grouped settings with switches, steppers and a segmented control" width="300">
 
@@ -32,9 +40,9 @@ Split every file into up to 32 connections, pause and resume (even after a resta
 
 Browsers download each file over a single connection, so a fast line often sits mostly idle, and a dropped connection can mean starting over. Swift Download Manager is a free **download accelerator**: it splits every file into several parts, downloads them at the same time, re-splits as parts finish, and keeps going when a connection drops. Big files finish sooner, and a broken connection never means starting over.
 
-- **Free and open source** (Apache License 2.0). No ads, no account, and no telemetry or update pings: the program only talks to the servers you download from.
+- **Free and open source** (Apache License 2.0). No ads, no account and no telemetry: the program only talks to the servers you download from. Looking for updates is optional (off until you say so) and fetches only a list of versions.
 - **Cross-platform**: one program for Windows 10/11, Ubuntu, Debian and Linux Mint, and macOS (built on a Mac).
-- **Fast and light**: written in Rust. On Windows it is one self-contained `.exe` that needs no installer.
+- **Fast and light**: written in Rust and drawn with OpenGL, so the window needs roughly 50 to 100 MB of memory and does not wake a discrete graphics card. On Windows it is one self-contained `.exe`, or an installer if you prefer.
 - **Built for everyday use**: pause and resume, queues with schedules, categories, batch downloads, a link grabber, clipboard watching, speed limits and a proxy.
 - **Works with your browser**: an add-on for Chrome, Edge, Brave, Opera and Firefox catches downloads and passes your login along.
 - **More than a desktop app**: a web interface, a multi-user server with a Docker image, and a built-in MCP server so AI assistants such as Claude can manage downloads.
@@ -70,6 +78,21 @@ Browsers download each file over a single connection, so a fast line often sits 
 **Runs in the background**
 - Close the window and **keep downloading**: an icon in the system tray (Windows notification area, macOS menu bar, Linux tray) shows what is going on, pauses and resumes everything, and opens the window again
 - Queues, schedules and the browser add-on keep working with no window open; optionally **start with the system**, in the background
+- The tray icon is there while the window is open too, and its menu lists the **running downloads with their percentages**, pauses and resumes everything, adds the link on the clipboard, opens the download folder, looks for updates and switches **start with the system** on and off
+- A progress window can be **minimized to a small bar** in the corner (name, percentage, speed, pause and close); **Cancel** stops a download and offers to take it off the list, deleting what was already fetched
+
+<p align="center"><img src="docs/images/progress-mini.png" alt="The main window with two progress windows shrunk to small bars in the bottom right corner" width="560"></p>
+
+**Updates, and going back**
+- **Help > Check for updates** reads the list of versions from GitHub, from the project's website or from a server of your own, shows what is new, downloads the file for how this copy was installed, checks its **SHA-256** and installs it (the Windows installer runs quietly and starts the new version; the single `.exe` replaces itself; a Debian package opens in the system's installer; an Arch package gives you the command)
+- The same list offers **any other version, also older ones**, to go back to; downloads and settings are kept. Optional daily check, optional betas
+- Nothing is checked until you say so (the first-start welcome asks)
+
+**The first minute**
+- A **welcome with six steps** on the first start (what it does, the look, how it should behave, the browser, updates and privacy, a few tips). Every choice applies at once, every step can be skipped
+
+<p align="center"><img src="docs/images/onboarding.gif" alt="The welcome window, step by step: the animated picture of channels flowing into a file, the theme picker, the settings, the browser add-on, updates and privacy, and the tips" width="640"></p>
+
 
 **Organised**
 - **Queues** with their own schedules (start and stop times, daily or once, close the app when done)
@@ -92,6 +115,9 @@ Browsers download each file over a single connection, so a fast line often sits 
 - Passes your browser login (cookies) along, so downloads behind a login work
 - Adds **Download with Swift Download Manager** to the right-click menu
 - Spots videos and sounds that a page plays, and offers them in a pop-up that has the look of the app (light and dark)
+- A pop-up with three tabs: **Downloads** (what the app is downloading right now, with pause and resume), **This page** (the videos and sounds it played, and the files it links to, with filters and tick boxes) and **Settings** (only big files, only some file types, leave some sites to the browser)
+- Right-click: **download the selected links**, or **all the files on the page**; hold **Alt** while clicking a link to let the browser download that one itself
+- Only the add-on can talk to the app: a web page cannot add downloads or read what is downloading
 
 What is finished and what is still planned (integrations with package managers, other tools and more) is in the [roadmap](#roadmap-and-feature-checklist).
 
@@ -446,6 +472,17 @@ Get the files from the [**latest release**](https://github.com/Namitjain07/Swift
 All files are built by GitHub from the release's source code (see [`release.yml`](.github/workflows/release.yml)). The Windows programs and installers, the Arch packages and the `SHA256SUMS` file are signed with keys that belong to this project; see [SECURITY.md](SECURITY.md) for the fingerprints and how to check them.
 
 Every release also lists a `SHA256SUMS` file (and `SHA256SUMS.asc`, its signature) so you can check what you downloaded.
+
+### Updates
+
+You do not have to come back here for every version. **Help > Check for updates** (or the tray menu) shows whether a newer one exists, what is new in it, and installs it with one button. The same window lists every other version too, also older ones, so a version that does not suit you can be rolled back: downloads, queues and settings are kept.
+
+<p align="center"><img src="docs/images/updates-window.png" alt="The Updates window: version 1.10.0 is available with its notes, the buttons Update now and Skip this version, and the folded lists of other versions and of settings" width="520"></p>
+
+- **Where the list comes from**: GitHub (the default), the project's website (`data/releases.json`, for networks where the GitHub API is not reachable), or **a server of your own**: any `https` address that serves a JSON list in the shape of GitHub's API (`tag_name`, `prerelease`, `published_at`, `body`, and `assets` with `name`, `size`, `browser_download_url` and `digest` as `sha256:…`)
+- **Safe**: a file is only installed when its SHA-256 matches the one in the list, files come only from the addresses in the list, and only `https` (or this computer) is accepted; nothing about you is sent
+- **Optional**: it checks once a day when you switch it on (the welcome asks), betas only when you ask for them, and a version can be skipped
+
 
 ### Browser add-on
 
