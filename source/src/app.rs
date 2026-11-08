@@ -591,6 +591,8 @@ pub struct Launch {
     pub headless: bool,
     /// Where to keep settings and the download list (default: the user's config folder).
     pub config_dir: Option<PathBuf>,
+    /// Draw everything this many times larger in a window this many times bigger (`--scale 2` for sharper screenshots).
+    pub scale: Option<f32>,
 }
 
 pub struct App {
@@ -710,7 +712,10 @@ impl App {
     }
 
     pub(crate) fn build(ctx: egui::Context, launch: Launch) -> Self {
-        let Launch { screenshot, demo, start_url, theme: theme_override, color_theme: color_theme_override, show, headless, config_dir } = launch;
+        let Launch { screenshot, demo, start_url, theme: theme_override, color_theme: color_theme_override, show, headless, config_dir, scale } = launch;
+        if let Some(s) = scale {
+            ctx.set_zoom_factor(s.clamp(1.0, 4.0));
+        }
         let mut app = App {
             items: Vec::new(),
             next_id: 1,

@@ -20,6 +20,12 @@ on:
     paths: ["site/**", "source/src/web/ui/**", ".github/workflows/pages.yml"]
   release:
     types: [published, edited, deleted]
+  # The Release workflow publishes with the repository's own token, and events made with that token start no other
+  # workflow, so the `release` trigger above never fires for it. The site therefore also runs when the Release workflow
+  # ends, to list the new version and make its preview.
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +38,7 @@ concurrency:
 jobs:
   build:
     name: Build the site
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

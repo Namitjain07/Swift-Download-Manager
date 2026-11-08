@@ -32,6 +32,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A pop-up with three tabs: **Downloads** (what the app is downloading, with pause and resume), **This page** (videos and sounds the page played, and the files it links to with filters and tick boxes) and **Settings** (only big files, only some file types, leave some sites to the browser). New right-click entries to download the selected links or all the files on a page; Alt+click leaves one download to the browser; a tick on the toolbar button when something was sent.
 - **Security:** the local listener (127.0.0.1:9614) answered any web page, so a page could have added downloads. It now only answers the add-on (an extension origin) or a program that sends no browser headers, and `Host` must be this computer. New: `GET /status`, `POST /add-many`, `POST /control`.
 
+### Sharper pictures
+- `--scale S` draws the app S times larger in a window S times bigger, for screenshots. The pictures of the README and the website were retaken with it at the largest scale the screen allows (1.2 to 1.7 on a 1080p screen: up to 1864 pixels wide instead of 1180), the add-on pop-up picture at 2 times; `site/tools/render-docs.sh` and `render-shots.sh` redo them, and `SDM_SCREEN=3840x2160` makes them twice as sharp on a 4K screen. The animations are bigger too (1100 pixels wide instead of 760).
+
 ### A website
 - A GitHub Pages site (https://namitjain07.github.io/Swift-Download-Manager/) with downloads chosen for the visitor's system, every version with its notes, a live preview of the web interface (for the current code and for each release that has one), the theme gallery, and a "report a bug" page that opens a ready-made GitHub issue. Built and published by `.github/workflows/pages.yml`.
 

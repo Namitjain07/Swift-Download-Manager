@@ -151,7 +151,7 @@
     var box = $("#hero-shots"), tag = $("#hero-tag"), nm = $("#hero-tag-name"), md = $("#hero-tag-mode"), made = { "coral-light": $("img", box) }, at = 0;
     function show(i) {
       var t = order[i], key = t[0] + "-" + t[1], th = themeById(t[0]);
-      if (!made[key]) { made[key] = el("img", { src: IMG + key + ".webp", width: "1180", height: "720", alt: "", "aria-hidden": "true", decoding: "async" }); box.appendChild(made[key]); }
+      if (!made[key]) { made[key] = el("img", { src: IMG + key + ".webp", width: "1770", height: "1080", alt: "", "aria-hidden": "true", decoding: "async" }); box.appendChild(made[key]); }
       var go = function () { $$("img", box).forEach(function (x) { x.classList.toggle("on", x === made[key]); }); nm.textContent = th.name; md.textContent = t[1]; tag.style.setProperty("--dot", t[1] === "dark" ? th.d : th.l); };
       if (made[key].complete) go(); else made[key].addEventListener("load", go, { once: true });
     }
@@ -187,7 +187,7 @@
     var cur = 0, mode = "light", made = {}, auto = true, timer = null;
     function show() {
       var t = THEMES[cur], key = t.id + "-" + mode, dot = mode === "dark" ? t.d : t.l;
-      if (!made[key]) { made[key] = el("img", { src: IMG + key + ".webp", width: "1180", height: "720", alt: t.name + " theme, " + mode + " mode: the main window", loading: "lazy", decoding: "async" }); shot.appendChild(made[key]); }
+      if (!made[key]) { made[key] = el("img", { src: IMG + key + ".webp", width: "1770", height: "1080", alt: t.name + " theme, " + mode + " mode: the main window", loading: "lazy", decoding: "async" }); shot.appendChild(made[key]); }
       var go = function () { $$("img", shot).forEach(function (x) { x.classList.toggle("on", x === made[key]); }); };
       if (made[key].complete && made[key].naturalWidth) go(); else made[key].addEventListener("load", go, { once: true });
       stage.style.setProperty("--dot", dot); nm.textContent = t.name; bl.textContent = t.blurb;
