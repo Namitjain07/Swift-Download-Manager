@@ -1,0 +1,79 @@
+# Builds the website in site/ and publishes it with GitHub Pages.
+#
+#   https://namitjain07.github.io/Swift-Download-Manager/
+#
+# Runs when the site or the page of the web interface changes on main, when a release is published (so the download
+# and version lists and the previews of the new version appear), and by hand (Actions > Pages > Run workflow).
+# A pull request only builds the site, to check that it can be built; it publishes nothing.
+#
+# Set up once (already done): Settings > Pages > Source: GitHub Actions.
+#   gh api -X POST repos/Namitjain07/Swift-Download-Manager/pages -f build_type=workflow
+#
+# Actions from outside GitHub are pinned to a full commit SHA (the version is in the comment); Dependabot keeps them up to date.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "source/src/web/ui/**", ".github/workflows/pages.yml"]
+  pull_request:
+    paths: ["site/**", "source/src/web/ui/**", ".github/workflows/pages.yml"]
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the tags: every release that has a web interface gets a preview
+          fetch-tags: true
+      - name: Build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash site/build.sh _site
+      - name: Check the result
+        run: |
+          set -e
+          for f in index.html 404.html report-bug/index.html demo/index.html demo/mock-api.js demo/versions.json data/releases.json assets/app.js assets/styles.css; do
+            test -s "_site/$f" || { echo "missing: $f"; exit 1; }
+          done
+          # The data files must be valid JSON, and the previews must carry the pretend server.
+          jq -e 'length >= 1' _site/data/releases.json > /dev/null
+          jq -e '.tags | type == "array"' _site/demo/versions.json > /dev/null
+          grep -q 'mock-api.js' _site/demo/index.html
+          # Nothing may be loaded from another site, apart from the GitHub API (see assets/app.js).
+          if grep -rEn '(src|href)="https?://' _site/index.html _site/report-bug/index.html | grep -vE 'github\.com|namitjain07\.github\.io' ; then
+            echo "the page loads something from another site"; exit 1
+          fi
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        if: github.event_name != 'pull_request'
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    name: Publish
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

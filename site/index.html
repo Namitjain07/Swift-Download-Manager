@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swift Download Manager: a free, fast download accelerator for Windows, Linux and macOS</title>
+<meta name="description" content="Free, open-source download manager. Up to 32 connections per file, resume after a restart, queues, a browser add-on, a web interface, an MCP server for AI assistants, 15 themes including WinUI 3, and Wi-Fi + Ethernet + USB tethering at once.">
+<meta name="theme-color" content="#09090d" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://namitjain07.github.io/Swift-Download-Manager/">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Swift Download Manager">
+<meta property="og:description" content="Every download, accelerated. Free and open source for Windows, Linux and macOS.">
+<meta property="og:url" content="https://namitjain07.github.io/Swift-Download-Manager/">
+<meta property="og:image" content="https://namitjain07.github.io/Swift-Download-Manager/assets/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://namitjain07.github.io/Swift-Download-Manager/assets/img/og.png">
+<link rel="preload" as="image" href="assets/img/themes/coral-light.webp" fetchpriority="high">
+<script>
+// Set the colour scheme before anything is painted, so the page never flashes the wrong one.
+(function () { try { var s = localStorage.getItem("sdm-site-theme"); var d = s ? s === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; document.documentElement.setAttribute("data-theme", d ? "dark" : "light"); } catch (e) {} })();
+</script>
+<link rel="stylesheet" href="assets/styles.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Swift Download Manager","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows, Linux, macOS","description":"A free, open-source download manager and accelerator written in Rust.","license":"https://www.apache.org/licenses/LICENSE-2.0","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://namitjain07.github.io/Swift-Download-Manager/","codeRepository":"https://github.com/Namitjain07/Swift-Download-Manager"}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+
+<!-- Icons, drawn once and used everywhere -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 00-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a10.9 10.9 0 015.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0012 .5z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2"/><path d="M12 7.2v4.3M12 11.5L6 17M12 11.5L18 17"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 01-12 0zM12 17v5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5L15.5 9.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18c1.2 0 2-.8 2-1.8 0-1.2-1-1.5-1-2.7 0-1 .8-1.5 1.8-1.5H17a4 4 0 004-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></symbol>
+    <symbol id="i-windows" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M3 5.6l7.5-1v7H3zM11.6 4.4L21 3v8.6h-9.4zM3 12.6h7.5v7L3 18.4zM11.6 12.6H21V21l-9.4-1.3z"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 6l6 6-6 6M12 19h8"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14.5-4M4 4v4h4M4 13a8 8 0 0014.5 4M20 20v-4h-4"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+    <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 4.5a3.5 3.5 0 010 7M18 20a5.5 5.5 0 00-3-4.9"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0M12 19.5h.01"/></symbol>
+    <symbol id="i-type" viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></symbol>
+    <symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 17a9 9 0 1116 0"/><path d="M12 14l4-5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap in">
+    <a class="brand" href="#top" aria-label="Swift Download Manager, back to the top">
+      <span class="mark"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg></span>
+      Swift Download Manager
+    </a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#themes">Themes</a></li>
+        <li><a href="#winui">WinUI 3</a></li>
+        <li><a href="#ai">AI &amp; MCP</a></li>
+        <li><a href="#web">Web preview</a></li>
+        <li><a href="#download">Download</a></li>
+        <li><a href="#versions">Versions</a></li>
+      </ul>
+    </nav>
+    <span class="grow"></span>
+    <a class="stars" href="https://github.com/Namitjain07/Swift-Download-Manager" rel="noopener" aria-label="Swift Download Manager on GitHub">
+      <svg class="ico" aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span><span class="n" id="star-count" hidden></span>
+    </a>
+    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch between light and dark">
+      <svg class="ico moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="ico sun" aria-hidden="true"><use href="#i-sun"/></svg>
+    </button>
+    <button class="icon-btn burger" id="burger" type="button" aria-label="Menu" aria-expanded="false"><svg class="ico" aria-hidden="true"><use href="#i-menu"/></svg></button>
+  </div>
+</header>
+
+<main id="main">
+<!-- ============================================================ HERO -->
+<div class="hero" id="top">
+  <span class="blob a" aria-hidden="true"></span><span class="blob b" aria-hidden="true"></span><span class="blob c" aria-hidden="true"></span>
+  <div class="wrap">
+    <div class="hero-copy">
+      <a class="pill reveal" href="#winui"><b>New</b> A WinUI 3 theme and a hardened MCP server <svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <h1 class="reveal" style="--d:.05s">Every download,<br><span class="grad">accelerated.</span></h1>
+      <p class="lede reveal" style="--d:.12s">Swift Download Manager splits each file into up to 32 connections, picks up where it left off after a restart, and can use Wi-Fi, Ethernet and a phone's USB tethering <em>at the same time</em>. Free and open source, for Windows, Linux and macOS.</p>
+      <div class="cta reveal" style="--d:.18s">
+        <a class="btn primary stack" id="hero-dl" href="#download"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span><span id="hero-dl-label">Download</span><small id="hero-dl-sub">Free · open source</small></span></a>
+        <a class="btn" href="#web"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg>Try it in your browser</a>
+        <a class="btn ghost" href="https://github.com/Namitjain07/Swift-Download-Manager" rel="noopener"><svg class="ico" aria-hidden="true"><use href="#i-github"/></svg>Source code</a>
+      </div>
+      <p class="fine reveal" style="--d:.24s">
+        <span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Apache-2.0 licence</span>
+        <span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>No ads, no account, no telemetry</span>
+        <span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Signed releases built by GitHub</span>
+      </p>
+    </div>
+
+    <div class="stage reveal" style="--d:.2s" id="stage">
+      <div class="window" id="window">
+        <div class="shots" id="hero-shots">
+          <img src="assets/img/themes/coral-light.webp" width="1180" height="720" alt="The main window of Swift Download Manager: a sidebar of categories and queues, tiles for speed, active, queued and finished downloads, and download cards with progress bars" class="on" fetchpriority="high">
+        </div>
+      </div>
+      <div class="tag" id="hero-tag" aria-live="off"><i></i><b id="hero-tag-name">Coral</b><span id="hero-tag-mode">light</span></div>
+      <div class="chip c1" aria-hidden="true"><svg class="ico"><use href="#i-gauge"/></svg><div><span class="live-speed" id="live-speed">6.46 MB/s</span><small>summed over 3 networks</small></div></div>
+      <div class="chip c2" aria-hidden="true"><svg class="ico"><use href="#i-layers"/></svg><div>32 connections<small>per download</small></div></div>
+      <div class="chip c3" aria-hidden="true"><svg class="ico"><use href="#i-palette"/></svg><div>15 themes<small>light and dark</small></div></div>
+    </div>
+
+    <div class="stats reveal" style="margin-top:96px">
+      <div class="stat"><b data-count="32">32</b><span>connections per file</span></div>
+      <div class="stat"><b data-count="15">15</b><span>colour themes</span></div>
+      <div class="stat"><b data-count="21">21</b><span>MCP tools for AI assistants</span></div>
+      <div class="stat"><b data-count="22">22</b><span>platform builds, x86 to RISC-V</span></div>
+    </div>
+  </div>
+  <div class="marquee" aria-hidden="true">
+    <div class="track" id="marquee"></div>
+  </div>
+</div>
+
+<!-- ============================================================ FEATURES -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Why it is fast</span>
+      <h2>Built to use <span class="grad">every bit</span> of your connection.</h2>
+      <p>A browser fetches a file down one pipe. Swift Download Manager opens several, keeps them all busy, and never starts over when one breaks.</p>
+    </div>
+
+    <div class="bento">
+      <article class="cell s7 reveal">
+        <div class="badge" style="--c:#ff385c"><svg class="ico"><use href="#i-layers"/></svg></div>
+        <h3>Split, fetch, merge.</h3>
+        <p>Each download is cut into parts that load at the same time. When a part finishes, a free connection takes half of the biggest one left, so the last stretch is never a single slow tail.</p>
+        <div class="lanes" aria-hidden="true" id="lanes"></div>
+      </article>
+
+      <article class="cell s5 reveal" style="--d:.08s">
+        <div class="badge" style="--c:#ff7a45"><svg class="ico"><use href="#i-pause"/></svg></div>
+        <h3>Pause, quit, come back.</h3>
+        <p>Resume works after you close the app, restart the computer or lose the line. Broken connections are retried, and busy servers get fewer of them.</p>
+        <div class="resume" aria-hidden="true">
+          <div class="row"><div class="file">ISO</div><div class="meta"><b>ubuntu-24.04-desktop-amd64.iso</b><span>5.69 GB · resumes byte for byte</span></div><span class="state"></span></div>
+          <div class="bar"><i></i></div>
+        </div>
+        <div class="mini"><span>Survives restarts</span><span>Retries on its own</span><span>Keeps what it has</span></div>
+      </article>
+
+      <article class="cell s5 reveal">
+        <div class="badge" style="--c:#0067c0"><svg class="ico"><use href="#i-network"/></svg></div>
+        <h3>Wi-Fi + Ethernet + your phone.</h3>
+        <p>Tick the networks to use and every download spreads over all of them, so the speeds add up. Plug in a phone while a download runs and it joins within seconds.</p>
+        <div class="nets" aria-hidden="true">
+          <svg viewBox="0 0 420 200" fill="none">
+            <defs><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="78" y1="0" x2="330" y2="0"><stop offset="0" stop-color="#ff385c"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+            <g stroke="url(#g1)" stroke-width="3" stroke-linecap="round">
+              <path class="flow" d="M78 38 C170 38 190 100 262 100"/><path class="flow f2" d="M78 100 L262 100"/><path class="flow f3" d="M78 162 C170 162 190 100 262 100"/>
+              <path d="M262 100 L330 100" stroke-width="5"/>
+            </g>
+            <g font-family="inherit" font-size="12.5" font-weight="650" fill="currentColor">
+              <g><rect x="8" y="20" width="70" height="36" rx="12" fill="var(--bg-2)" stroke="var(--line-2)"/><text x="43" y="43" text-anchor="middle">Wi-Fi</text></g>
+              <g><rect x="8" y="82" width="70" height="36" rx="12" fill="var(--bg-2)" stroke="var(--line-2)"/><text x="43" y="105" text-anchor="middle">Ethernet</text></g>
+              <g><rect x="8" y="144" width="70" height="36" rx="12" fill="var(--bg-2)" stroke="var(--line-2)"/><text x="43" y="167" text-anchor="middle">USB phone</text></g>
+            </g>
+            <g class="pulse"><circle cx="262" cy="100" r="16" fill="url(#g1)"/><circle cx="262" cy="100" r="6" fill="#fff"/></g>
+            <g><rect x="330" y="74" width="84" height="52" rx="14" fill="var(--bg-2)" stroke="var(--line-2)"/><text x="372" y="96" text-anchor="middle" font-size="11.5" fill="var(--ink-3)" font-weight="600">one file</text><text x="372" y="115" text-anchor="middle" font-size="16" font-weight="760" fill="currentColor" id="net-total">6.5 MB/s</text></g>
+          </svg>
+        </div>
+      </article>
+
+      <article class="cell s7 reveal" style="--d:.08s">
+        <div class="badge" style="--c:#16a34a"><svg class="ico"><use href="#i-plug"/></svg></div>
+        <h3>Right where you already download.</h3>
+        <p>An add-on for Chrome, Edge, Brave, Opera and Firefox catches downloads, passes your login along, adds a right-click entry, and spots the videos and sounds on a page. Close the window and downloads keep going from the tray.</p>
+        <ul class="ticks">
+          <li><svg class="ico"><use href="#i-check"/></svg>Starts with the system, quietly, if you want it to</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Clipboard watching: copy a link and the app offers to fetch it</li>
+          <li><svg class="ico"><use href="#i-check"/></svg>Link grabber, batch downloads and numbered ranges such as <span class="kbd">img*.jpg</span></li>
+        </ul>
+        <div class="mini"><span>Chrome</span><span>Edge</span><span>Brave</span><span>Opera</span><span>Firefox</span><span>System tray</span></div>
+      </article>
+
+      <article class="cell s3 reveal">
+        <div class="badge" style="--c:#8b5cf6"><svg class="ico"><use href="#i-clock"/></svg></div>
+        <h3>Queues &amp; schedules</h3>
+        <p>Queues with start and stop times, daily or once, and an option to close the app when they finish.</p>
+      </article>
+      <article class="cell s3 reveal" style="--d:.06s">
+        <div class="badge" style="--c:#0d9488"><svg class="ico"><use href="#i-server"/></svg></div>
+        <h3>A server for a team</h3>
+        <p>A web page and a Docker image: people sign in, the server downloads, everybody gets their own folder.</p>
+      </article>
+      <article class="cell s3 reveal" style="--d:.12s">
+        <div class="badge" style="--c:#16a34a"><svg class="ico"><use href="#i-shield"/></svg></div>
+        <h3>Private by design</h3>
+        <p>No ads, no account, no telemetry and no update pings. It only talks to the servers you download from.</p>
+      </article>
+      <article class="cell s3 reveal" style="--d:.18s">
+        <div class="badge" style="--c:#d97706"><svg class="ico"><use href="#i-hash"/></svg></div>
+        <h3>Checked, then trusted</h3>
+        <p>SHA-256 checks on finished files, and releases whose programs, packages and checksums are signed.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ THEMES -->
+<section id="themes" class="themes">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Make it yours</span>
+      <h2>15 themes. Light <em style="font-style:normal" class="grad">and</em> dark.</h2>
+      <p>Every picture below was drawn by the app itself. Pick a look and watch the whole window change, title bar included. Text stays easy to read in every theme: tests check it.</p>
+    </div>
+    <div class="gallery reveal">
+      <div>
+        <div class="gal-stage" id="gal-stage">
+          <div class="gal-shot" id="gal-shot"></div>
+          <div class="gal-bar">
+            <div><h3><i></i><span id="gal-name">Coral</span></h3><p id="gal-blurb"></p></div>
+            <div class="seg" role="group" aria-label="Light or dark">
+              <button type="button" data-mode="light" aria-pressed="true"><svg class="ico"><use href="#i-sun"/></svg>Light</button>
+              <button type="button" data-mode="dark" aria-pressed="false"><svg class="ico"><use href="#i-moon"/></svg>Dark</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="swatches" id="swatches" role="group" aria-label="Colour themes"></div>
+    </div>
+
+    <div class="tour reveal">
+      <div class="frame">
+        <picture>
+          <source srcset="assets/img/theme-cycle.webp" type="image/webp">
+          <img src="assets/img/theme-cycle.gif" width="760" height="464" loading="lazy" decoding="async" alt="An animation that steps through the main window in all 15 colour themes, light and then dark">
+        </picture>
+      </div>
+      <div>
+        <span class="eyebrow">The 20-second tour</span>
+        <h3>All fifteen, one after the other.</h3>
+        <p>Coral, WinUI 3, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha. Switching glides from one look to the next, and the app follows your system's light or dark setting unless you say otherwise.</p>
+        <div class="links">
+          <a class="btn sm" href="assets/img/theme-cycle.gif" download><svg class="ico"><use href="#i-download"/></svg>Save the GIF</a>
+          <a class="btn sm ghost" href="https://github.com/Namitjain07/Swift-Download-Manager#colour-themes" rel="noopener">How to choose one<svg class="ico"><use href="#i-external"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ WINUI 3 -->
+<section id="winui" class="winui">
+  <div class="wrap">
+    <div class="win-grid">
+      <div class="reveal">
+        <span class="eyebrow">Windows 11, to the letter</span>
+        <h2>A theme made of <em>WinUI 3</em>, not painted to look like it.</h2>
+        <p class="lead" style="font-size:18.5px;margin:22px 0 0">Colours, translucency, sizes and type come from the design tokens of Microsoft's own controls. The system accent, light and dark, the transparency switch and a Mica material made from your wallpaper are all followed live.</p>
+        <div class="win-feats">
+          <div class="wf"><svg class="ico"><use href="#i-layers"/></svg><div><b>Mica, Mica Alt and Acrylic</b><span>Your wallpaper, blurred and tinted, shows through the title bar, sidebar and status bar and shifts as you move the window.</span></div></div>
+          <div class="wf"><svg class="ico"><use href="#i-palette"/></svg><div><b>The accent of Windows, all seven shades</b><span>Read through <code>UISettings</code>, the source WinUI uses, and followed while the app is open. Or pick your own.</span></div></div>
+          <div class="wf"><svg class="ico"><use href="#i-contrast"/></svg><div><b>Follows the system</b><span>Light or dark, transparency effects on or off, high contrast, the dark title bar and the rounded corners of Windows 11.</span></div></div>
+          <div class="wf"><svg class="ico"><use href="#i-type"/></svg><div><b>Segoe UI and the real type ramp</b><span>4 px controls, 8 px cards, a 3 px progress bar and a 3 px accent mark on the chosen row, as the XAML says.</span></div></div>
+        </div>
+        <div class="links" style="margin-top:32px">
+          <a class="btn win" href="#download"><svg class="ico"><use href="#i-windows"/></svg>Get it for Windows</a>
+          <a class="btn ghost" style="color:#fff;border-color:rgba(255,255,255,.28)" href="https://github.com/Namitjain07/Swift-Download-Manager#winui-3-windows-11" rel="noopener">Read the details<svg class="ico"><use href="#i-external"/></svg></a>
+        </div>
+      </div>
+      <div class="win-shot reveal" style="--d:.1s">
+        <div class="frame">
+          <picture>
+            <source srcset="assets/img/winui-sync.webp" type="image/webp">
+            <img src="assets/img/winui-sync.gif" width="760" height="464" loading="lazy" decoding="async" alt="The WinUI 3 theme over different wallpapers and materials: Mica tinted by a blue bloom, a warm sunset, an aurora and graphite; Acrylic; a light dawn; and a solid window">
+          </picture>
+        </div>
+        <div class="cap"><span>Mica</span><span>Mica Alt</span><span>Acrylic</span><span>Solid</span><span>System accent</span><span>Light &amp; dark</span></div>
+      </div>
+    </div>
+    <p class="lead reveal" style="margin:64px auto 0;max-width:720px;text-align:center;font-size:15.5px;opacity:.75">Windows draws Mica for WinUI apps, but this app draws with OpenGL, whose window Windows lays over a plain white sheet. So the app paints the same material itself from your wallpaper, tinted with the colours of <code>MicaController</code>. It stays opaque and looks the same on every graphics card. On other systems the theme uses solid colours and the app's own typeface.</p>
+  </div>
+</section>
+
+<!-- ============================================================ AI / MCP -->
+<section id="ai">
+  <div class="wrap">
+    <div class="ai-grid">
+      <div class="reveal">
+        <span class="eyebrow">For AI assistants</span>
+        <h2>Let Claude run your <span class="grad">downloads</span>.</h2>
+        <p style="font-size:18.5px;color:var(--ink-2);margin:22px 0 0">Swift Download Manager speaks the Model Context Protocol. Ask an assistant to download a list of links, check what is still running, or retry what failed. The app, not the assistant, decides what is allowed.</p>
+        <ul class="ai-points">
+          <li><svg class="ico"><use href="#i-lock"/></svg><span><b>Access levels enforced in the app.</b> Look only, Standard or Full, and a per-connection <span class="kbd">--read-only</span> that can only lower it.</span></li>
+          <li><svg class="ico"><use href="#i-shield"/></svg><span><b>No trips to your router.</b> Private addresses, localhost and cloud metadata are refused as text and again when the connection is made, so redirects cannot sneak in.</span></li>
+          <li><svg class="ico"><use href="#i-eye"/></svg><span><b>Prompt-injection aware.</b> File names and error texts from remote servers are cleaned before an assistant reads them, and assistants can never delete files or pick folders.</span></li>
+          <li><svg class="ico"><use href="#i-list"/></svg><span><b>An audit log</b> of every call, with site allow and deny lists, rate limits and "wait until I start them".</span></li>
+        </ul>
+      </div>
+      <div class="term reveal" style="--d:.1s" aria-label="An example conversation with an AI assistant">
+        <div class="top"><i></i><i></i><i></i><span>An example conversation · Claude Code</span></div>
+        <div class="body" id="term-body" aria-live="off"></div>
+      </div>
+    </div>
+
+    <div class="tools reveal">
+      <h3>21 tools, three levels</h3>
+      <div class="toolgroups">
+        <div class="tg" style="--c:#16a34a"><h4>Look <span>read only</span></h4><p>See what is going on. Nothing changes.</p>
+          <ul><li>list_downloads</li><li>get_download</li><li>get_status</li><li>list_queues</li><li>get_settings</li><li>probe_link</li><li>get_audit_log</li></ul></div>
+        <div class="tg" style="--c:#ff385c"><h4>Standard <span>the default</span></h4><p>Add, pause, resume, move and remove. No file is ever deleted.</p>
+          <ul><li>add_download</li><li>add_downloads</li><li>pause_download</li><li>resume_download</li><li>pause_all</li><li>resume_all</li><li>start_queue</li><li>stop_queue</li><li>move_download</li><li>verify_download</li><li>remove_download</li></ul></div>
+        <div class="tg" style="--c:#8b5cf6"><h4>Full <span>you opt in</span></h4><p>The overall speed limit, networks and tidying up.</p>
+          <ul><li>set_speed_limit</li><li>list_networks</li><li>clear_completed</li></ul></div>
+      </div>
+      <div class="snip"><div class="code" data-copy><span class="c"># Claude Code</span>
+claude mcp add swift-download-manager -- /path/to/swift_download_manager --mcp</div></div>
+      <div class="snip"><div class="code" data-copy><span class="c">// Claude Desktop and most other MCP clients</span>
+{ <span class="n">"mcpServers"</span>: { <span class="n">"swift-download-manager"</span>: { <span class="n">"command"</span>: <span class="s">"/path/to/swift_download_manager"</span>, <span class="n">"args"</span>: [<span class="s">"--mcp"</span>] } } }</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ WEB PREVIEW -->
+<section id="web" style="background:linear-gradient(180deg,transparent,var(--bg-2) 20%,var(--bg-2) 80%,transparent)">
+  <div class="wrap">
+    <div class="web-grid">
+      <div class="reveal">
+        <span class="eyebrow">Live preview</span>
+        <h2>Manage it from any browser.</h2>
+        <p style="font-size:18px;color:var(--ink-2);margin:20px 0 0">The page on the right is the real web interface, running against pretend data right here in your browser. Pause something, add a link, open the settings: nothing is downloaded and nothing leaves this page.</p>
+        <ul class="checks">
+          <li><svg class="ico"><use href="#i-check"/></svg><span>Add many links at once, with an answer for each</span></li>
+          <li><svg class="ico"><use href="#i-check"/></svg><span>Networks, speed limit, access tokens and users, from the settings sheet (the gear)</span></li>
+          <li><svg class="ico"><use href="#i-check"/></svg><span>Light and dark, and it works on a phone</span></li>
+          <li><svg class="ico"><use href="#i-check"/></svg><span>Plain JSON underneath, plus <span class="kbd">/healthz</span> and Prometheus <span class="kbd">/metrics</span></span></li>
+        </ul>
+        <div class="snip"><div class="code" data-copy><span class="c"># a download server for your team</span>
+docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
+  -e SDM_ADMIN_USER=admin -e SDM_ADMIN_PASSWORD='a long password' \
+  ghcr.io/namitjain07/swift-download-manager:latest</div></div>
+      </div>
+      <div class="reveal" style="--d:.1s;min-width:0">
+        <div class="tools-row">
+          <label class="sr" for="demo-version">Version to preview</label>
+          <select class="select" id="demo-version" aria-label="Version to preview"><option value="">Latest build</option></select>
+          <div class="seg" role="group" aria-label="Screen size">
+            <button type="button" data-w="100%" aria-pressed="true" aria-label="Desktop"><svg class="ico"><use href="#i-monitor"/></svg></button>
+            <button type="button" data-w="760px" aria-pressed="false" aria-label="Tablet"><svg class="ico"><use href="#i-tablet"/></svg></button>
+            <button type="button" data-w="390px" aria-pressed="false" aria-label="Phone"><svg class="ico"><use href="#i-phone"/></svg></button>
+          </div>
+          <span style="flex:1"></span>
+          <button class="btn sm" id="demo-reset" type="button"><svg class="ico"><use href="#i-refresh"/></svg>Start over</button>
+          <a class="btn sm" id="demo-open" href="demo/" target="_blank" rel="noopener"><svg class="ico"><use href="#i-external"/></svg>New tab</a>
+        </div>
+        <div class="browser" id="browser">
+          <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><svg class="ico"><use href="#i-lock"/></svg><span id="demo-url">http://localhost:9615/</span></span></div>
+          <div class="view">
+            <div class="launch" id="demo-launch">
+              <div><h3 style="font-size:26px;margin-bottom:12px">Try the web interface</h3><p>It loads the real page with a pretend server. Nothing is downloaded.</p></div>
+              <button class="btn primary" id="demo-start" type="button"><svg class="ico"><use href="#i-play"/></svg>Start the preview</button>
+            </div>
+            <iframe id="demo-frame" title="Preview of the web interface of Swift Download Manager (pretend data)" hidden sandbox="allow-scripts allow-same-origin allow-forms allow-modals" loading="lazy"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="gallery-web reveal">
+      <figure><img src="assets/img/product/web-light.webp" width="1100" height="760" loading="lazy" alt="The web interface in light mode"><figcaption>Light</figcaption></figure>
+      <figure><img src="assets/img/product/web-dark.webp" width="1100" height="760" loading="lazy" alt="The web interface in dark mode"><figcaption>Dark</figcaption></figure>
+      <figure><img src="assets/img/product/web-mobile.webp" width="420" height="800" loading="lazy" alt="The web interface on a phone" style="max-width:260px;margin-inline:auto"><figcaption>On a phone</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ DOWNLOAD -->
+<section id="download" class="dl">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <span class="eyebrow">Get it</span>
+      <h2>Download <span class="grad" id="dl-version">Swift Download Manager</span>.</h2>
+      <p>Free, with nothing to sign up for. Every file is built by GitHub from the release's source code and listed with its checksum.</p>
+    </div>
+    <div class="dl-main reveal">
+      <div class="dl-hero">
+        <div>
+          <span class="eyebrow" id="dl-detected">Recommended for your computer</span>
+          <h3 id="dl-title">Choose your platform</h3>
+          <p id="dl-desc">Pick a tab below, or let the page suggest the right file for the computer you are on.</p>
+          <div id="dl-primary"><div class="skeleton" style="max-width:360px;height:56px;border-radius:99px"></div></div>
+        </div>
+        <div class="dl-meta" id="dl-meta">
+          <div><svg class="ico"><use href="#i-shield"/></svg><span>Programs and installers are signed with the project's own certificate</span></div>
+          <div><svg class="ico"><use href="#i-hash"/></svg><span>Every release lists <code>SHA256SUMS</code> and its GPG signature</span></div>
+          <div><svg class="ico"><use href="#i-cpu"/></svg><span>Intel/AMD and ARM builds for Windows and Linux</span></div>
+        </div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Platforms" id="dl-tabs">
+        <button role="tab" aria-selected="true" id="t-windows" aria-controls="p-windows" data-tab="windows"><svg class="ico"><use href="#i-windows"/></svg>Windows</button>
+        <button role="tab" aria-selected="false" id="t-linux" aria-controls="p-linux" data-tab="linux" tabindex="-1"><svg class="ico"><use href="#i-terminal"/></svg>Linux</button>
+        <button role="tab" aria-selected="false" id="t-macos" aria-controls="p-macos" data-tab="macos" tabindex="-1"><svg class="ico"><use href="#i-monitor"/></svg>macOS</button>
+        <button role="tab" aria-selected="false" id="t-browser" aria-controls="p-browser" data-tab="browser" tabindex="-1"><svg class="ico"><use href="#i-plug"/></svg>Browser add-on</button>
+        <button role="tab" aria-selected="false" id="t-server" aria-controls="p-server" data-tab="server" tabindex="-1"><svg class="ico"><use href="#i-server"/></svg>Docker &amp; server</button>
+        <button role="tab" aria-selected="false" id="t-all" aria-controls="p-all" data-tab="all" tabindex="-1"><svg class="ico"><use href="#i-package"/></svg>All files</button>
+      </div>
+      <div class="panel" role="tabpanel" id="p-windows" aria-labelledby="t-windows"><div class="files" data-files="windows"><div class="skeleton"></div><div class="skeleton"></div></div>
+        <div class="note">Windows may say the publisher is unknown, because the installer is signed with the project's own certificate rather than a paid one. Choose <b>More info</b>, then <b>Run anyway</b>, or check the signature first: <a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/SECURITY.md" rel="noopener">SECURITY.md</a> has the fingerprints. Quiet install: <span class="kbd">setup.exe /VERYSILENT</span>.</div></div>
+      <div class="panel" role="tabpanel" id="p-linux" aria-labelledby="t-linux" hidden><div class="files" data-files="linux"><div class="skeleton"></div><div class="skeleton"></div></div>
+        <div class="note">Ubuntu 22.04+, Debian 12+ and Mint 21+: <span class="kbd">sudo apt install ./swift-download-manager_&lt;version&gt;_amd64.deb</span>. Arch, Manjaro and EndeavourOS: <span class="kbd">sudo pacman -U &lt;file&gt;.pkg.tar.zst</span>. Anything else: <span class="kbd">make build &amp;&amp; sudo make install</span> from the source. The tray icon needs a desktop that shows them (KDE, Xfce, Cinnamon, MATE, or GNOME with the AppIndicator extension).</div></div>
+      <div class="panel" role="tabpanel" id="p-macos" aria-labelledby="t-macos" hidden>
+        <div class="files"><div class="file"><div class="fi" style="--c:#6b7280"><svg class="ico"><use href="#i-monitor"/></svg></div><div><b>Build it on your Mac</b><div class="sub">A Mac app can only be built on a Mac. It takes a few minutes with Rust installed.</div></div><div class="acts"><a class="btn sm" href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/mac/HOW%20TO%20GET%20THE%20MAC%20VERSION.txt" rel="noopener">Read the steps<svg class="ico"><use href="#i-external"/></svg></a></div></div></div>
+        <div class="note">The Mac version is not signed with a paid Apple developer account, so on the first start right-click the app and choose <b>Open</b>.</div></div>
+      <div class="panel" role="tabpanel" id="p-browser" aria-labelledby="t-browser" hidden><div class="files" data-files="browser"><div class="skeleton"></div><div class="skeleton"></div></div>
+        <div class="note"><b>Chrome, Edge, Brave, Opera:</b> unzip into a folder you keep, open <span class="kbd">chrome://extensions</span>, turn on Developer mode, choose <b>Load unpacked</b>. <b>Firefox:</b> open <span class="kbd">about:debugging</span>, <b>This Firefox</b>, <b>Load Temporary Add-on</b>. The app has to be running; otherwise the browser downloads as usual.</div></div>
+      <div class="panel" role="tabpanel" id="p-server" aria-labelledby="t-server" hidden>
+        <div class="snip" style="margin-top:20px"><div class="code" data-copy><span class="c"># Docker: 64-bit Intel/AMD for now. :latest follows the newest stable release.</span>
+docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
+  -e SDM_ADMIN_USER=admin -e SDM_ADMIN_PASSWORD='a long password' \
+  ghcr.io/namitjain07/swift-download-manager:latest</div></div>
+        <div class="note">Put a reverse proxy with HTTPS in front before you open it to a network, and add <span class="kbd">--secure-cookie</span>. Links to private addresses are refused unless you trust your team enough for <span class="kbd">--allow-private</span>. <a href="https://github.com/Namitjain07/Swift-Download-Manager#run-it-for-your-organisation" rel="noopener">The full guide</a>.</div></div>
+      <div class="panel" role="tabpanel" id="p-all" aria-labelledby="t-all" hidden><div class="files" data-files="all"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+    </div>
+    <div class="dl-foot reveal">
+      <div><b>Check what you downloaded</b>Each release has <span class="kbd">SHA256SUMS</span> and <span class="kbd">SHA256SUMS.asc</span>. <a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/SECURITY.md" rel="noopener" style="color:var(--accent-ink);font-weight:600">How to verify it</a>.</div>
+      <div><b>Build it yourself</b><span class="kbd">make build</span> compiles it, and a Docker toolchain builds 22 platforms at once. <a href="https://github.com/Namitjain07/Swift-Download-Manager#build-it-yourself" rel="noopener" style="color:var(--accent-ink);font-weight:600">The steps</a>.</div>
+      <div><b>Something wrong?</b><a href="report-bug/" style="color:var(--accent-ink);font-weight:600">Report a bug</a> in a minute: the page opens a ready-made GitHub issue.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ VERSIONS -->
+<section id="versions">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow">Every version</span>
+      <h2>Browse, read, preview and download any release.</h2>
+      <p>Read what changed, grab the files of any version, or open its web interface in a preview (versions from 1.6 on have one).</p>
+    </div>
+    <div class="ver-tools reveal">
+      <div class="seg" role="group" aria-label="Which releases" id="ver-filter">
+        <button type="button" data-f="all" aria-pressed="true">All</button>
+        <button type="button" data-f="stable" aria-pressed="false">Stable</button>
+        <button type="button" data-f="pre" aria-pressed="false">Pre-releases</button>
+      </div>
+      <a class="btn sm ghost" href="https://github.com/Namitjain07/Swift-Download-Manager/releases" rel="noopener">On GitHub<svg class="ico"><use href="#i-external"/></svg></a>
+    </div>
+    <div class="timeline" id="timeline"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+    <noscript><p>The list of versions needs JavaScript. All releases are on <a href="https://github.com/Namitjain07/Swift-Download-Manager/releases">GitHub</a>.</p></noscript>
+  </div>
+</section>
+
+<!-- ============================================================ FAQ -->
+<section id="faq" style="padding-top:40px">
+  <div class="wrap">
+    <div class="sec-head center reveal"><span class="eyebrow">Questions</span><h2>Good to know.</h2></div>
+    <div class="faq reveal">
+      <details><summary>Is it really free?</summary><div class="ans"><p>Yes. It is open source under the Apache License 2.0: no ads, no account, no paid tier. It only contacts the servers you download from, and it never sends usage data anywhere.</p></div></details>
+      <details><summary>How does it compare with IDM or aria2?</summary><div class="ans"><p>Like IDM it has a friendly window and a browser add-on, but it is free, open source and runs on Windows, Linux and macOS. Like aria2 it is open and scriptable, but it has a graphical window, and a web interface with a Docker image for teams. Details are in the <a href="https://github.com/Namitjain07/Swift-Download-Manager#why-swift-download-manager" rel="noopener">comparison</a>.</p></div></details>
+      <details><summary>Why does Windows say "unknown publisher"?</summary><div class="ans"><p>The programs and installers are signed with a certificate that belongs to this project, not with a paid one from a certificate authority, so Windows SmartScreen does not know the publisher yet. You can verify the signature and the GPG-signed checksums yourself; <a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/SECURITY.md" rel="noopener">SECURITY.md</a> lists the fingerprints.</p></div></details>
+      <details><summary>Is there a Mac version?</summary><div class="ans"><p>Yes, but a Mac app can only be built on a Mac, so there is no download here: build it with a few commands (see the <b>macOS</b> tab). The same goes for the BSDs and other platforms, which the Docker toolchain can cross-compile for command-line use.</p></div></details>
+      <details><summary>Can an AI assistant delete my files?</summary><div class="ans"><p>No. Assistants can add, pause, resume, move and remove entries from the <em>list</em>, but never delete a file from disk and never choose a folder. You can also limit them to looking only, restrict the sites they may use, and read a log of everything they did.</p></div></details>
+      <details><summary>Does it work behind a login or a proxy?</summary><div class="ans"><p>Yes. The browser add-on passes your cookies along, saved site logins and a per-download referrer are supported, and there is a proxy setting plus overall and per-download speed limits.</p></div></details>
+    </div>
+  </div>
+</section>
+
+<section class="final" style="padding-top:60px">
+  <div class="wrap">
+    <h2 class="reveal">Fast downloads shouldn't cost a thing.</h2>
+    <p class="reveal">Get Swift Download Manager and see how quick a big file can be.</p>
+    <div class="cta reveal" style="margin:0"><a class="btn primary" href="#download"><svg class="ico"><use href="#i-download"/></svg>Download now</a><a class="btn" href="https://github.com/Namitjain07/Swift-Download-Manager" rel="noopener"><svg class="ico"><use href="#i-star"/></svg>Star on GitHub</a></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="#top"><span class="mark"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg></span>Swift Download Manager</a>
+        <p>A free, open-source download manager and accelerator, written in Rust.</p>
+      </div>
+      <div><h5>Product</h5><ul><li><a href="#features">Features</a></li><li><a href="#themes">Themes</a></li><li><a href="#winui">WinUI 3</a></li><li><a href="#ai">AI &amp; MCP</a></li><li><a href="#web">Web preview</a></li></ul></div>
+      <div><h5>Get it</h5><ul><li><a href="#download">Downloads</a></li><li><a href="#versions">All versions</a></li><li><a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/CHANGELOG.md" rel="noopener">Changelog</a></li><li><a href="https://github.com/Namitjain07/Swift-Download-Manager/pkgs/container/swift-download-manager" rel="noopener">Docker image</a></li></ul></div>
+      <div><h5>Project</h5><ul><li><a href="https://github.com/Namitjain07/Swift-Download-Manager" rel="noopener">GitHub</a></li><li><a href="report-bug/">Report a bug</a></li><li><a href="https://github.com/Namitjain07/Swift-Download-Manager/issues" rel="noopener">Issues</a></li><li><a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/SECURITY.md" rel="noopener">Security</a></li><li><a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></li></ul></div>
+    </div>
+    <div class="legal"><span>Open source under the Apache License 2.0. The screenshots are drawn by the app itself in its demo mode; the previews run on pretend data.</span><span>Built with Rust, egui and a lot of care.</span></div>
+  </div>
+</footer>
+
+<dialog class="preview" id="preview-dialog" aria-label="Preview of a version">
+  <header><b id="pv-title">Preview</b><span>pretend data, nothing is downloaded</span><span style="flex:1"></span>
+    <a class="btn sm" id="pv-open" href="demo/" target="_blank" rel="noopener"><svg class="ico"><use href="#i-external"/></svg>New tab</a>
+    <button class="icon-btn" id="pv-close" type="button" aria-label="Close the preview"><svg class="ico"><use href="#i-x"/></svg></button>
+  </header>
+  <iframe id="pv-frame" title="Preview of the web interface of this version" sandbox="allow-scripts allow-same-origin allow-forms allow-modals"></iframe>
+</dialog>
+
+<script src="assets/app.js" defer></script>
+</body>
+</html>
