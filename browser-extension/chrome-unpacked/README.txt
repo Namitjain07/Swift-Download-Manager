@@ -17,10 +17,13 @@ Install in Chrome, Edge or Brave
   1. Open the extensions page (chrome://extensions or edge://extensions).
   2. Turn on "Developer mode".
   3. Click "Load unpacked" and choose this folder.
+     (Needs Chrome, Edge or Brave 121 or newer. If you load the folder source/browser-extension instead of this ready-made one,
+     the browser may list the key "browser_specific_settings" as unrecognized: it is meant for Firefox and does no harm.)
 
 Install in Firefox
   1. Open about:debugging#/runtime/this-firefox
   2. Click "Load Temporary Add-on…" and choose manifest.json in this folder.
+     (Needs Firefox 140 or newer: it is the first to read the add-on's statement of what data it collects, which is: none.)
 
 The add-on only talks to the app on this computer (127.0.0.1, port 9614), and the app only answers
 this add-on: a web page cannot reach it. It also reads the pages you view only when you open the

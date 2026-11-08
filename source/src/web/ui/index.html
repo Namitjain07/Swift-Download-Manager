@@ -580,7 +580,7 @@ function netTab(body) {
       h("h3", null, "Overall speed limit"),
       h("p", { class: "note" }, limit ? "All downloads together are limited to " + limit + " KB/s." : "There is no limit."),
       h("div", { class: "form" }, kb,
-        h("button", { class: "btn small primary", type: "button", onclick: () => { const v = parseInt(kb.value, 10); if (v > 0) setLimit(v); else toast("Enter the limit in KB/s"); } }, "Set limit"),
+        h("button", { class: "btn small primary", type: "button", onclick: () => { const v = Number.parseInt(kb.value, 10); if (v > 0) setLimit(v); else toast("Enter the limit in KB/s"); } }, "Set limit"),
         limit ? h("button", { class: "btn small outline", type: "button", onclick: () => setLimit(0) }, "Remove limit") : null));
   }
   const tick = async () => {

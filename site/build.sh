@@ -44,7 +44,7 @@ TAGS=()
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   while IFS= read -r tag; do
     tmp="$(mktemp)"
-    if git -C "$ROOT" show "$tag:$UI" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+    if git -C "$ROOT" show "$tag:$UI" > "$tmp" 2>/dev/null && [[ -s "$tmp" ]]; then
       make_demo "$tmp" "$OUT/demo/$tag" "../" "$tag" && TAGS+=("$tag")
     fi
     rm -f "$tmp"
@@ -62,12 +62,12 @@ FRESH=""
 if command -v gh >/dev/null 2>&1; then
   if gh api "repos/$REPO/releases?per_page=100" --jq '[.[] | select(.draft | not) | {tag_name, name, published_at, prerelease, body, html_url,
       assets: [.assets[] | {name, size, download_count, browser_download_url, digest}]}]' > "$OUT/data/releases.json.new" 2>/dev/null \
-     && [ -s "$OUT/data/releases.json.new" ] && grep -q '^\[' "$OUT/data/releases.json.new"; then
+     && [[ -s "$OUT/data/releases.json.new" ]] && grep -q '^\[' "$OUT/data/releases.json.new"; then
     mv "$OUT/data/releases.json.new" "$OUT/data/releases.json"; FRESH=1
   fi
 fi
 rm -f "$OUT/data/releases.json.new"
-if [ -z "$FRESH" ]; then
+if [[ -z "$FRESH" ]]; then
   cp "$HERE/data/releases.json" "$OUT/data/releases.json"
   echo "releases: the committed copy (no GitHub API)"
 else

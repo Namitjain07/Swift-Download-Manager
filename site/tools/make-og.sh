@@ -4,8 +4,8 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 B="${1:-$(command -v google-chrome chromium chromium-browser chrome 2>/dev/null | head -1 || true)}"
-[ -n "$B" ] || { for p in "/c/Program Files/Google/Chrome/Application/chrome.exe" "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"; do [ -x "$p" ] && B="$p" && break; done; }
-[ -n "$B" ] || { echo "no browser found: pass its path" >&2; exit 1; }
+[[ -n "$B" ]] || { for p in "/c/Program Files/Google/Chrome/Application/chrome.exe" "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"; do [[ -x "$p" ]] && B="$p" && break; done; }
+[[ -n "$B" ]] || { echo "no browser found: pass its path" >&2; exit 1; }
 PROFILE="$(mktemp -d)"
 URL="file://$HERE/og.html"; case "$(uname -s)" in MINGW*|MSYS*) URL="file:///$(cygpath -m "$HERE")/og.html";; esac
 "$B" --headless=new --disable-gpu --hide-scrollbars --no-first-run --user-data-dir="$PROFILE" --window-size=1200,630 \

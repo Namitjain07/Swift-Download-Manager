@@ -234,7 +234,7 @@ api.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg.type === "links") {
-    collectLinks(msg.tabId, !!msg.onlySelection).then((links) => reply({ links }));
+    collectLinks(msg.tabId, !!msg.onlySelection).then((links) => reply({ links }), () => reply({ links: [] }));
     return true;
   }
   if (msg.type === "bypass" && typeof msg.url === "string") {

@@ -11,7 +11,7 @@ OUT="${1:?folder to write the screenshots to}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 APP="${2:-$ROOT/source/target/release/swift_download_manager}"
-[ -x "$APP" ] || [ -x "$APP.exe" ] || { echo "build the app first (cargo build --release) or pass its path" >&2; exit 1; }
+[[ -x "$APP" || -x "$APP.exe" ]] || { echo "build the app first (cargo build --release) or pass its path" >&2; exit 1; }
 
 mkdir -p "$OUT/themes" "$OUT/sync"
 WALL="$ROOT/docs/images/wallpaper-bloom.png"
@@ -29,7 +29,7 @@ W="${SDM_WALLPAPERS:-}"
 shot() { "$APP" --screenshot "$OUT/sync/$1.png" --demo --color-theme winui --theme "$2" --backdrop "$3" ${4:+--wallpaper "$4"} --size "$SIZE"; }
 shot dark-bloom dark mica "$WALL"
 shot dark-solid dark none
-if [ -n "$W" ]; then
+if [[ -n "$W" ]]; then
   shot dark-sunset dark mica "$W/sunset.png"
   shot dark-aurora dark mica "$W/aurora.png"
   shot dark-graphite dark mica "$W/graphite.png"
