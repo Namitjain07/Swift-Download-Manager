@@ -612,6 +612,9 @@ pub struct App {
     /// The icon in the system tray (made on the first frame) and when it was last refreshed.
     tray: Option<crate::background::Tray>,
     tray_tried: bool,
+    /// What the browser add-on can see of the app, and the commands it sends.
+    bridge_link: bridge::Link,
+    bridge_shown: Instant,
     tray_shown: Instant,
     details_open: BTreeSet<u64>,
     options: Option<Settings>,
@@ -725,6 +728,8 @@ impl App {
             onboarding: None,
             tray: None,
             tray_tried: false,
+            bridge_link: bridge::Link::default(),
+            bridge_shown: Instant::now(),
             tray_shown: Instant::now(),
             details_open: BTreeSet::new(),
             options: None,
@@ -802,7 +807,7 @@ impl App {
                     app.toast("AI assistants cannot control the downloads: another copy of the app owns them");
                 }
                 if app.settings.browser_listen {
-                    app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
+                    app.listener = bridge::start_listener_with(bridge::PORT, app.inbox.clone(), app.bridge_link.clone(), app.ctx.clone());
                 }
                 bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
             }

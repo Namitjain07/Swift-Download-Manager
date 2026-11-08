@@ -242,10 +242,70 @@ impl App {
         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
     }
 
+    // ---- the browser add-on's window into the app (see `bridge`)
+
+    /// The status the pop-up of the add-on shows, as JSON: totals and the newest unfinished downloads.
+    fn bridge_snapshot(&self) -> String {
+        let name = |s: Status| match s {
+            Status::Queued => "queued",
+            Status::Connecting => "connecting",
+            Status::Downloading => "downloading",
+            Status::Paused => "paused",
+            Status::Complete => "complete",
+            Status::Error => "error",
+        };
+        let rows: Vec<serde_json::Value> = self
+            .items
+            .iter()
+            .rev()
+            .filter(|i| i.status() != Status::Complete)
+            .take(8)
+            .map(|i| serde_json::json!({ "id": i.id, "name": i.name, "status": name(i.status()), "progress": i.progress(), "speed": i.speed() as u64, "size": i.total() }))
+            .collect();
+        let count = |f: &dyn Fn(Status) -> bool| self.items.iter().filter(|i| f(i.status())).count();
+        serde_json::json!({
+            "app": "swift-download-manager",
+            "version": env!("CARGO_PKG_VERSION"),
+            "active": count(&|s| s.is_active()),
+            "queued": count(&|s| s == Status::Queued),
+            "paused": count(&|s| s == Status::Paused),
+            "complete": count(&|s| s == Status::Complete),
+            "speed": self.items.iter().filter(|i| i.status().is_active()).map(|i| i.speed()).sum::<f64>() as u64,
+            "update": self.update_hint().filter(|(_, strong)| *strong).map(|(t, _)| t),
+            "downloads": rows,
+        })
+        .to_string()
+    }
+
+    /// Per frame: keep the snapshot fresh (half a second old at most) and do what the add-on asked.
+    pub(super) fn bridge_tick(&mut self, ctx: &egui::Context) {
+        use crate::bridge::Command;
+        if self.listener.is_err() {
+            return;
+        }
+        if self.bridge_shown.elapsed().as_millis() >= 500 {
+            self.bridge_shown = Instant::now();
+            *self.bridge_link.status.lock().unwrap() = self.bridge_snapshot();
+        }
+        let cmds = std::mem::take(&mut *self.bridge_link.commands.lock().unwrap());
+        for c in cmds {
+            match c {
+                Command::Pause(id) => self.stop_item(id),
+                Command::Resume(id) => self.start_item(id),
+                Command::PauseAll => self.stop_all(),
+                Command::ResumeAll => self.resume_all(),
+                Command::Open if self.headless => {
+                    let _ = crate::background::spawn_window();
+                }
+                Command::Open => self.raise_window(ctx),
+            }
+        }
+    }
+
     /// Accept links from the browser add-on without a window: they start straight away.
     pub fn enable_browser_bridge(&mut self) {
         if self.settings.browser_listen && self.listener.is_err() {
-            self.listener = bridge::start_listener(bridge::PORT, self.inbox.clone(), self.ctx.clone());
+            self.listener = bridge::start_listener_with(bridge::PORT, self.inbox.clone(), self.bridge_link.clone(), self.ctx.clone());
         }
     }
 }

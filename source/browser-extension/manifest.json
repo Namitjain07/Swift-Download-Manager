@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Swift Download Manager Helper",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Sends downloads, links and videos from the browser to Swift Download Manager.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -15,7 +15,8 @@
     "storage",
     "cookies",
     "webRequest",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -26,6 +27,19 @@
       "background.js"
     ]
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "bypass.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
   "action": {
     "default_title": "Swift Download Manager",
     "default_popup": "popup.html",

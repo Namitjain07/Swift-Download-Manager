@@ -449,6 +449,7 @@ impl App {
         self.tick_updates();
         let ctx = self.ctx.clone();
         self.tray_tick(&ctx);
+        self.bridge_tick(&ctx);
         // Speeds.
         let dt = self.last_sample.elapsed().as_secs_f64();
         if dt >= 0.5 {
