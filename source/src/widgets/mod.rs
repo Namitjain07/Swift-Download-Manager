@@ -23,7 +23,7 @@ pub mod wheel;
 pub use button::{button, button_width, icon_label_button, small_button, small_icon_label_button, ButtonKind, ButtonSize};
 pub use card::{card, disclosure, form_field, hint, kv, kv_text, message, notice, section_title};
 pub use components::{empty_state, icon_button, icon_button_at, icon_button_primary, icon_segmented, stat_tile};
-pub use dialog::{check_row, plain_button, primary_button, secondary_button, sheet, truncated};
+pub use dialog::{check_row, elided_tooltip, plain_button, primary_button, secondary_button, sheet, truncated};
 pub use field::{dropdown, field, field_full, field_multiline, number_field, search_field, stepper};
 pub use menu::{menu_caption, menu_check_row, menu_danger_item, menu_icon_item, menu_item, menu_separator, menu_submenu, menu_toggle, menu_width};
 pub use picker::theme_picker;

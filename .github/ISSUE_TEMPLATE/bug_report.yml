@@ -44,9 +44,12 @@ body:
     attributes:
       label: How you got the app
       options:
+        - Windows installer (setup .exe)
         - SwiftDownloadManager.exe (Windows)
         - Windows .zip
         - Linux .deb
+        - Arch package
+        - Docker image
         - Built from the source myself
         - Other
     validations:

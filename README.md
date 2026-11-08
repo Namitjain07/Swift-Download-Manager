@@ -6,12 +6,14 @@
 
 **Free, open-source download manager and download accelerator for Windows, Linux and macOS.**
 
-Split every file into up to 32 connections, pause and resume (even after a restart), queue and schedule downloads, and send downloads from Chrome, Edge, Firefox, Brave and Opera straight to the app. A modern, fast alternative to Internet Download Manager (IDM), written in Rust.
+Split every file into up to 32 connections, pause and resume (even after a restart), queue and schedule downloads, and send downloads from Chrome, Edge, Firefox, Brave and Opera straight to the app. It can even **combine Wi-Fi, Ethernet and a phone's USB tethering into one faster download**, and run as a **web-managed download server** for a team. A modern, free alternative to Internet Download Manager (IDM) for Windows 11, Windows 10, Linux and macOS, written in Rust.
 
 [![Latest release](https://img.shields.io/github/v/release/Namitjain07/Swift-Download-Manager?label=release)](https://github.com/Namitjain07/Swift-Download-Manager/releases/latest)
 [![License](https://img.shields.io/github/license/Namitjain07/Swift-Download-Manager)](LICENSE)
 ![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)
+
+**Website, a live preview of the web interface and every version: [namitjain07.github.io/Swift-Download-Manager](https://namitjain07.github.io/Swift-Download-Manager/)** · [Report a bug](https://namitjain07.github.io/Swift-Download-Manager/report-bug/)
 
 [**Download the latest release**](https://github.com/Namitjain07/Swift-Download-Manager/releases/latest) · [Features](#features) · [Screenshots](#screenshots) · [Browser add-on](#browser-add-on) · [Web interface and Docker](#run-it-for-your-organisation) · [FAQ](#frequently-asked-questions)
 
@@ -21,6 +23,12 @@ Split every file into up to 32 connections, pause and resume (even after a resta
 </picture>
 
 <sub>The main window, light and dark (it follows your system), with the app's built-in sample data (<code>--demo</code> mode).</sub>
+
+<p align="center"><img src="docs/images/tour.gif" alt="A tour of the app: the main window in the Coral and WinUI 3 themes, a progress window, progress windows shrunk to small bars, the Updates window, the networks options, the AI assistants window and the table view" width="760"></p>
+
+<p align="center"><sub>A short tour, drawn by the app itself. Below: all fifteen themes, light and then dark.</sub></p>
+
+<p align="center"><img src="docs/images/theme-cycle.gif" alt="An animation that steps through the main window in all fifteen colour themes, light and dark" width="640"></p>
 
 <img src="docs/images/responsive-medium.png" alt="Swift Download Manager at a medium window width: an icon rail instead of the sidebar and icon-only tools" width="440"> <img src="docs/images/responsive-compact.png" alt="Swift Download Manager at a narrow window width: the menus in one button, a scrolling toolbar of icons and one column of download cards" width="230"> <img src="docs/images/options-light.png" alt="The Options window: grouped settings with switches, steppers and a segmented control" width="300">
 
@@ -32,12 +40,23 @@ Split every file into up to 32 connections, pause and resume (even after a resta
 
 Browsers download each file over a single connection, so a fast line often sits mostly idle, and a dropped connection can mean starting over. Swift Download Manager is a free **download accelerator**: it splits every file into several parts, downloads them at the same time, re-splits as parts finish, and keeps going when a connection drops. Big files finish sooner, and a broken connection never means starting over.
 
-- **Free and open source** (Apache License 2.0). No ads, no account, and no telemetry or update pings: the program only talks to the servers you download from.
+- **Free and open source** (Apache License 2.0). No ads, no account and no telemetry: the program only talks to the servers you download from. Looking for updates is optional (off until you say so) and fetches only a list of versions.
 - **Cross-platform**: one program for Windows 10/11, Ubuntu, Debian and Linux Mint, and macOS (built on a Mac).
-- **Fast and light**: written in Rust. On Windows it is one self-contained `.exe` that needs no installer.
+- **Fast and light**: written in Rust and drawn with OpenGL, so the window needs roughly 50 to 100 MB of memory and does not wake a discrete graphics card. On Windows it is one self-contained `.exe`, or an installer if you prefer.
 - **Built for everyday use**: pause and resume, queues with schedules, categories, batch downloads, a link grabber, clipboard watching, speed limits and a proxy.
 - **Works with your browser**: an add-on for Chrome, Edge, Brave, Opera and Firefox catches downloads and passes your login along.
 - **More than a desktop app**: a web interface, a multi-user server with a Docker image, and a built-in MCP server so AI assistants such as Claude can manage downloads.
+- **Faster than one connection can be**: download over Wi-Fi, Ethernet and a phone's USB tethering at the same time, so the speeds add up. A cable or phone plugged in while a download runs is taken into use within seconds.
+
+| | Swift Download Manager | Internet Download Manager (IDM) | aria2 |
+| --- | --- | --- | --- |
+| Price and licence | Free, open source (Apache-2.0) | Paid, closed source | Free, open source |
+| Runs on | Windows, Linux, macOS | Windows | Windows, Linux, macOS |
+| Graphical window | Yes | Yes | No (command line; separate front-ends exist) |
+| Browser add-on | Chrome, Edge, Brave, Opera, Firefox | Yes | Not included |
+| Web interface and multi-user server | Yes, with a Docker image | No | Not included (RPC only) |
+
+<sub>Based on what each project documents; check the other projects' sites for their current features and prices.</sub>
 
 ## Features
 
@@ -51,7 +70,7 @@ Browsers download each file over a single connection, so a fast line often sits 
 - **In a web browser and for a whole team**: a page on a localhost address, and a Docker image that serves several people from one machine
 - **Several networks at once**: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
 - One consistent design, inspired by Airbnb and drawn with iOS-style controls: white surfaces on a soft grey page, one coral accent, 16 px rounded cards with soft shadows, capsule buttons, an iOS switch, stepper and segmented control, and line icons from [Phosphor](https://phosphoricons.com). Text is set in [Inter](https://rsms.me/inter/). Flat colours only, no gradients. Light and dark, following your system (or choose under **View → Appearance**)
-- **14 colour themes** to choose from in **Options → Appearance**: Coral (the default), **Files** (a Windows 11 look with small corners and a blue accent), **Carbon** (sharp corners), Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha, each in light and dark. Automated tests check that text stays easy to read in every theme, and switching glides from one look to the next
+- **15 colour themes** to choose from in **Options → Appearance**: Coral (the default), **WinUI 3** (a real Windows 11 look: Mica, the system accent, Segoe UI), **Files** (a Windows 11 look with small corners and a blue accent), **Carbon** (sharp corners), Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha, each in light and dark. Automated tests check that text stays easy to read in every theme, and switching glides from one look to the next
 - **A title bar in the theme's colours**: the app draws its own minimise, maximise and close buttons instead of the system's grey bar, so the whole window matches. Drag it to move the window, double-click to maximise, resize from any edge (macOS keeps its traffic lights; `--native-title-bar` brings the system's bar back)
 - **See a download at work**: the parts of a file are drawn as channels that flow along smooth curves into one file, each at its own speed, and the file fills up as data arrives. Waiting is shown with a smooth loader or a sliding bar, never a frozen window
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars and the speed number glide, and dialogs fade and rise into place. The window stays idle when nothing moves
@@ -59,6 +78,21 @@ Browsers download each file over a single connection, so a fast line often sits 
 **Runs in the background**
 - Close the window and **keep downloading**: an icon in the system tray (Windows notification area, macOS menu bar, Linux tray) shows what is going on, pauses and resumes everything, and opens the window again
 - Queues, schedules and the browser add-on keep working with no window open; optionally **start with the system**, in the background
+- The tray icon is there while the window is open too, and its menu lists the **running downloads with their percentages**, pauses and resumes everything, adds the link on the clipboard, opens the download folder, looks for updates and switches **start with the system** on and off
+- A progress window can be **minimized to a small bar** in the corner (name, percentage, speed, pause and close); **Cancel** stops a download and offers to take it off the list, deleting what was already fetched
+
+<p align="center"><img src="docs/images/progress-mini.png" alt="The main window with two progress windows shrunk to small bars in the bottom right corner" width="560"></p>
+
+**Updates, and going back**
+- **Help > Check for updates** reads the list of versions from GitHub, from the project's website or from a server of your own, shows what is new, downloads the file for how this copy was installed, checks its **SHA-256** and installs it (the Windows installer runs quietly and starts the new version; the single `.exe` replaces itself; a Debian package opens in the system's installer; an Arch package gives you the command)
+- The same list offers **any other version, also older ones**, to go back to; downloads and settings are kept. Optional daily check, optional betas
+- Nothing is checked until you say so (the first-start welcome asks)
+
+**The first minute**
+- A **welcome with six steps** on the first start (what it does, the look, how it should behave, the browser, updates and privacy, a few tips). Every choice applies at once, every step can be skipped
+
+<p align="center"><img src="docs/images/onboarding.gif" alt="The welcome window, step by step: the animated picture of channels flowing into a file, the theme picker, the settings, the browser add-on, updates and privacy, and the tips" width="640"></p>
+
 
 **Organised**
 - **Queues** with their own schedules (start and stop times, daily or once, close the app when done)
@@ -81,6 +115,9 @@ Browsers download each file over a single connection, so a fast line often sits 
 - Passes your browser login (cookies) along, so downloads behind a login work
 - Adds **Download with Swift Download Manager** to the right-click menu
 - Spots videos and sounds that a page plays, and offers them in a pop-up that has the look of the app (light and dark)
+- A pop-up with three tabs: **Downloads** (what the app is downloading right now, with pause and resume), **This page** (the videos and sounds it played, and the files it links to, with filters and tick boxes) and **Settings** (only big files, only some file types, leave some sites to the browser)
+- Right-click: **download the selected links**, or **all the files on the page**; hold **Alt** while clicking a link to let the browser download that one itself
+- Only the add-on can talk to the app: a web page cannot add downloads or read what is downloading
 
 What is finished and what is still planned (integrations with package managers, other tools and more) is in the [roadmap](#roadmap-and-feature-checklist).
 
@@ -101,7 +138,7 @@ What is finished and what is still planned (integrations with package managers, 
 </tr>
 <tr>
 <td><img src="docs/images/download-flow.png" alt="The progress window of a download: eight channels, one for each part of the file, flow along curves into one file that fills up, above the size, speed and time left"><br><sub><b>See it at work</b>: each part of the file is a channel that flows into the finished file at its own speed.</sub></td>
-<td><img src="docs/images/appearance-dark.png" alt="Options, Appearance: a grid of fourteen small pictures, one for each colour theme, with Files chosen"><br><sub><b>14 themes</b>: pick one by its picture under Options → Appearance.</sub></td>
+<td><img src="docs/images/winui-appearance-dark.png" alt="Options, Appearance: a grid of fifteen small pictures, one for each colour theme, with WinUI 3 chosen"><br><sub><b>15 themes</b>: pick one by its picture under Options → Appearance.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/theme-files-light.png" alt="The Files theme in light mode: a Windows 11 look with small corners, a blue accent and a title bar that blends into the window"><br><sub><b>Files</b>: small corners and a blue accent, inspired by the Files app for Windows 11.</sub></td>
@@ -111,14 +148,49 @@ What is finished and what is still planned (integrations with package managers, 
 
 ### Colour themes
 
-Fourteen themes, each in light and dark. Click a picture to see it full size.
+Fifteen themes, each in light and dark (the pictures below show the first fourteen; WinUI 3 has its own section after them). Click a picture to see it full size.
 
 <a href="docs/images/themes-dark.png"><img src="docs/images/themes-dark.png" alt="The main window in all fourteen colour themes in dark mode: Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha" width="900"></a>
 
 <a href="docs/images/themes-light.png"><img src="docs/images/themes-light.png" alt="The main window in all fourteen colour themes in light mode" width="900"></a>
 
 Choose one under **Options → Appearance** or **View → Appearance → Theme**. To try one for a single run, start the program with
-`--color-theme files` (or `carbon`, `blue`, `green`, `black`, `purple`, `pink`, `orange`, `teal`, `gold`, `nord`, `dracula`, `mocha`, `coral`).
+`--color-theme files` (or `winui`, `carbon`, `blue`, `green`, `black`, `purple`, `pink`, `orange`, `teal`, `gold`, `nord`, `dracula`, `mocha`, `coral`).
+
+### WinUI 3 (Windows 11)
+
+A theme made from the design tokens of Microsoft's own WinUI 3 controls, not a recolouring of another one: the light and dark colours are those
+of `Common_themeresources_any.xaml` in [microsoft-ui-xaml](https://github.com/microsoft/microsoft-ui-xaml), with their translucency; the sizes are WinUI's
+(4 px controls, 8 px cards and dialogs, 32 px buttons and title bar, a 40 × 20 toggle switch, a 3 px progress bar, a 3 px accent mark on the chosen
+list row, square caption buttons) and the type is Segoe UI with the Windows type ramp (Body 14, Caption 12, Subtitle 20, Title 28).
+
+<table>
+<tr>
+<td><a href="docs/images/winui-light.png"><img src="docs/images/winui-light.png" alt="The main window in the WinUI 3 theme, light: a Mica material tinted by a blue and violet wallpaper behind the title bar and the list of categories, translucent cards and a blue accent" width="440"></a></td>
+<td><a href="docs/images/winui-dark.png"><img src="docs/images/winui-dark.png" alt="The same window in dark mode: dark Mica, a light blue accent and black text on the accent button" width="440"></a></td>
+</tr>
+</table>
+
+- **A material behind the window**: *Mica* (the wallpaper, blurred and tinted, which shows through the title bar, the list of categories and the status bar, and changes
+  as you move the window over it), *Mica Alt* (a stronger tint) or *Acrylic* (thinner and more colourful), or none. Under **Options → Appearance → WinUI 3**.
+  Windows draws Mica for WinUI apps; this app draws with OpenGL, whose surface Windows lays over a plain white sheet instead of the material, so the app paints
+  the same picture itself from your wallpaper (read with the Windows Imaging Component, tinted with the colours of `MicaController`). The window stays opaque and
+  works the same on every graphics card.
+- **The accent of Windows**, read through `UISettings` (the source WinUI uses, with all seven shades), and followed while the app is open. Or choose
+  your own from the colours Windows offers, or any `#RRGGBB`. Light themes use the dark shades and dark themes the light ones, as the XAML says.
+- **Follows the system**: light or dark, the *transparency effects* switch (off gives a solid window), a high contrast theme (solid), the dark title bar and the rounded corners
+  of Windows 11, and Segoe UI from your Windows fonts. Other systems get the same look with solid colours and the app's own typeface.
+- Buttons, switches, text boxes and check boxes behave as WinUI's do: a fill for rest, hover and pressed (the accent at 100, 90 and 80 %), an outline whose bottom
+  edge is a little stronger, a 2 px accent line under the text box you are typing in, no shrinking while pressed.
+
+<table>
+<tr>
+<td><a href="docs/images/winui-options.png"><img src="docs/images/winui-options.png" alt="Options, WinUI 3: the material (Mica, Mica Alt, Acrylic, None), use the accent of Windows, follow the transparency effects setting" width="440"></a></td>
+<td><a href="docs/images/winui-appearance.png"><img src="docs/images/winui-appearance.png" alt="Options, Appearance: the 15 colour themes with WinUI 3 chosen" width="440"></a></td>
+</tr>
+</table>
+
+To try it for a single run: `--color-theme winui` (and `--backdrop mica|alt|acrylic|none`; `--wallpaper picture.png` to make the material from another picture).
 
 ## Frequently asked questions
 
@@ -152,8 +224,14 @@ No. There is no telemetry, no analytics and no update check in the program. It o
 **Can an AI assistant use it?**
 Yes. Claude and other assistants that speak the Model Context Protocol (MCP) can list, add, pause, resume and remove downloads, but never delete files or choose folders. See [Use it from an AI assistant](#use-it-from-an-ai-assistant-mcp).
 
+**Does downloading over several networks work with a VPN?**
+If you pick the cards by hand, that is a decision and it is respected: those cards carry the traffic, which means it does not pass through the VPN. Automatic mode stands back while a VPN is connected, so nothing is sent round it by accident.
+
+**Can I send downloads from my browser to a server instead of my own computer?**
+You can send links to a server from any script with an access token (see [Manage the downloads of a whole server from the page](#manage-the-downloads-of-a-whole-server-from-the-page)). Pointing the browser add-on at a server is on the [ideas list](docs/IDEAS.md).
+
 **Can I change how it looks?**
-Yes. Under **Options → Appearance** you choose light, dark or automatic, and one of 14 colour themes (Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha). The choice is saved and applies at once, with a short glide from the old look to the new one. See [Colour themes](#colour-themes).
+Yes. Under **Options → Appearance** you choose light, dark or automatic, and one of 15 colour themes (Coral, WinUI 3, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha). The choice is saved and applies at once, with a short glide from the old look to the new one. See [Colour themes](#colour-themes).
 
 **Why does the window have its own title bar? Can I get the system's back?**
 The app draws its own minimise, maximise and close buttons so that the title bar has the colours and corners of the theme you picked. Dragging, double-click to maximise and resizing from the edges work as usual. If you prefer the system's bar (or your desktop handles frameless windows badly), start the program with `--native-title-bar`.
@@ -187,6 +265,32 @@ remove and download finished files. It follows your system's light or dark setti
   swaps it for a cookie and the key disappears from the address bar
 - It runs inside the window, or in the background when only the tray icon is left
 
+### Manage the downloads of a whole server from the page
+
+<p align="center"><img src="docs/images/web-networks.png" alt="The web interface's settings sheet: several networks at once with a switch, a speed and a connection count for each network, and the overall speed limit" width="560"> <img src="docs/images/web-tokens.png" alt="The web interface's access tokens: a list of tokens, a new token shown once with a copy button and a ready curl command" width="560"></p>
+
+- **Add many links at once**: paste a list (one per line, `#` lines are skipped), pick a category and a queue, and every link gets its own answer, so one bad link does not spoil the rest
+- **Pause all, Resume all, Clear finished** (files are never deleted), search, filter, and sort by newest, name, size, progress or state; the browser tab shows the current speed
+- **Networks and speed** (administrators): switch downloading over several networks on, see every network of the server with its live speed and connections, leave one out, and set an overall speed limit
+- **Access tokens**: each person can make keys for scripts and other programs. A token acts as its owner with the owner's rights, is shown once, can be revoked at once, cannot make more tokens, and dies with the account
+- **Users** (administrators): see what each person has downloaded, add accounts, change passwords and remove accounts; there is always at least one administrator
+- **Monitoring**: `GET /healthz` (no sign-in, says nothing about the downloads) for load balancers, and `GET /metrics` in the Prometheus format for administrators
+
+Everything the page does is a plain JSON call, so scripts can do it too. Send `Authorization: Bearer <token>` (or sign in and use the cookie, with the header `X-SDM-Request: 1` on changes):
+
+| Call | What it does |
+| --- | --- |
+| `GET /api/downloads?status=&q=&limit=` | List downloads (yours; everybody's for an administrator) |
+| `POST /api/downloads` with `{"url", "name", "category", "queue", "start"}` | Add one download |
+| `POST /api/downloads/batch` with `{"urls": [...]}` or `{"text": "one link per line"}` | Add many, one answer each |
+| `POST /api/downloads/{id}/pause`, `/resume`, `DELETE /api/downloads/{id}` | Act on one download (removing keeps the file) |
+| `POST /api/downloads/pause-all`, `/resume-all`, `/clear-completed` | Act on all of your downloads |
+| `GET /files/{id}` | Fetch a finished file (supports ranges, so a broken transfer can carry on) |
+| `GET`/`POST /api/networks`, `POST /api/speed-limit` with `{"kbps"}` | Networks and the overall limit (administrators) |
+| `GET`/`POST /api/tokens`, `DELETE /api/tokens/{id}` | Your access tokens (from a signed-in page only) |
+| `GET`/`POST /api/users`, `DELETE /api/users/{name}` | Accounts (administrators of a server with accounts) |
+| `GET /healthz`, `GET /metrics` | Health check, Prometheus numbers |
+
 ## Run it for your organisation
 
 `swift_download_manager --server` runs as a download server with no window. People sign in to the web page with their own accounts, add links, and the **server**
@@ -203,7 +307,7 @@ docker run -d --name sdm -p 8080:8080 -v sdm-data:/data \
   ghcr.io/namitjain07/swift-download-manager:latest
 ```
 
-Open <http://localhost:8080/> and sign in. (`:latest` follows the newest stable release and `:1.8.0` pins this one; pre-releases get the `:beta` tag instead.)
+Open <http://localhost:8080/> and sign in. (`:latest` follows the newest stable release and `:1.9.0` pins this one; pre-releases get the `:beta` tag instead.)
 Everything lives in the `/data` volume: settings, accounts, the download list and the files. The image is for 64-bit Intel/AMD machines for now.
 
 Add more people:
@@ -259,19 +363,24 @@ USB or hotspot connection. A download is then spread over all of them.
 
 - Each connection of a download is tied to one network card. Every card always gets a connection and the faster cards get more, so the speeds add
   up and a slow card never holds the others back
-- A card that stops working (cable pulled, phone out of range) is left alone for 30 seconds while the others carry on
+- **Plug in a phone or a cable while a download runs** and it is picked up within a few seconds, with a connection of its own; a network that is unplugged gets no new connections, and a card whose address changed gets the new one
+- **Automatic mode** (*Use every connected network automatically*) uses every connected network, also ones you plug in later, and has a switch to leave one out (a phone on a metered plan, say). It stands back while a VPN is connected, so traffic is not sent round it. Picking cards by hand is always respected
+- USB networks (a phone with USB tethering, a USB network adapter) are recognised and labelled *USB*; `swift_download_manager --networks` lists what the app sees and what automatic mode would use
+- A card that stops working (cable pulled, phone out of range) is left alone for 30 seconds while the others carry on; a connection that breaks in the middle of a transfer rests its card for 8 seconds, and the last working card is never rested
 - The progress window shows what each network is carrying
 - When networks are chosen, nothing falls back to the normal connection: if none of them works, the download says so
 - Linux ties the traffic to the card with `SO_BINDTODEVICE` (kernel 5.7 or newer; older kernels use the card's address), macOS with `IP_BOUND_IF`, and
-  Windows with the card's address. The logic is tested on Linux with separate local addresses standing in for networks; it has not yet been tried with
-  real phones and cables on Windows or macOS, so please report what you see
+  Windows with `IP_UNICAST_IF` (the card's number) plus the card's address, because on Windows an address alone does not decide which card the packets leave
+  through. The logic is tested with separate local addresses standing in for networks (including a card plugged in mid-download), and on Windows the card
+  choice is tested against the real adapters. It has not yet been tried with real phones and cables on all three systems, so please report what you see
 
 ## Use it from an AI assistant (MCP)
 
 Swift Download Manager speaks the [Model Context Protocol](https://modelcontextprotocol.io), so an assistant such as Claude
-can look at your downloads and manage them for you ("download this video", "pause everything", "what is still running?").
+can look at your downloads and manage them for you ("download this video", "pause everything", "what is still running?",
+"is this link what it says it is?").
 
-<img src="docs/images/ai-assistants.png" alt="The AI assistants window: a switch, the live state, and copy-ready setup text for Claude Code and Claude Desktop" width="520">
+<img src="docs/images/ai-assistants.png" alt="The AI assistants window: the switch, its state and the setup text for Claude Code and Claude Desktop" width="400"> <img src="docs/images/ai-assistants-controls.png" alt="The same window further down: the lists of sites assistants may and may not use, and a log of what they did, with a refused request in amber" width="400">
 
 **Connect it.** The assistant starts the program itself with `--mcp`. The app shows these commands with the right path
 filled in under **Help → AI assistants…**.
@@ -286,18 +395,44 @@ filled in under **Help → AI assistants…**.
 ```
 
 On Windows use the path of `SwiftDownloadManager.exe`. (`--mcp` talks over standard input and output, which relies on the
-assistant starting the program with pipes, as MCP clients do.)
+assistant starting the program with pipes, as MCP clients do.) To limit **one connection**, add `--read-only` or
+`--level read|standard|full` after `--mcp`, for example `"args": ["--mcp", "--read-only"]`. That can only lower what the
+settings of the app allow, never raise it.
 
-**What it can do.** Ten tools; assistants that support it ask you before each action unless you tell them not to.
+**What it can do.** 21 tools. Assistants that support it ask you before each action unless you tell them not to; the
+**access level** (below) decides what each connection may do at all.
 
-| Tool | What it does |
+| Tool | Level | What it does |
+| --- | --- | --- |
+| `list_downloads`, `get_download` | look | See downloads, their progress, speed and errors |
+| `get_status`, `list_queues`, `get_settings` | look | Overall state; queues and their schedules; the settings that matter (no passwords, proxies or logins) |
+| `probe_link` | look | Check a link without downloading it: does it answer, how big, what type, what name, can it be resumed |
+| `get_audit_log` | look | What assistants did recently |
+| `add_download`, `add_downloads` | standard | Start downloads from `http(s)` links (up to 200 at once); saved in the folder of their category |
+| `pause_download`, `resume_download`, `pause_all`, `resume_all` | standard | Pause or resume one download, or all of them (through the queues) |
+| `start_queue`, `stop_queue`, `move_download` | standard | Run or stop a queue; move a download to another queue |
+| `verify_download` | standard | Check a finished file against a SHA-256, in the background |
+| `remove_download` | standard | Take a download off the list (marked destructive so clients ask first; no file is deleted) |
+| `set_speed_limit`, `list_networks`, `clear_completed` | full | The overall speed limit; the networks of this computer; take every finished download off the list |
+
+It also offers **resources** (`sdm://status`, `sdm://downloads`, `sdm://queues`, `sdm://settings`, and
+`sdm://download/{id}`) and four **prompts** (download these links, what is going on, retry what failed, tidy the list).
+Every tool returns text and structured JSON. When a call fails, the assistant is told the *kind* of problem
+(`invalid_argument`, `not_found`, `forbidden`, `disabled`, `rate_limited`, `busy`, `conflict`, `unreachable`), what is
+wrong and what to do about it, so it can correct itself or come back later instead of guessing. Arguments are checked
+against the tool's schema first: unknown names, wrong types and sizes that are too big are refused with a message.
+
+**You decide what it may do** (Options → AI assistants, or Help → AI assistants…). The app enforces all of this on every
+call; it does not rely on the assistant behaving:
+
+| Setting | What it does |
 | --- | --- |
-| `list_downloads`, `get_download` | See downloads, their progress, speed and errors (read-only) |
-| `get_status`, `list_queues` | Overall state; queues and their schedules (read-only) |
-| `add_download` | Start a download from an `http(s)` link; saved in the folder of its category |
-| `pause_download`, `resume_download` | Pause or resume one download |
-| `start_queue`, `stop_queue` | Run or stop a queue |
-| `remove_download` | Take a download off the list (marked as destructive so clients ask first) |
+| **Access level** | *Look only*, *Standard* (the default: also add, pause, resume, move and remove) or *Full* (also the speed limit, the networks and clearing finished downloads) |
+| **Refuse private networks and this computer** (on) | Links to your router, to `localhost`, to other machines in your network and to the cloud "metadata" address are refused, as text and again when the connection is made (so redirects and names that change their answer are caught) |
+| **Only these sites / never these sites** | A list of sites (and their subdomains) assistants may use, and a list they never may |
+| **Their downloads wait until I start them** | What an assistant adds is queued and does not begin by itself |
+| **Most downloads an hour** (60) | A limit on adding; at most 120 changes a minute are accepted in any case |
+| **Keep a log** (on) | `mcp-audit.log` in the settings folder: when, which tool, on what (links without password or query), how it ended. The newest are shown in the window |
 
 **With or without the window.** If the window is open, the assistant works in it and you see changes live. If it is
 closed, the assistant runs the downloads itself in the background. Opening the window while a download is running pauses it,
@@ -308,10 +443,15 @@ redrawing it, a request can time out after 10 seconds with a message saying so; 
 - It is on by default; switch it off under **Options** or **Help → AI assistants…** and every request is refused.
 - An assistant can never delete files from your disk (not even partly downloaded ones) and cannot choose where a file is
   saved: the folder always comes from the file's category. Only `http` and `https` links are accepted.
+- A web page or a document an assistant reads can try to talk it into things ("prompt injection"). That is why the rules
+  above are enforced here and not left to the assistant, why file names, descriptions and error texts that come from remote
+  servers are cleaned (no control or hidden characters, a sensible length) before an assistant sees them, and why the
+  instructions tell it to treat them as data. If a call is refused, the assistant is told to ask you.
 - The window listens only on your own computer, on a random port, and only answers requests that carry a secret token stored in
-  your settings folder (`mcp-token`, readable only by you). Requests that come from a web page are refused. This is separate
-  from the browser add-on's listener.
-- Passwords and cookies are never shown to the assistant.
+  your settings folder (`mcp-token`, readable only by you). Requests that come from a web page are refused, and only a
+  few are answered at the same time. This is separate from the browser add-on's listener.
+- A message from a client may be at most 1 MiB, and a bug in one command ends that call, not the session.
+- Passwords and cookies are never shown to the assistant, and neither are proxy addresses or saved site logins.
 
 ## Download
 
@@ -319,15 +459,30 @@ Get the files from the [**latest release**](https://github.com/Namitjain07/Swift
 
 | Platform | File | How to install |
 | --- | --- | --- |
-| **Windows 10/11** (64-bit) | `SwiftDownloadManager.exe` | Double-click it. No installer needed. It is signed with the project's own certificate, so Windows may say the publisher is unknown: choose **More info**, then **Run anyway** (see [Windows warnings](#windows-warnings-and-antivirus)). |
-| **Windows**, with browser add-on | `SwiftDownloadManager-<version>-windows-x64.zip` | The same program together with the browser add-on, the certificate and a short read-me. |
-| **Ubuntu 22.04+, Debian 12+, Mint 21+** (64-bit) | `swift-download-manager_<version>_amd64.deb` | Double-click it, or run `sudo apt install ./swift-download-manager_<version>_amd64.deb`. |
+| **Windows 10/11**, Intel or AMD (64-bit) | `SwiftDownloadManager-<version>-setup-x64.exe` | **The installer.** Double-click it and follow the steps: it installs for you (no administrator needed) or for everybody, adds a Start menu entry and an uninstaller, and can add a desktop icon. Quiet install: `setup.exe /VERYSILENT`. It is signed with the project's own certificate, so Windows may say the publisher is unknown: choose **More info**, then **Run anyway** (see [Windows warnings](#windows-warnings-and-antivirus)). |
+| **Windows 11 on ARM** (Snapdragon and others) | `SwiftDownloadManager-<version>-setup-arm64.exe` | The same installer, with the program built for ARM so that it runs natively. (The x64 installer also works there, through Windows' emulation.) |
+| **Windows**, no installing | `SwiftDownloadManager.exe` (x64) or `SwiftDownloadManager-arm64.exe` | Just the program: double-click it. |
+| **Windows**, portable with browser add-on | `SwiftDownloadManager-<version>-windows-x64.zip` (or `-arm64.zip`) | The program together with the browser add-on, the certificate and a short read-me. |
+| **Ubuntu 22.04+, Debian 12+, Mint 21+**, Intel or AMD (64-bit) | `swift-download-manager_<version>_amd64.deb` | Double-click it, or run `sudo apt install ./swift-download-manager_<version>_amd64.deb`. |
+| **The same on ARM** (Raspberry Pi 4/5 with a 64-bit OS, ARM servers and laptops) | `swift-download-manager_<version>_arm64.deb` | `sudo apt install ./swift-download-manager_<version>_arm64.deb`. |
+| **Arch Linux, Manjaro, EndeavourOS** (x86_64), **Arch Linux ARM** (aarch64) | `swift-download-manager-<version>-1-x86_64.pkg.tar.zst` or `...-aarch64.pkg.tar.zst`, with its `.sig` | `sudo pacman -U swift-download-manager-<version>-1-x86_64.pkg.tar.zst`. To have pacman check the signature, add the project's key first (see [Security](SECURITY.md#checking-the-linux-packages-and-the-checksums-gpg)). Or build it yourself: `makepkg -si` with [`source/packaging/arch/PKGBUILD`](source/packaging/arch/PKGBUILD) or `make arch`. |
 | **macOS** | build it, see below | A Mac app can only be built on a Mac. See [`mac/HOW TO GET THE MAC VERSION.txt`](mac/HOW%20TO%20GET%20THE%20MAC%20VERSION.txt). On first start, right-click the app and choose **Open**, because it is not signed with a paid Apple developer account. |
-| **Other Linux** | build it, see below | `bash packaging/linux/build-deb.sh` in [`source/`](source/). |
+| **Other Linux** | build it, see below | `make build && sudo make install` (to `/usr/local`; `PREFIX=/usr` to change), or `make deb` / `make arch` for a package. `make help` lists everything. |
 
-All files are built and, for Windows, signed by GitHub from the release's source code (see [`release.yml`](.github/workflows/release.yml)).
+All files are built by GitHub from the release's source code (see [`release.yml`](.github/workflows/release.yml)). The Windows programs and installers, the Arch packages and the `SHA256SUMS` file are signed with keys that belong to this project; see [SECURITY.md](SECURITY.md) for the fingerprints and how to check them.
 
-Every release also lists a `SHA256SUMS` file so you can check what you downloaded.
+Every release also lists a `SHA256SUMS` file (and `SHA256SUMS.asc`, its signature) so you can check what you downloaded.
+
+### Updates
+
+You do not have to come back here for every version. **Help > Check for updates** (or the tray menu) shows whether a newer one exists, what is new in it, and installs it with one button. The same window lists every other version too, also older ones, so a version that does not suit you can be rolled back: downloads, queues and settings are kept.
+
+<p align="center"><img src="docs/images/updates-window.png" alt="The Updates window: version 1.10.0 is available with its notes, the buttons Update now and Skip this version, and the folded lists of other versions and of settings" width="520"></p>
+
+- **Where the list comes from**: GitHub (the default), the project's website (`data/releases.json`, for networks where the GitHub API is not reachable), or **a server of your own**: any `https` address that serves a JSON list in the shape of GitHub's API (`tag_name`, `prerelease`, `published_at`, `body`, and `assets` with `name`, `size`, `browser_download_url` and `digest` as `sha256:…`)
+- **Safe**: a file is only installed when its SHA-256 matches the one in the list, files come only from the addresses in the list, and only `https` (or this computer) is accepted; nothing about you is sent
+- **Optional**: it checks once a day when you switch it on (the welcome asks), betas only when you ask for them, and a version can be skipped
+
 
 ### Browser add-on
 
@@ -397,7 +552,7 @@ cd source
 cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
 cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
 # a window other than the main one: --show add|batch|options|networks|appearance|scheduler|queues|properties|progress|delete|about|browser|ai|grabber|close|table|drawer|menus|empty
-# a colour theme: --color-theme files|carbon|blue|green|black|purple|pink|orange|teal|gold|nord|dracula|mocha|coral
+# a colour theme: --color-theme winui|files|carbon|blue|green|black|purple|pink|orange|teal|gold|nord|dracula|mocha|coral
 # a narrower window: --size 900x640   (or 600x760)
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```
@@ -429,6 +584,8 @@ in each one is in [`CHANGELOG.md`](CHANGELOG.md). Pushing a tag such as `v1.3.0`
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 ## Roadmap and feature checklist
+
+Looking for what could come next? There is a brainstorm with effort and value marks in [docs/IDEAS.md](docs/IDEAS.md).
 
 A ticked box (`[x]`) is built and in the program; an empty box (`[ ]`) is planned or still an idea. Items marked *(pre-release)* are in a pre-release
 build and not yet in the stable version. The unticked items are ideas in a rough order, not promises: the list changes as people tell us what they need.
@@ -471,7 +628,7 @@ Want one of them? [Open an issue](https://github.com/Namitjain07/Swift-Download-
 - [x] Spots videos and sounds that a page plays
 
 **AI assistants (MCP)**
-- [x] MCP server with ten tools to list, add, pause, resume and remove downloads and to run queues
+- [x] MCP server with 21 tools, resources and prompts, an access level, site lists, private-address protection, limits and a log (see above)
 - [x] Works with or without the window, and hands downloads over mid-download
 - [x] Safety rules: an off switch, a secret token, no file deletion, no choosing folders, no passwords shown
 
@@ -541,7 +698,7 @@ bad connection, and offline copies.
 - [ ] **Telegram and Discord bot**: send a link, the server at home downloads it
 - [ ] **Home Assistant**, **n8n** and **Zapier** connectors
 - [ ] **Explorer "Send to"**, and plug-ins for Raycast, Alfred and PowerToys Run
-- [ ] More **MCP tools**: resolve a package name, verify a checksum, set a speed limit, search a feed
+- [ ] More **MCP tools**: resolve a package name to a download link, search a feed
 
 ### Planned: a plugin system
 

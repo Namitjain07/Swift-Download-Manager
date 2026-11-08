@@ -3,6 +3,125 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [1.9.0] - 2026-11-08
+
+### Downloads that stay smooth, a status that tells the truth, a tenth of the memory
+- **No more reconnecting every minute.** Every connection of a download was given 60 seconds in total for its whole body, so each part of a big file was torn down and reopened once a minute (with a two-second stall) and the window kept saying "Connection problem, retry 1…" while the download carried on. The limit is now on *silence* (30 seconds without a byte), not on the length of the transfer, and the wait before a retry grows (half a second up to 15) instead of always being two seconds. The retry note goes away as soon as every connection is fetching again.
+- **Pause is immediate.** The download shows "Paused" the moment the button is pressed; connections that were blocked in a read wind down by themselves, and a resume straight after a pause starts a new run that old connections cannot touch (no byte counted twice). **Cancel** in the progress window now stops the download and asks to take it off the list, deleting what was already fetched.
+- **Smooth bars with many downloads.** Progress bars, the speed tile and the file in the progress window started a new animation on every frame and asked for an immediate repaint each time, so several downloads at once drew every card as fast as the machine could and moved in jerks. They now ease by time (the same motion at any frame rate) and ask for 30 frames a second (4 behind other windows, none when minimized). The packets in the progress window were placed as time × speed, so they jumped whenever a speed changed; their position is now accumulated frame by frame. Only the cards in view are drawn.
+- **A tenth of the memory.** The window was drawn with wgpu (eframe's default), which woke the discrete graphics card and needed about 440 MB. OpenGL is now used first on Windows and Linux: about 50 MB of private memory, 12 threads instead of 40 and a 6 MB smaller program. wgpu stays the first choice on macOS and the fallback where OpenGL cannot start (a remote desktop, some virtual machines).
+- A shortened file name shows in full when you point at it (cards, the table, the finished window).
+
+### A welcome on the first start
+- Six animated steps with pictures: what it does, the look (the window behind changes as a theme is picked), how it should behave (folder, connections, closing to the tray, starting with the system, the clipboard), the browser add-on, updates and privacy, and a few tips. Every choice applies at once; every step can be skipped.
+
+### Updates, and going back to an older version
+- **Help > Check for updates** (and the tray menu): reads the list of versions from GitHub, from the project's website or from a server of your own (`https`, the shape of GitHub's API), shows what is new, downloads the file that fits how this copy was installed, **checks its SHA-256** and installs it: the Windows installer runs quietly and starts the new version, the single program replaces itself, a Debian package opens in the system's installer, an Arch package shows its command.
+- The same list offers **any other version, older ones too**, to go back to; downloads, queues and settings are kept. Optional daily check (off until you say so), betas optional, a version can be skipped. The website's `data/releases.json` carries checksums and is one of the sources.
+
+### The tray and the progress windows
+- The tray icon now also exists while the window is open. Its menu lists the **running downloads with their percentages** and has pause all, resume, add the link on the clipboard, open the download folder, check for updates, start with the system, and quit.
+- Progress windows can be **minimized to a small bar** (name, percentage, speed, pause and close) that stacks in the corner.
+
+### A new icon
+- Drawn in code at every size (the window, the tray, the taskbar, the installers, the add-on): a white arrow dropping into a tray, on coral.
+
+### Browser add-on 1.6
+- A pop-up with three tabs: **Downloads** (what the app is downloading, with pause and resume), **This page** (videos and sounds the page played, and the files it links to with filters and tick boxes) and **Settings** (only big files, only some file types, leave some sites to the browser). New right-click entries to download the selected links or all the files on a page; Alt+click leaves one download to the browser; a tick on the toolbar button when something was sent.
+- **Security:** the local listener (127.0.0.1:9614) answered any web page, so a page could have added downloads. It now only answers the add-on (an extension origin) or a program that sends no browser headers, and `Host` must be this computer. New: `GET /status`, `POST /add-many`, `POST /control`.
+
+### A website
+- A GitHub Pages site (https://namitjain07.github.io/Swift-Download-Manager/) with downloads chosen for the visitor's system, every version with its notes, a live preview of the web interface (for the current code and for each release that has one), the theme gallery, and a "report a bug" page that opens a ready-made GitHub issue. Built and published by `.github/workflows/pages.yml`.
+
+
+### AI assistants (MCP): more tools, more control, safer
+- **21 tools** (were 10): `add_downloads` (up to 200 links at once), `pause_all`, `resume_all`, `move_download`, `probe_link` (look at a link before adding
+  it: does it answer, size, type, name, can it be resumed), `verify_download` (check a finished file's SHA-256 in the background), `get_settings`,
+  `get_audit_log`, and at the full level `set_speed_limit`, `list_networks` and `clear_completed`. Also **MCP resources** (`sdm://status`,
+  `sdm://downloads`, `sdm://queues`, `sdm://settings`, `sdm://download/{id}`) and four **prompts**; tools answer with text and `structuredContent`
+- **You decide what an assistant may do** (Options > AI assistants, or Help > AI assistants…): an **access level** (look only, standard, full), lists of sites
+  it may or may not use, **refusal of private networks, localhost and the cloud metadata address** (on by default, checked as text and again when the
+  connection is made, so redirects and DNS tricks are caught), "their downloads wait until I start them", a limit on downloads an hour, and a **log** of
+  what assistants did (`mcp-audit.log`, shown in the window, with no passwords or keys). `--mcp --read-only` or `--level` limits a single connection
+- **Errors that help**: every failure says its kind (`invalid_argument`, `not_found`, `forbidden`, `disabled`, `rate_limited`, `busy`, `conflict`,
+  `unreachable`), what is wrong and what to do; arguments are checked against the tool's schema (unknown names, wrong types, too long); a bug in one
+  command ends that call and not the session
+- **Security**: the access level and the site rules are enforced by the app, not left to the client; names, descriptions and error texts from remote servers are
+  cleaned (no control or hidden characters, a sensible length) before an assistant reads them; at most 120 changes a minute; a message may be at most
+  1 MiB (a longer line is skipped as it arrives instead of being held in memory); at most 16 requests are answered at once at the control door; the
+  settings an assistant can read hold no proxy, login or key. Settings from older versions get these safe defaults
+
+### A WinUI 3 theme (Windows 11)
+- **A new theme, "WinUI 3"**, built from the design tokens of Microsoft's own controls (the light and dark colours of `Common_themeresources_any.xaml` in microsoft-ui-xaml, with their
+  translucency), WinUI's sizes (4 px controls, 8 px cards and dialogs, 32 px buttons and title bar, a 40 × 20 toggle switch, a 3 px progress bar, square caption
+  buttons) and Segoe UI with the Windows type ramp. Buttons, switches, text boxes and check boxes behave as WinUI's do: a fill for rest, hover and pressed, an outline with
+  a stronger bottom edge, a 2 px accent line under the text box being typed in
+- **A material behind the window**: Mica, Mica Alt or Acrylic (Options > Appearance > WinUI 3): the wallpaper, blurred and tinted, shows through the title bar, the list of
+  categories and the status bar and moves with the window. The app paints it itself (Windows lays an OpenGL window over a white sheet instead of over the system's
+  material, so the system's Mica cannot be used), from your wallpaper read with the Windows Imaging Component, with the tints of WinUI's `MicaController`. `--backdrop`
+  and `--wallpaper` choose the material and the picture for a single run
+- **Synced with Windows**: the accent colour with all seven shades (`UISettings`, as WinUI reads it) and live while the app is open, or your own colour (the colours Windows
+  offers, or any `#RRGGBB`); the *transparency effects* switch; a high contrast theme (the window turns solid); the dark title bar and rounded corners (DWM); light and dark
+- Other systems get the same look with solid colours. 15 colour themes now; the Options picker lists WinUI 3 second
+- `Cargo.lock`: the `windows` crate (UI settings, DWM, imaging) is now a direct dependency on Windows
+
+### Building for many platforms with Docker (`make cross`)
+- **One Docker image builds the program for 22 platforms**: Linux on Intel/AMD, ARM (32 and 64 bit), RISC-V, POWER, IBM Z and LoongArch, linked against an
+  old glibc so it runs on old distributions, and static musl builds for servers; Windows on x64, x86 and ARM; FreeBSD and NetBSD. Zig is the linker
+  (through cargo-zigbuild), the build checks every program (right CPU, static where it must be, nothing newer than the planned glibc, Windows icon and version
+  information) and puts an archive per platform in `out/`. `bash packaging/cross/cross.sh test` starts the Linux programs on their own CPU (QEMU). See
+  [`source/packaging/cross`](source/packaging/cross/README.md)
+- The tray icon is now built for the BSDs as well (it was limited to Linux, Windows and macOS)
+
+
+**Installers for Windows (Intel/AMD and ARM), Debian packages and Arch packages for Intel/AMD and ARM, a Makefile, and signing with new keys**, together with the improvements to downloading over several networks and to the web interface that were made since 1.8.0. The Docker image is published as `:latest` and `:1.9.0`.
+
+
+### Installers and packages, for Intel/AMD and for ARM
+- **A Windows installer** (`SwiftDownloadManager-<version>-setup-x64.exe` and `...-setup-arm64.exe`, built with Inno Setup): installs for the current
+  user without an administrator or for everybody, adds a Start menu entry and an uninstaller (both signed), an optional desktop icon, the browser
+  add-on folder and the licence; a running copy is asked to close; settings and the download list are kept when you uninstall. Quiet install:
+  `setup.exe /VERYSILENT`. The program is also built natively for **Windows on ARM**
+- **Debian packages for amd64 and arm64** (Raspberry Pi 4/5 with a 64-bit OS, ARM servers and laptops), now with a copyright file, a changelog,
+  checksums for every installed file and a proper maintainer line
+- **Arch Linux packages** (`.pkg.tar.zst`) for x86_64 and, on Arch Linux ARM, aarch64, with a `PKGBUILD` in `source/packaging/arch/`
+- **A `Makefile`**: `make build test`, `make install` / `uninstall` (with `PREFIX` and `DESTDIR`), `make deb`, `make arch`, `make windows-installer`,
+  `make checksums` and `make sign-checksums`; `make help` lists them all
+- **A new signing key**: a new Windows code-signing certificate (SHA-256 `1F:6A:E5:BB:…:B8:A1:5D`, valid until 2031-11-07) signs the programs and
+  the installers, and a new GPG key (`0EBC C36E 6AC4 83A3 7A61 EA5B B217 B8AB B696 672D`) signs `SHA256SUMS` (`SHA256SUMS.asc`) and the Arch packages. The
+  earlier Windows key signed everything up to 1.8.0 and was replaced, not because of any known exposure. Public parts are in `source/packaging`; the
+  fingerprints and how to check them are in SECURITY.md
+- The release workflow builds all of it in parallel, tries each package (installs it, starts the program, removes it again), signs, and publishes
+
+### Several networks at once, made more reliable
+- **A network plugged in while a download runs is used**: a USB-tethered phone or a cable is picked up within a few seconds and gets a connection
+  of its own; a network that is unplugged gets no new connections, and a card whose address changed gets the new one. An empty answer from the system
+  is read as "could not tell", never as "everything was unplugged"
+- **Automatic mode** (Options > Networks): use every connected network, also ones plugged in later, with a switch to leave one out. It stands back
+  while a VPN is connected so traffic is not sent round it
+- **USB networks are recognised** (`usb0`, `rndis0`, `enx…`, "Remote NDIS", "Apple Mobile Device Ethernet") and labelled *USB*, apart from phones
+  on the mobile network
+- **Windows names the card** the traffic must leave through (`IP_UNICAST_IF`): binding to a card's address alone does not decide it there. Tested
+  with the real adapters: the right one connects and a made-up one is refused
+- A connection that breaks in the middle of a transfer rests its network for 8 seconds, and the last working network is never rested
+- `--networks` lists the networks the app sees and what automatic mode would use. The progress window says *not connected* for a card that was unplugged
+
+### The web interface
+- **The page**: add many links at once (with a category and a queue), Pause all / Resume all / Clear finished, sorting, the speed in the tab title,
+  and a settings sheet: Networks and speed (several networks, automatic mode, every network's live speed, the overall speed limit), Access tokens and
+  Users
+- **Access tokens** for scripts and other programs on a server with accounts: each acts as its owner with the owner's rights, is shown once, can be
+  revoked at once, cannot make more tokens, and stops when the account is removed. Requests with a token are not turned away for their `Origin`
+- **Users** (administrators): see what each person has downloaded, add accounts, change passwords, remove accounts; there is always one administrator
+- `GET /healthz` (no sign-in) and `GET /metrics` (Prometheus format, administrators); new JSON calls for all of the above are listed in the README
+- A person using the web page is no longer announced in the window as "an AI assistant"
+
+### Other
+- The Options > Networks card says that a network plugged in or out while a download runs is picked up or skipped
+- Tests: 301 (was 261), including a real download that gains a second network half-way, and tests for every new web call
+
 ## [1.8.0] - 2026-11-06
 
 **A regular release.** Colour themes (including one after the Files app for Windows 11), a title bar that matches the theme, a picture of a download's parts flowing into one file, smoother loaders and motion, and a redesigned browser add-on (version 1.5.0). The Docker image is published as `:latest` and `:1.8.0`.

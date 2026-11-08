@@ -19,6 +19,12 @@ use ureq::unversioned::transport::{
 
 /// How long a network that failed is left alone before it is tried again.
 pub const COOLDOWN: Duration = Duration::from_secs(30);
+/// ... and after a connection that broke in the middle of a transfer.
+pub const SOFT_COOLDOWN: Duration = Duration::from_secs(8);
+
+/// Tells a running download which networks to use right now (it asks every few seconds, so a cable or a
+/// phone plugged in later is taken into use).
+pub type NetSource = Arc<dyn Fn() -> Vec<Route> + Send + Sync>;
 
 /// One way out to the internet: the address of a network card on this computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,7 +41,9 @@ pub struct Route {
 pub enum Kind {
     Wifi,
     Ethernet,
-    /// A phone: USB tethering, a Bluetooth/hotspot link or a mobile modem.
+    /// A USB network: a phone tethered by cable (Android "USB tethering", an iPhone) or a USB network adapter.
+    Usb,
+    /// A phone or modem on the mobile network: a hotspot link or a built-in modem.
     Phone,
     Vpn,
     /// Docker, virtual machines and the like: never offered.
@@ -48,6 +56,7 @@ impl Kind {
         match self {
             Kind::Wifi => "Wi-Fi",
             Kind::Ethernet => "Ethernet",
+            Kind::Usb => "USB",
             Kind::Phone => "Phone",
             Kind::Vpn => "VPN",
             Kind::Virtual => "Virtual",
@@ -65,7 +74,11 @@ pub fn kind_of(name: &str) -> Kind {
     } else if starts(&["tun", "tap", "wg", "utun", "zt", "tailscale", "ppp"]) || has(&["vpn", "wireguard", "tailscale", "openvpn"]) {
         // "ppp" is also used by mobile modems, but those show up as wwan/rmnet in practice.
         Kind::Vpn
-    } else if starts(&["usb", "rndis", "wwan", "rmnet", "ccmni", "ww"]) || has(&["rndis", "ndis", "tether", "iphone", "android", "cellular", "mobile broadband", "hotspot"]) {
+    } else if starts(&["usb", "rndis", "enx"]) || has(&["usb", "rndis", "remote ndis", "apple mobile device"]) {
+        // Linux names USB network adapters "enx" + their MAC address; phones tethered by cable show up as
+        // usb0 / rndis0 (Android) or "Remote NDIS" / "Apple Mobile Device Ethernet" (Windows).
+        Kind::Usb
+    } else if starts(&["wwan", "rmnet", "ccmni", "ww"]) || has(&["tether", "iphone", "android", "cellular", "mobile broadband", "hotspot"]) {
         Kind::Phone
     } else if starts(&["wlan", "wl", "wifi", "wi-fi", "ath", "ra"]) || has(&["wi-fi", "wifi", "wireless", "wlan"]) {
         Kind::Wifi
@@ -115,6 +128,7 @@ fn pick_interfaces(all: impl Iterator<Item = (String, IpAddr, Option<u32>)>) -> 
             Some(existing) => {
                 if existing.addr.is_ipv6() && addr.is_ipv4() {
                     existing.addr = addr;
+                    existing.index = index.or(existing.index);
                 }
             }
             None => out.push(Iface { name, addr, index, kind }),
@@ -129,6 +143,60 @@ pub fn resolve(names: &[String], available: &[Iface]) -> Vec<Route> {
     names.iter().filter_map(|n| available.iter().find(|i| &i.name == n)).map(Iface::route).collect()
 }
 
+/// The networks as a table of text, for `--networks`: what the app sees, what kind it takes each for, and
+/// whether automatic mode would use it.
+pub fn describe(list: &[Iface]) -> String {
+    if list.is_empty() {
+        return "No connected network was found.\n".to_string();
+    }
+    let vpn = list.iter().any(|i| i.kind == Kind::Vpn);
+    let width = list.iter().map(|i| i.name.chars().count()).max().unwrap_or(4).max(4);
+    let mut out = format!("{:<width$}  {:<9} {:<40} {}\n", "Name", "Kind", "Address", "Automatic mode");
+    for i in list {
+        let auto = if i.kind == Kind::Vpn {
+            "no (a VPN)"
+        } else if vpn {
+            "no (stands back while a VPN is connected)"
+        } else {
+            "yes"
+        };
+        out += &format!("{:<width$}  {:<9} {:<40} {}\n", i.name, i.kind.label(), i.addr.to_string(), auto);
+    }
+    out
+}
+
+/// Which networks a person wants downloads to use (Options > Networks).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Choice {
+    /// Download over several networks at all.
+    pub on: bool,
+    /// Use every connected network, including ones that are plugged in later (except the ones in `off`).
+    pub auto: bool,
+    /// The cards picked by hand.
+    pub names: Vec<String>,
+    /// Cards that automatic mode must leave alone (a phone on a metered plan, say).
+    pub off: Vec<String>,
+}
+
+impl Choice {
+    /// The networks to use now, out of the cards that are connected (`available`).
+    ///
+    /// Automatic mode uses every connected card except those switched off. It also stands back completely
+    /// while a VPN is connected: sending traffic out of one card by hand would go round the VPN.
+    pub fn routes(&self, available: &[Iface]) -> Vec<Route> {
+        if !self.on {
+            return Vec::new();
+        }
+        if !self.auto {
+            return resolve(&self.names, available);
+        }
+        if available.iter().any(|i| i.kind == Kind::Vpn) {
+            return Vec::new();
+        }
+        available.iter().filter(|i| !self.off.contains(&i.name)).map(Iface::route).collect()
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Choosing a network for each connection
 // ---------------------------------------------------------------------------------------------
@@ -139,11 +207,16 @@ struct Slot {
     bytes: u64,
     first_use: Option<Instant>,
     down_until: Option<Instant>,
+    /// The card is not connected any more (unplugged, Wi-Fi left): no new connection goes through it.
+    gone: bool,
 }
 
 impl Slot {
+    fn new(route: Route) -> Slot {
+        Slot { route, active: 0, bytes: 0, first_use: None, down_until: None, gone: false }
+    }
     fn usable(&self, now: Instant) -> bool {
-        self.down_until.is_none_or(|t| now >= t)
+        !self.gone && self.down_until.is_none_or(|t| now >= t)
     }
     /// Bytes per second since the card was first used (0 until there is data).
     fn speed(&self, now: Instant) -> f64 {
@@ -165,13 +238,50 @@ pub struct RouteStatus {
     pub name: String,
     pub connections: usize,
     pub bytes_per_sec: f64,
+    /// Not working for a moment (it failed; it is tried again soon).
     pub resting: bool,
+    /// Not connected any more.
+    pub gone: bool,
 }
 
 impl Router {
     pub fn new(routes: Vec<Route>) -> Arc<Router> {
-        let slots = routes.into_iter().map(|route| Slot { route, active: 0, bytes: 0, first_use: None, down_until: None }).collect();
+        let slots = routes.into_iter().map(Slot::new).collect();
         Arc::new(Router { slots: Mutex::new(slots) })
+    }
+
+    /// Bring the router up to date with the networks that are connected right now (`routes`), while a
+    /// download is running: a cable or a phone that was plugged in is taken into use, a card whose address
+    /// changed gets its new address (and a fresh start), and one that is gone is left alone. Cards are told
+    /// apart by name. Returns how many networks are newly usable.
+    pub fn refresh(&self, routes: &[Route]) -> usize {
+        let mut slots = self.slots.lock().unwrap();
+        let mut added = 0;
+        for route in routes {
+            match slots.iter_mut().find(|s| s.route.name == route.name) {
+                Some(slot) => {
+                    if slot.gone {
+                        slot.gone = false;
+                        added += 1;
+                    }
+                    if slot.route != *route {
+                        // Another address (the router handed out a new one): what went wrong with the old one is history.
+                        slot.route = route.clone();
+                        slot.down_until = None;
+                    }
+                }
+                None => {
+                    slots.push(Slot::new(route.clone()));
+                    added += 1;
+                }
+            }
+        }
+        for slot in slots.iter_mut() {
+            if !routes.iter().any(|r| r.name == slot.route.name) {
+                slot.gone = true;
+            }
+        }
+        added
     }
 
     pub fn len(&self) -> usize {
@@ -190,7 +300,7 @@ impl Router {
             .lock()
             .unwrap()
             .iter()
-            .map(|s| RouteStatus { name: s.route.name.clone(), connections: s.active, bytes_per_sec: s.speed(now), resting: !s.usable(now) })
+            .map(|s| RouteStatus { name: s.route.name.clone(), connections: s.active, bytes_per_sec: s.speed(now), resting: !s.gone && !s.usable(now), gone: s.gone })
             .collect()
     }
 
@@ -244,6 +354,24 @@ impl Lease {
         self.fail_at(Instant::now());
     }
 
+    /// A connection on this network broke while it was running (a read timed out, the link dropped). That may
+    /// be the server and not the card, so the rest is short, and the only network left is never rested.
+    pub fn fail_soft(&self) {
+        self.fail_soft_at(Instant::now());
+    }
+
+    fn fail_soft_at(&self, now: Instant) {
+        let mut slots = self.router.slots.lock().unwrap();
+        let others = slots.iter().enumerate().filter(|(i, s)| *i != self.index && s.usable(now)).count();
+        if others == 0 {
+            return;
+        }
+        let slot = &mut slots[self.index];
+        slot.down_until = Some(now + SOFT_COOLDOWN);
+        slot.bytes = 0;
+        slot.first_use = None;
+    }
+
     fn fail_at(&self, now: Instant) {
         let mut slots = self.router.slots.lock().unwrap();
         let slot = &mut slots[self.index];
@@ -266,9 +394,41 @@ impl Drop for Lease {
 // Opening a connection through one network
 // ---------------------------------------------------------------------------------------------
 
+/// Windows only. With two cards that both lead to the internet, binding a socket to one card's address
+/// does not make the packets leave through that card: the routing table decides, and the cheaper
+/// route may be the other card. `IP_UNICAST_IF` (`IPV6_UNICAST_IF`) names the card that must be used.
+#[cfg(windows)]
+mod force {
+    use std::os::windows::io::AsRawSocket;
+
+    #[link(name = "ws2_32")]
+    unsafe extern "system" {
+        fn setsockopt(s: usize, level: i32, name: i32, value: *const u8, len: i32) -> i32;
+    }
+
+    const IPPROTO_IP: i32 = 0;
+    const IPPROTO_IPV6: i32 = 41;
+    const IP_UNICAST_IF: i32 = 31;
+    const IPV6_UNICAST_IF: i32 = 31;
+
+    /// Make the socket send through the card with this index. IPv4 wants the number in network byte order,
+    /// IPv6 in host order.
+    pub fn unicast_if(socket: &impl AsRawSocket, v4: bool, index: u32) -> std::io::Result<()> {
+        let (level, name, value) = if v4 { (IPPROTO_IP, IP_UNICAST_IF, index.to_be()) } else { (IPPROTO_IPV6, IPV6_UNICAST_IF, index) };
+        // SAFETY: `value` lives through the call and 4 is its size; the handle is an open socket owned by the caller.
+        let rc = unsafe { setsockopt(socket.as_raw_socket() as usize, level, name, (&value as *const u32).cast(), 4) };
+        if rc == 0 { Ok(()) } else { Err(std::io::Error::last_os_error()) }
+    }
+}
+
 /// Open a TCP connection that leaves through the given network.
 fn connect_from(route: &Route, to: SocketAddr, timeout: Option<Duration>) -> io::Result<TcpStream> {
     let socket = Socket::new(Domain::for_address(to), Type::STREAM, Some(Protocol::TCP))?;
+    // Windows: name the card the traffic must leave through (best effort; the source address below still applies).
+    #[cfg(windows)]
+    if let Some(index) = route.index {
+        let _ = force::unicast_if(&socket, to.is_ipv4(), index);
+    }
     // Linux: tie the socket to the card, so the traffic really leaves through it whatever the routing table
     // says. This needs a recent kernel (5.7+) or CAP_NET_RAW, so it is best effort; the source address below
     // is what works everywhere.

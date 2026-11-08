@@ -10,22 +10,22 @@ use crate::mcp::server::Engine;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
-mod tray;
+pub mod tray;
 
-pub use tray::TrayCmd;
+pub use tray::{row_text, Tray, TrayCmd, TrayState, MAX_ROWS};
 
 /// How long the background process waits for a closing window to let go of the downloads.
 const START_WAIT: Duration = Duration::from_secs(30);
 
-/// Text for the tray tooltip and the status line of its menu.
+/// The status line of the tray menu (the tooltip puts the program's name before it).
 pub fn status_text(active: usize, queued: usize, speed_bps: f64) -> String {
     if active > 0 {
         let speed = crate::app::human_size(speed_bps.max(0.0) as u64);
-        format!("Swift Download Manager: {active} downloading, {speed}/s")
+        format!("{active} downloading · {speed}/s")
     } else if queued > 0 {
-        format!("Swift Download Manager: {queued} waiting")
+        format!("{queued} waiting")
     } else {
-        "Swift Download Manager: idle".to_string()
+        "Idle".to_string()
     }
 }
 
@@ -39,11 +39,18 @@ pub fn spawn_window() -> std::io::Result<()> {
     spawn_detached(None)
 }
 
+/// Start a window that opens the Updates window and looks for a new version.
+pub fn spawn_updates_window() -> std::io::Result<()> {
+    spawn_detached_with(&["--show", "check-updates"])
+}
+
 fn spawn_detached(arg: Option<&str>) -> std::io::Result<()> {
+    spawn_detached_with(&arg.into_iter().collect::<Vec<_>>())
+}
+
+fn spawn_detached_with(args: &[&str]) -> std::io::Result<()> {
     let mut cmd = std::process::Command::new(std::env::current_exe()?);
-    if let Some(a) = arg {
-        cmd.arg(a);
-    }
+    cmd.args(args);
     cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
     #[cfg(unix)]
     {
@@ -63,7 +70,7 @@ fn spawn_detached(arg: Option<&str>) -> std::io::Result<()> {
 /// `swift_download_manager --background`. Returns the process exit code.
 pub fn run() -> i32 {
     let (cmd_tx, cmd_rx) = mpsc::channel::<TrayCmd>();
-    let (status_tx, status_rx) = mpsc::channel::<String>();
+    let (status_tx, status_rx) = mpsc::channel::<TrayState>();
     let engine = std::thread::spawn(move || engine_loop(cmd_rx, status_tx));
     // The tray lives on this (the main) thread, which Windows and macOS require. It returns when
     // the engine thread has finished and dropped its end of the status channel.
@@ -73,7 +80,7 @@ pub fn run() -> i32 {
 }
 
 /// Owns the downloads and reacts to the tray until it is told to quit or a window takes over.
-fn engine_loop(cmd_rx: Receiver<TrayCmd>, status_tx: Sender<String>) {
+fn engine_loop(cmd_rx: Receiver<TrayCmd>, status_tx: Sender<TrayState>) {
     let mut engine = Engine::new(default_config_dir());
     if let Err(e) = engine.ensure_local(START_WAIT) {
         eprintln!("swift-download-manager: not running in the background: {e}");
@@ -100,6 +107,26 @@ fn engine_loop(cmd_rx: Receiver<TrayCmd>, status_tx: Sender<String>) {
                     app.resume_all();
                 }
             }
+            Ok(TrayCmd::AddClipboard) => {
+                if let Some(app) = engine.app_mut() {
+                    app.add_clipboard_link();
+                }
+            }
+            Ok(TrayCmd::OpenFolder) => {
+                if let Some(app) = engine.app_mut() {
+                    app.open_download_folder();
+                }
+            }
+            Ok(TrayCmd::CheckUpdates) => {
+                if let Err(e) = spawn_updates_window() {
+                    eprintln!("swift-download-manager: could not open the window: {e}");
+                }
+            }
+            Ok(TrayCmd::Autostart(on)) => {
+                if let Some(app) = engine.app_mut() {
+                    app.set_autostart(on);
+                }
+            }
             Ok(TrayCmd::Quit) | Err(RecvTimeoutError::Disconnected) => {
                 engine.shutdown();
                 return;
@@ -114,8 +141,8 @@ fn engine_loop(cmd_rx: Receiver<TrayCmd>, status_tx: Sender<String>) {
         };
         if last_status.elapsed() >= Duration::from_secs(1) {
             last_status = Instant::now();
-            let (active, queued, speed) = app.background_summary();
-            if status_tx.send(status_text(active, queued, speed)).is_err() {
+            let state = app.tray_state();
+            if status_tx.send(state).is_err() {
                 return;
             }
         }
@@ -128,9 +155,19 @@ mod tests {
 
     #[test]
     fn the_tray_text_says_what_is_going_on() {
-        assert_eq!(status_text(0, 0, 0.0), "Swift Download Manager: idle");
-        assert_eq!(status_text(0, 3, 0.0), "Swift Download Manager: 3 waiting");
-        assert_eq!(status_text(2, 5, 4_620_000.0), "Swift Download Manager: 2 downloading, 4.41 MB/s");
-        assert_eq!(status_text(1, 0, -5.0), "Swift Download Manager: 1 downloading, 0 B/s");
+        assert_eq!(status_text(0, 0, 0.0), "Idle");
+        assert_eq!(status_text(0, 3, 0.0), "3 waiting");
+        assert_eq!(status_text(2, 5, 4_620_000.0), "2 downloading · 4.41 MB/s");
+        assert_eq!(status_text(1, 0, -5.0), "1 downloading · 0 B/s");
+    }
+
+    #[test]
+    fn a_running_download_is_a_short_line_with_its_percentage() {
+        assert_eq!(row_text(41, "ubuntu.iso"), "41%  ubuntu.iso");
+        let long = "a-very-long-file-name-that-would-run-across-the-whole-screen-of-the-menu.iso";
+        let line = row_text(7, long);
+        assert!(line.starts_with("7%  a-very-long") && line.ends_with('…'), "{line}");
+        assert!(line.chars().count() <= 4 + 44, "{line}");
+        assert_eq!(row_text(100, &"é".repeat(60)).chars().count(), 6 + 44, "cut by characters, not bytes");
     }
 }

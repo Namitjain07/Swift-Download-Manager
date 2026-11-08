@@ -5,7 +5,7 @@
 use super::anim::fade;
 use crate::icons::{self, Icon};
 use crate::theme;
-use eframe::egui::{self, vec2, Color32, CornerRadius, FontId, Response, Sense, Stroke, StrokeKind, Ui};
+use eframe::egui::{self, pos2, vec2, Color32, CornerRadius, FontFamily, FontId, Response, Sense, Stroke, StrokeKind, Ui};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ButtonKind {
@@ -57,11 +57,20 @@ pub fn button_width(ui: &Ui, size: ButtonSize, icon: bool, label: &str) -> f32 {
 
 const GAP: f32 = 8.0;
 
+/// Button labels are semibold, except in WinUI 3, which sets them in the regular weight.
+fn label_family(d: &theme::Design) -> FontFamily {
+    if d.is_winui() {
+        FontFamily::Proportional
+    } else {
+        theme::semibold()
+    }
+}
+
 fn metrics(d: &theme::Design, size: ButtonSize) -> (FontId, f32, f32) {
     // The side padding is wide for capsules and narrower for the rectangular buttons of Files and Carbon.
     match size {
-        ButtonSize::Regular => (FontId::new(d.body, theme::semibold()), 12.0 + 8.0 * d.pill, 18.0),
-        ButtonSize::Small => (FontId::new(13.0, theme::semibold()), 10.0 + 4.0 * d.pill, 16.0),
+        ButtonSize::Regular => (FontId::new(d.body, label_family(d)), 12.0 + 8.0 * d.pill, 18.0),
+        ButtonSize::Small => (FontId::new(13.0, label_family(d)), 10.0 + 4.0 * d.pill, 16.0),
     }
 }
 
@@ -71,6 +80,18 @@ fn disabled_look(kind: ButtonKind, pal: &theme::Palette) -> (Color32, Color32, S
         ButtonKind::Outline => (Color32::TRANSPARENT, pal.disabled, Stroke::new(1.0, pal.separator_strong)),
         ButtonKind::Plain => (Color32::TRANSPARENT, pal.disabled, Stroke::NONE),
         ButtonKind::Primary | ButtonKind::Secondary | ButtonKind::Danger => (pal.surface2, pal.disabled, Stroke::NONE),
+    }
+}
+
+/// (fill, text, outline) of an enabled button in WinUI 3: each state has a fill of its own (`ControlFillColorDefault`, `Secondary`,
+/// `Tertiary`; the accent at 100, 90 and 80 %), the label softens a little while pressed, and the outline is the thin one of controls.
+fn winui_look(kind: ButtonKind, pal: &theme::Palette, hover: f32, press: f32) -> (Color32, Color32, Stroke) {
+    match kind {
+        ButtonKind::Primary => (pal.accent_solid.lerp_to_gamma(pal.accent_hover, hover).lerp_to_gamma(pal.accent_press, press), pal.on_accent.gamma_multiply(1.0 - 0.3 * press), Stroke::NONE),
+        ButtonKind::Secondary => (pal.ctl.lerp_to_gamma(pal.ctl_hover, hover).lerp_to_gamma(pal.ctl_press, press), pal.label.lerp_to_gamma(pal.secondary, press), Stroke::new(1.0, pal.ctl_stroke)),
+        ButtonKind::Outline => (Color32::TRANSPARENT.lerp_to_gamma(pal.hover, hover).lerp_to_gamma(pal.press, press), pal.label, Stroke::new(1.0, pal.ctl_stroke_bottom)),
+        ButtonKind::Plain => (Color32::TRANSPARENT.lerp_to_gamma(pal.hover, hover).lerp_to_gamma(pal.press, press), pal.label, Stroke::NONE),
+        ButtonKind::Danger => (pal.red_tint.gamma_multiply(1.0 + 0.6 * hover.max(press)), pal.red_ink, Stroke::NONE),
     }
 }
 
@@ -85,10 +106,14 @@ fn paint_button(ui: &mut Ui, kind: ButtonKind, size: ButtonSize, icon: Option<Ic
     let (rect, resp) = ui.allocate_exact_size(vec2(2.0 * pad + content_w, height), if enabled { Sense::click() } else { Sense::hover() });
     let hover = fade(&ctx, resp.id.with("hover"), enabled && resp.hovered(), 0.12);
     let press = fade(&ctx, resp.id.with("press"), enabled && resp.is_pointer_button_down_on(), 0.08);
-    // Pressed buttons shrink to 97%; only the painting changes, never the layout.
-    let rect = rect.shrink2(rect.size() * (0.015 * press));
+    // Pressed buttons shrink to 97%; only the painting changes, never the layout. (WinUI buttons do not.)
+    let winui = d.is_winui();
+    let rect = rect.shrink2(rect.size() * (if winui { 0.0 } else { 0.015 } * press));
 
-    let (fill, text, stroke) = match kind {
+    let (fill, text, stroke) = if winui {
+        winui_look(kind, &pal, hover, press)
+    } else {
+        match kind {
         ButtonKind::Primary => (pal.accent_solid.lerp_to_gamma(pal.accent_press, hover.max(press)), pal.on_accent, Stroke::NONE),
         ButtonKind::Secondary => (pal.surface2.lerp_to_gamma(pal.surface3, hover.max(press)), pal.label, Stroke::NONE),
         ButtonKind::Outline => {
@@ -96,6 +121,7 @@ fn paint_button(ui: &mut Ui, kind: ButtonKind, size: ButtonSize, icon: Option<Ic
         }
         ButtonKind::Plain => (Color32::TRANSPARENT.lerp_to_gamma(pal.hover, hover.max(press)), pal.label, Stroke::NONE),
         ButtonKind::Danger => (pal.red_tint.gamma_multiply(1.0 + 0.6 * hover.max(press)), pal.red_ink, Stroke::NONE),
+        }
     };
     // Disabled buttons are flat grey with grey text (never a faded copy of the coloured one, which would be unreadable).
     let (fill, text, stroke) = if enabled { (fill, text, stroke) } else { disabled_look(kind, &pal) };
@@ -107,6 +133,22 @@ fn paint_button(ui: &mut Ui, kind: ButtonKind, size: ButtonSize, icon: Option<Ic
     }
     if stroke != Stroke::NONE {
         p.rect_stroke(rect, radius, Stroke::new(stroke.width, stroke.color.gamma_multiply(dim)), StrokeKind::Inside);
+    }
+    if winui && enabled {
+        // WinUI's "elevation" border: the outline is a little stronger along the bottom edge, which makes the button lie on the page.
+        let (kind_edge, dark) = (kind, pal.label.r() > 128);
+        let edge = match kind_edge {
+            ButtonKind::Primary => Some((Color32::from_white_alpha(20), if dark { Color32::from_black_alpha(35) } else { Color32::from_black_alpha(102) })),
+            ButtonKind::Secondary | ButtonKind::Outline => Some((pal.ctl_stroke, pal.ctl_stroke_bottom)),
+            _ => None,
+        };
+        if let Some((side, bottom)) = edge {
+            if kind_edge == ButtonKind::Primary {
+                p.rect_stroke(rect, radius, Stroke::new(1.0, side), StrokeKind::Inside);
+            }
+            let r = f32::from(radius.nw);
+            p.line_segment([pos2(rect.left() + r, rect.bottom() - 0.5), pos2(rect.right() - r, rect.bottom() - 0.5)], Stroke::new(1.0, bottom));
+        }
     }
     // Icon and label are centred together as one block.
     let mut x = rect.center().x - content_w / 2.0;
@@ -195,5 +237,24 @@ mod tests {
         let a = rects(600.0, |ui| vec![button(ui, ButtonKind::Primary, "OK"), button(ui, ButtonKind::Secondary, "Next")]);
         let b = rects(600.0, |ui| vec![button(ui, ButtonKind::Primary, "OK"), button(ui, ButtonKind::Secondary, "Next")]);
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn winui_buttons_are_32_and_28_high_with_regular_labels() {
+        let ctx = crate::theme::testing::themed_with(ThemeMode::Light, crate::theme::ColorTheme::WinUi);
+        let mut sizes = Vec::new();
+        for _ in 0..2 {
+            let mut frame = ctx.run_ui(egui::RawInput { screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(600.0, 200.0))), ..Default::default() }, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        sizes = vec![button(ui, ButtonKind::Primary, "Save").rect.size(), button(ui, ButtonKind::Secondary, "Cancel").rect.size(), small_button(ui, ButtonKind::Secondary, "Copy").rect.size()];
+                    });
+                });
+            });
+            frame.textures_delta.clear();
+        }
+        assert_eq!((sizes[0].y, sizes[1].y, sizes[2].y), (32.0, 32.0, 28.0));
+        assert_eq!(label_family(&theme::WINUI), egui::FontFamily::Proportional, "WinUI sets button labels in the regular weight");
+        assert_eq!(label_family(&theme::DESIGN), theme::semibold(), "the other themes in semibold");
     }
 }

@@ -150,11 +150,15 @@ impl App {
                 self.progress_open.remove(&id);
                 continue;
             };
+            if self.progress_mini.contains(&id) {
+                self.mini_progress(ctx, id);
+                continue;
+            }
             let mut act: Option<&str> = None;
             let mut details = self.details_open.contains(&id);
             let mut lim_on = self.items[idx].limit_kbps > 0;
             let mut lim_val: u64 = if lim_on { self.items[idx].limit_kbps } else { 256 };
-            let mut close = {
+            let (mut close, minimize) = {
                 let item = &self.items[idx];
                 let st = item.status();
                 let pal = theme::current(ctx);
@@ -181,7 +185,7 @@ impl App {
                     Status::Error => FlowState::Failed,
                     Status::Queued | Status::Paused => FlowState::Waiting,
                 };
-                let out = sheet(("progress", id), title).width(500.0).floating(pos).show(ctx, |s| {
+                let out = sheet(("progress", id), title).width(500.0).floating(pos).minimizable().show(ctx, |s| {
                     s.body(|ui| {
                         crate::widgets::flow(ui, ("progress", id), &channels, item.progress(), flow_state, 112.0);
                         ui.add_space(12.0);
@@ -191,7 +195,7 @@ impl App {
                         kv(ui, "Status", |ui| {
                             let text = match st {
                                 Status::Error => item.live.error.lock().unwrap().clone().unwrap_or_else(|| "Error".into()),
-                                s => item.live.note.lock().unwrap().clone().unwrap_or_else(|| s.label().to_string()),
+                                s => item.live.note().unwrap_or_else(|| s.label().to_string()),
                             };
                             let col = if st == Status::Error { pal.red_ink } else { pal.label };
                             ui.add(egui::Label::new(RichText::new(text).family(theme::semibold()).color(col)).truncate());
@@ -208,7 +212,7 @@ impl App {
                         // With several networks chosen: what each one is carrying.
                         let nets = item.live.router.lock().unwrap().as_ref().map(|r| r.status());
                         for n in nets.into_iter().flatten() {
-                            let text = if n.resting { "not working, resting".to_string() } else { format!("{} · {} connections", human_speed(n.bytes_per_sec), n.connections) };
+                            let text = if n.gone { "not connected".to_string() } else if n.resting { "not working, resting".to_string() } else { format!("{} · {} connections", human_speed(n.bytes_per_sec), n.connections) };
                             kv_text(ui, &format!("Network {}", n.name), &text);
                         }
                         kv_text(
@@ -281,13 +285,17 @@ impl App {
                             } else if primary_button(ui, "Resume").clicked() {
                                 act = Some("resume");
                             }
-                            if plain_button(ui, "Cancel").on_hover_text("Stop and close").clicked() {
+                            if st == Status::Complete {
+                                if plain_button(ui, "Close").clicked() {
+                                    act = Some("close");
+                                }
+                            } else if plain_button(ui, "Cancel download").on_hover_text("Stop it and take it off the list (what was already fetched is deleted)").clicked() {
                                 act = Some("cancel");
                             }
                         },
                     );
                 });
-                out.close
+                (out.close, out.minimize)
             };
             let new_limit = if lim_on { lim_val.max(1) } else { 0 };
             if new_limit != self.items[idx].limit_kbps {
@@ -302,17 +310,120 @@ impl App {
             match act {
                 Some("pause") => self.stop_item(id),
                 Some("resume") => self.start_item(id),
+                // Cancel: stop it and ask to take it off the list (the question also deletes what was fetched).
                 Some("cancel") => {
                     self.stop_item(id);
                     close = true;
+                    self.ask_delete(vec![id]);
                 }
+                Some("close") => close = true,
                 Some("open") => open_path(&self.items[idx].path()),
                 Some("folder") => open_path(&self.items[idx].folder),
                 _ => {}
             }
+            if minimize && !close {
+                self.progress_mini.insert(id);
+            }
             if close {
                 self.progress_open.remove(&id);
+                self.progress_mini.remove(&id);
             }
+        }
+    }
+
+    /// A progress window shrunk to a small bar: the name, how far it is, the speed, and the buttons that matter.
+    /// Several of them stack up in the bottom right corner; they can be dragged anywhere.
+    fn mini_progress(&mut self, ctx: &egui::Context, id: u64) {
+        use crate::icons;
+        use crate::widgets::{capsule_bar, elided_tooltip, icon_button_at, indeterminate_bar, truncated};
+        use eframe::egui::{CornerRadius, FontId, Frame, Rect, Sense, Stroke, UiBuilder, Vec2};
+        let Some(item) = self.items.iter().find(|i| i.id == id) else {
+            self.progress_mini.remove(&id);
+            return;
+        };
+        let (pal, d) = (theme::current(ctx), theme::design(ctx));
+        let st = item.status();
+        let n = self.progress_mini.iter().position(|m| *m == id).unwrap_or(0) as f32;
+        let edge = if ctx.global_style().visuals.dark_mode { pal.separator_strong } else { pal.separator };
+        let frame = Frame::NONE.fill(pal.raised).corner_radius(CornerRadius::same(d.radius_lg)).stroke(Stroke::new(1.0, edge)).shadow(theme::shadow(ctx, crate::theme::Elevation::Dialog));
+        let mut act: Option<&str> = None;
+        egui::Window::new(format!("mini progress {id}"))
+            .id(egui::Id::unique(("sdm_mini_progress", id)))
+            .title_bar(false)
+            .frame(frame)
+            .resizable(false)
+            .collapsible(false)
+            .constrain(true)
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -(40.0 + n * 90.0)))
+            .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(340.0, 78.0), Sense::hover());
+                let p = ui.painter().clone();
+                icons::file_tile(&p, Rect::from_min_size(rect.min + Vec2::new(12.0, 10.0), Vec2::splat(32.0)), &item.category);
+                let left = rect.left() + 12.0 + 32.0 + 10.0;
+                let buttons = 3.0 * 28.0 + 8.0;
+                let name = truncated(&p, &item.name, FontId::new(d.body, theme::semibold()), pal.label, (rect.right() - left - buttons - 6.0).max(40.0));
+                let name_pos = egui::pos2(left, rect.top() + 11.0);
+                elided_tooltip(ui, &name, name_pos, &item.name, ("mini_name", id));
+                p.galley(name_pos, name, pal.label);
+                let (line, colour) = match st {
+                    Status::Downloading => (format!("{:.0}%  ·  {}  ·  {}", item.progress() * 100.0, human_speed(item.speed()), item.time_left()), pal.secondary),
+                    Status::Paused if item.total() > 0 => (format!("{:.0}%  ·  Paused", item.progress() * 100.0), pal.secondary),
+                    Status::Paused => ("Paused".to_string(), pal.secondary),
+                    Status::Connecting => ("Connecting…".to_string(), pal.secondary),
+                    Status::Queued => ("Waiting".to_string(), pal.secondary),
+                    Status::Complete => ("Complete".to_string(), pal.green_ink),
+                    Status::Error => (item.live.error.lock().unwrap().clone().unwrap_or_else(|| "Something went wrong".into()), pal.red_ink),
+                };
+                let line_text = line.clone();
+                let line = truncated(&p, &line, FontId::proportional(d.caption), colour, (rect.right() - left - 12.0).max(40.0));
+                let line_pos = egui::pos2(left, rect.top() + 33.0);
+                elided_tooltip(ui, &line, line_pos, &line_text, ("mini_line", id));
+                p.galley(line_pos, line, colour);
+                // The bar along the bottom.
+                let bar = Rect::from_min_size(egui::pos2(rect.left() + 12.0, rect.bottom() - 18.0), Vec2::new(rect.width() - 24.0, 6.0));
+                let mut child = ui.new_child(UiBuilder::new().max_rect(bar));
+                let colour = match st {
+                    Status::Complete => pal.green,
+                    Status::Error => pal.red,
+                    Status::Downloading => pal.accent,
+                    _ => pal.orange,
+                };
+                if st == Status::Connecting || (st == Status::Downloading && item.total() == 0) {
+                    indeterminate_bar(&mut child, 6.0);
+                } else {
+                    capsule_bar(&mut child, egui::Id::unique(("mini_bar", id)), if st == Status::Complete { 1.0 } else { item.progress() }, colour, 6.0, None);
+                }
+                // Buttons: pause or resume (or open), back to the full window, close.
+                let primary = match st {
+                    Status::Downloading | Status::Connecting => (Icon::Pause, "Pause", "pause"),
+                    Status::Complete => (Icon::File, "Open the file", "open"),
+                    _ => (Icon::Resume, "Resume", "resume"),
+                };
+                let right = rect.right() - 10.0;
+                for (k, (icon, tip, key)) in [primary, (Icon::CaretUp, "Back to the full window", "expand"), (Icon::Close, "Close (the download goes on)", "close")].into_iter().enumerate() {
+                    let r = Rect::from_center_size(egui::pos2(right - 14.0 - (2 - k) as f32 * 28.0 + 0.0, rect.top() + 24.0), Vec2::splat(28.0));
+                    if icon_button_at(ui, r, icon, tip, egui::Id::unique(("mini_btn", id, key))).clicked() {
+                        act = Some(key);
+                    }
+                }
+            });
+        match act {
+            Some("pause") => self.stop_item(id),
+            Some("resume") => self.start_item(id),
+            Some("open") => {
+                if let Some(i) = self.items.iter().find(|i| i.id == id) {
+                    open_path(&i.path());
+                }
+            }
+            Some("expand") => {
+                self.progress_mini.remove(&id);
+            }
+            Some("close") => {
+                self.progress_mini.remove(&id);
+                self.progress_open.remove(&id);
+            }
+            _ => {}
         }
     }
 
@@ -375,9 +486,15 @@ impl App {
         let Some(mut d) = self.delete.take() else { return };
         let chosen = std::cell::Cell::new(None::<bool>);
         let any_done = d.ids.iter().any(|id| self.items.iter().any(|i| i.id == *id && i.status() == Status::Complete));
+        // Unfinished downloads: how much of them is on the disk and goes with them.
+        let partial: u64 = d.ids.iter().filter_map(|id| self.items.iter().find(|i| i.id == *id)).filter(|i| i.status() != Status::Complete).map(|i| i.done()).sum();
         let out = sheet("delete", "Remove from the list?").width(440.0).show(ctx, |s| {
             s.body(|ui| {
                 ui.label(if d.ids.len() == 1 { "This download will be removed from the list.".to_string() } else { format!("These {} downloads will be removed from the list.", d.ids.len()) });
+                if partial > 0 {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(format!("The part that was already fetched ({}) is deleted too.", human_size(partial))).color(theme::current(ui.ctx()).secondary));
+                }
                 if any_done {
                     ui.add_space(8.0);
                     check_row(ui, &mut d.delete_files, "Also delete the downloaded files from disk");
@@ -529,24 +646,32 @@ fn networks_card(ui: &mut egui::Ui, s: &mut Settings) {
         if !s.multi_network {
             return;
         }
+        g.toggle("Use every connected network automatically", Some("Also a network you plug in later, such as a phone with USB tethering. Stands back while a VPN is connected."), &mut s.networks_auto);
         if nets.is_empty() {
             g.custom(48.0, |ui| {
                 ui.label("No connected network found.");
             });
         }
         for n in &nets {
-            let mut on = s.networks.contains(&n.name);
+            // By hand the switch means "use it"; in automatic mode it means "do not leave it out".
+            let mut on = if s.networks_auto { !s.networks_off.contains(&n.name) } else { s.networks.contains(&n.name) };
             let sub = format!("{} · {}", n.kind.label(), n.addr);
             if g.row(&n.name, Some(&sub), switch_w, |ui| switch(ui, &mut on)).changed() {
-                s.networks.retain(|x| x != &n.name);
-                if on {
-                    s.networks.push(n.name.clone());
+                let list = if s.networks_auto { &mut s.networks_off } else { &mut s.networks };
+                list.retain(|x| x != &n.name);
+                if on != s.networks_auto {
+                    list.push(n.name.clone());
                 }
             }
         }
     });
     if s.multi_network {
-        hint(ui, "Pick two or more. Each download then uses every picked network at once and their speeds add up; a network that drops out is skipped. Takes effect when a download starts.");
+        let text = if s.networks_auto {
+            "Every download uses all the connected networks at once and their speeds add up. Switch a network off to leave it out (for a phone on a metered plan). A network that is plugged in or drops out while a download runs is picked up or skipped within a few seconds."
+        } else {
+            "Pick two or more. Each download then uses every picked network at once and their speeds add up. A picked network that is plugged in or drops out while a download runs is picked up or skipped within a few seconds."
+        };
+        hint(ui, text);
     }
 }
 
@@ -582,6 +707,71 @@ fn web_card(ui: &mut egui::Ui, s: &mut Settings, link: Option<&str>) {
     if s.web_enabled {
         hint(ui, "It needs this program (or its tray icon) to be running.");
     }
+}
+
+/// Options for the WinUI 3 theme: the material behind the window, the accent and the transparency switch of Windows.
+fn winui_card(ui: &mut egui::Ui, s: &mut Settings) {
+    use crate::theme::winui::{runtime, Accent, Backdrop};
+    /// The accent colours Windows itself offers (a selection of them).
+    const PRESETS: [u32; 16] = [0xFFB900, 0xF7630C, 0xDA3B01, 0xE81123, 0xEA005E, 0xC239B3, 0x8764B8, 0x0078D4, 0x0063B1, 0x00B7C3, 0x038387, 0x10893E, 0x107C10, 0x7A7574, 0x68768A, 0x767676];
+    section_title(ui, "WinUI 3");
+    let material_w = segmented_width(ui, &["Mica", "Mica Alt", "Acrylic", "None"]);
+    let now = runtime();
+    card(ui, |g| {
+        g.row(
+            "Material behind the window",
+            Some("What the window is made of: the wallpaper, blurred and tinted (Mica), a stronger tint (Mica Alt), or a thinner, more colourful one (Acrylic)."),
+            material_w,
+            |ui| segmented(ui, &[(Backdrop::Mica, "Mica"), (Backdrop::MicaAlt, "Mica Alt"), (Backdrop::Acrylic, "Acrylic"), (Backdrop::None, "None")], &mut s.winui_backdrop),
+        );
+        let mut system = s.winui_accent.is_none();
+        g.toggle("Use the accent colour of Windows", Some("Follows Settings > Personalization > Colors, also while the app is open."), &mut system);
+        if system != s.winui_accent.is_none() {
+            s.winui_accent = if system { None } else { Some(u32::from_be_bytes([0, now.accent.base.r(), now.accent.base.g(), now.accent.base.b()])) };
+        }
+        if let Some(chosen) = s.winui_accent {
+            g.free(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+                    for preset in PRESETS {
+                        let colour = egui::Color32::from_rgb((preset >> 16) as u8, (preset >> 8) as u8, preset as u8);
+                        let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+                        let r = egui::CornerRadius::same(theme::design(ui.ctx()).radius_sm);
+                        ui.painter().rect_filled(rect, r, colour);
+                        if chosen == preset {
+                            ui.painter().rect_stroke(rect.expand(2.0), r, egui::Stroke::new(2.0, theme::current(ui.ctx()).label), egui::StrokeKind::Outside);
+                        }
+                        if resp.on_hover_text(format!("#{preset:06X}")).clicked() {
+                            s.winui_accent = Some(preset);
+                        }
+                    }
+                });
+                ui.add_space(8.0);
+                // Any other colour, as #RRGGBB.
+                let id = egui::Id::unique("winui_accent_hex");
+                let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| format!("#{chosen:06X}"));
+                let shown = format!("#{chosen:06X}");
+                if !ui.memory(|m| m.has_focus(id.with("edit"))) && !text.eq_ignore_ascii_case(&shown) && Accent::parse_hex(&text).is_none_or(|v| v != chosen) {
+                    text = shown;
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Other colour");
+                    let edited = ui.add(field(&mut text).id(id.with("edit")).desired_width(110.0).hint_text("#0078D4")).changed();
+                    if edited && let Some(v) = Accent::parse_hex(&text) {
+                        s.winui_accent = Some(v);
+                    }
+                });
+                ui.data_mut(|d| d.insert_temp(id, text));
+            });
+        }
+        g.toggle("Follow the transparency effects setting of Windows", Some("When Windows turns transparency effects off, the window is solid."), &mut s.winui_follow_effects);
+    });
+    let in_use = match now.material {
+        Backdrop::None if s.winui_backdrop != Backdrop::None => "No material is showing now: Windows has transparency effects off, a high contrast theme is on, or this is not Windows. The colours are solid.".to_string(),
+        Backdrop::None => "The window is solid.".to_string(),
+        m => format!("{} is showing now.", m.name()),
+    };
+    hint(ui, &in_use);
 }
 
 fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
@@ -633,6 +823,13 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
             crate::widgets::theme_picker(ui, &mut s.color_theme);
         });
     });
+    if s.color_theme == crate::theme::ColorTheme::WinUi {
+        // Screenshots (--show winui) start with this card in view.
+        if ui.data(|d| d.get_temp::<bool>(egui::Id::unique("sdm_scroll_winui"))).unwrap_or(false) {
+            ui.scroll_to_cursor(Some(egui::Align::TOP));
+        }
+        winui_card(ui, s);
+    }
     networks_card(ui, s);
     web_card(ui, s, web_link);
     section_title(ui, "Background");
@@ -642,9 +839,13 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
         g.toggle("Start with the system, in the background", None, &mut s.launch_at_login);
     });
     hint(ui, "Running in the background keeps downloads, queues and the browser add-on going, with an icon in the tray.");
+    section_title(ui, "Updates");
+    card(ui, |g| {
+        g.toggle("Look for updates by itself", Some("Once a day. Help > Check for updates lists every version, also older ones to go back to."), &mut s.update_check);
+    });
     section_title(ui, "AI assistants");
     card(ui, |g| {
-        g.toggle("Let AI assistants add, pause and remove downloads (MCP)", Some("They cannot delete files or choose folders. Setup: Help > AI assistants…"), &mut s.mcp_enabled);
+        g.toggle("Let AI assistants add, pause and remove downloads (MCP)", Some("They cannot delete files or choose folders. What they may do, limits and setup: Help > AI assistants…"), &mut s.mcp_enabled);
     });
     ui.add_space(10.0);
     disclosure(ui, "opt_categories", "Categories (file types and folders)", |ui| {

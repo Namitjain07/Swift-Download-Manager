@@ -6,10 +6,13 @@ mod dialogs;
 mod cards;
 pub(crate) mod closing;
 mod grabber;
+mod onboarding;
 pub(crate) mod layout;
 pub(crate) mod mcp_cmds;
 mod tools;
+mod updates;
 mod view;
+mod winui;
 
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
@@ -221,15 +224,53 @@ pub struct Settings {
     pub launch_at_login: bool,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
+    /// What assistants may do: look only, the usual (add, pause, resume, move, remove), or also the speed limit and networks.
+    pub mcp_level: crate::mcp::policy::Level,
+    /// Sites assistants may download from, with their subdomains (empty: any public site), and sites they never may.
+    pub mcp_allow_hosts: Vec<String>,
+    pub mcp_block_hosts: Vec<String>,
+    /// Refuse links to private networks and to this computer for assistants (a page an assistant read could try to aim it there).
+    pub mcp_block_private: bool,
+    /// What an assistant adds waits in its queue until the person starts it.
+    pub mcp_hold: bool,
+    /// The most downloads an assistant may add in an hour; 0 means no limit.
+    pub mcp_adds_per_hour: u32,
+    /// Keep a log of what assistants did (mcp-audit.log in the settings folder).
+    pub mcp_audit: bool,
+    /// The WinUI 3 theme: the material behind the window (Mica by default).
+    pub winui_backdrop: theme::winui::Backdrop,
+    /// The WinUI 3 theme: an accent of your own (`0xRRGGBB`); none follows the accent of Windows.
+    pub winui_accent: Option<u32>,
+    /// The WinUI 3 theme: follow the "transparency effects" switch of Windows (when it is off, the window is solid).
+    pub winui_follow_effects: bool,
     /// Download over several networks at once (Options > Networks).
     pub multi_network: bool,
     /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
     pub networks: Vec<String>,
+    /// Use every connected network, also ones plugged in later, except those in `networks_off` (Options > Networks).
+    pub networks_auto: bool,
+    /// Networks that automatic mode never uses (a phone on a metered plan, say).
+    pub networks_off: Vec<String>,
     /// Let a browser on this computer use the downloads (Options > Web interface).
     pub web_enabled: bool,
     pub web_port: u16,
     /// Refuse links that lead to private or local addresses (set by `--server`).
     pub block_private: bool,
+    /// Look for a newer version once a day (Help > Check for updates). Off until the person says so: the program
+    /// otherwise talks only to the servers it downloads from.
+    pub update_check: bool,
+    /// Download an update in the background once it is found (it still waits for a restart).
+    pub update_download: bool,
+    /// Only finished versions, or also betas.
+    pub update_channel: crate::update::Channel,
+    /// Where the list of versions comes from, and the address of it when it is the person's own server.
+    pub update_server: crate::update::Server,
+    pub update_url: String,
+    /// When the list was last read (seconds since 1970), and a version the person chose not to be told about.
+    pub update_last: i64,
+    pub update_skip: String,
+    /// The welcome has been shown (and finished or skipped).
+    pub onboarded: bool,
 }
 
 impl Default for Settings {
@@ -259,11 +300,31 @@ impl Default for Settings {
             background: closing::BackgroundMode::Ask,
             launch_at_login: false,
             mcp_enabled: true,
+            mcp_level: crate::mcp::policy::Level::Standard,
+            mcp_allow_hosts: Vec::new(),
+            mcp_block_hosts: Vec::new(),
+            mcp_block_private: true,
+            mcp_hold: false,
+            mcp_adds_per_hour: 60,
+            mcp_audit: true,
+            winui_backdrop: theme::winui::Backdrop::Mica,
+            winui_accent: None,
+            winui_follow_effects: true,
             multi_network: false,
             networks: Vec::new(),
+            networks_auto: false,
+            networks_off: Vec::new(),
             web_enabled: false,
             web_port: 9615,
             block_private: false,
+            update_check: false,
+            update_download: false,
+            update_channel: crate::update::Channel::Stable,
+            update_server: crate::update::Server::GitHub,
+            update_url: String::new(),
+            update_last: 0,
+            update_skip: String::new(),
+            onboarded: false,
         }
     }
 }
@@ -312,6 +373,8 @@ struct SavedItem {
     handoff_resume: bool,
     #[serde(default)]
     owner: String,
+    #[serde(default)]
+    guard_private: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -355,6 +418,8 @@ pub struct Item {
     handoff_resume: bool,
     /// On a shared server: whose download this is (empty on a personal computer).
     owner: String,
+    /// Added by an AI assistant with private addresses refused: the connection (and every redirect) is checked too.
+    guard_private: bool,
     speed: f64,
     last_bytes: u64,
     last_status: Status,
@@ -390,6 +455,7 @@ impl Item {
             limiter: Arc::new(Limiter::chained(overall.clone())),
             handoff_resume: false,
             owner: String::new(),
+            guard_private: false,
             speed: 0.0,
             last_bytes,
             last_status,
@@ -539,6 +605,17 @@ pub struct App {
     add: Option<AddDialog>,
     batch: Option<BatchDialog>,
     progress_open: BTreeSet<u64>,
+    /// Progress windows that were minimized to a small bar.
+    progress_mini: BTreeSet<u64>,
+    updates: updates::Updates,
+    onboarding: Option<onboarding::Onboarding>,
+    /// The icon in the system tray (made on the first frame) and when it was last refreshed.
+    tray: Option<crate::background::Tray>,
+    tray_tried: bool,
+    /// What the browser add-on can see of the app, and the commands it sends.
+    bridge_link: bridge::Link,
+    bridge_shown: Instant,
+    tray_shown: Instant,
     details_open: BTreeSet<u64>,
     options: Option<Settings>,
     /// Scheduler window: which queue, and its schedule being edited.
@@ -586,6 +663,21 @@ pub struct App {
     handoff_queues: Vec<String>,
     /// When an AI assistant last used this app (for the status bar).
     last_ai_call: Option<Instant>,
+    /// When assistants added downloads, and when they changed anything (for the limits on how often they may).
+    ai_adds: crate::mcp::policy::Window,
+    ai_changes: crate::mcp::policy::Window,
+    /// What assistants did recently (the AI assistants window and the get_audit_log tool).
+    ai_log: crate::mcp::audit::Log,
+    /// The site lists as they are being typed in the AI assistants window (they are cleaned up when typing stops).
+    ai_sites_text: Option<(String, String)>,
+    /// The link to Windows for the WinUI 3 theme (material behind the window, system accent), and what it found.
+    winui_link: crate::winui_link::Link,
+    winui_material: theme::winui::Backdrop,
+    winui_dark: bool,
+    winui_wallpaper: Option<std::sync::Arc<theme::mica::Wallpaper>>,
+    winui_wallpaper_version: u32,
+    winui_texture: Option<winui::MaterialTexture>,
+    winui_system: theme::winui::SystemLook,
     ai_open: bool,
     /// The window is really closing (not going to the background or asking).
     quitting: bool,
@@ -603,7 +695,13 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, launch: Launch) -> Self {
         // The bundled fonts are ready before the first frame, so nothing is ever drawn in a stand-in font.
         theme::install_fonts(&cc.egui_ctx);
-        Self::build(cc.egui_ctx.clone(), launch)
+        // The first start (or the first with this feature): the welcome, unless this is a picture or a test.
+        let first = !launch.demo && launch.screenshot.is_none() && launch.show.is_none() && !launch.headless;
+        let mut app = Self::build(cc.egui_ctx.clone(), launch);
+        if first && !app.settings.onboarded {
+            app.onboarding = Some(onboarding::Onboarding::at_step(0));
+        }
+        app
     }
 
     /// An app with no window, for `--mcp` when nothing else owns the downloads.
@@ -625,6 +723,14 @@ impl App {
             add: None,
             batch: None,
             progress_open: BTreeSet::new(),
+            progress_mini: BTreeSet::new(),
+            updates: updates::Updates::new(),
+            onboarding: None,
+            tray: None,
+            tray_tried: false,
+            bridge_link: bridge::Link::default(),
+            bridge_shown: Instant::now(),
+            tray_shown: Instant::now(),
             details_open: BTreeSet::new(),
             options: None,
             scheduler: None,
@@ -667,6 +773,17 @@ impl App {
             state_lock: None,
             handoff_queues: Vec::new(),
             last_ai_call: None,
+            ai_adds: Default::default(),
+            ai_changes: Default::default(),
+            ai_log: Default::default(),
+            ai_sites_text: None,
+            winui_link: Default::default(),
+            winui_material: theme::winui::Backdrop::None,
+            winui_dark: false,
+            winui_wallpaper: None,
+            winui_wallpaper_version: 0,
+            winui_texture: None,
+            winui_system: theme::winui::SystemLook::UNKNOWN,
             ai_open: false,
             ctx,
         };
@@ -690,7 +807,7 @@ impl App {
                     app.toast("AI assistants cannot control the downloads: another copy of the app owns them");
                 }
                 if app.settings.browser_listen {
-                    app.listener = bridge::start_listener(bridge::PORT, app.inbox.clone(), app.ctx.clone());
+                    app.listener = bridge::start_listener_with(bridge::PORT, app.inbox.clone(), app.bridge_link.clone(), app.ctx.clone());
                 }
                 bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
             }
@@ -717,9 +834,12 @@ impl App {
         match name {
             "add" => self.open_add_dialog(None),
             "batch" => self.open_batch(),
-            "options" | "networks" | "appearance" => {
+            "options" | "networks" | "appearance" | "winui" => {
                 if name == "networks" {
                     self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_networks"), true));
+                }
+                if name == "winui" {
+                    self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_winui"), true));
                 }
                 if name == "appearance" {
                     self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_appearance"), true));
@@ -747,6 +867,23 @@ impl App {
             "progress" => {
                 self.progress_open.insert(1);
             }
+            "progress-mini" => {
+                for id in [1, 3] {
+                    self.progress_open.insert(id);
+                    self.progress_mini.insert(id);
+                }
+            }
+            "updates" => self.show_sample_updates(),
+            "check-updates" => {
+                self.updates.open = true;
+                self.check_updates(true);
+            }
+            "onboarding" => self.onboarding = Some(onboarding::Onboarding::at_step(0)),
+            "onboarding-look" => self.onboarding = Some(onboarding::Onboarding::at_step(1)),
+            "onboarding-setup" => self.onboarding = Some(onboarding::Onboarding::at_step(2)),
+            "onboarding-browser" => self.onboarding = Some(onboarding::Onboarding::at_step(3)),
+            "onboarding-updates" => self.onboarding = Some(onboarding::Onboarding::at_step(4)),
+            "onboarding-tips" => self.onboarding = Some(onboarding::Onboarding::at_step(5)),
             "about" => self.about_open = true,
             "browser" => self.browser_open = true,
             "ai" => self.ai_open = true,
@@ -772,6 +909,7 @@ impl App {
     }
 
     fn load(&mut self) {
+        self.ai_log = crate::mcp::audit::Log::load(&self.config_dir);
         let Ok(text) = std::fs::read_to_string(self.state_file()) else { return };
         let Ok(state) = serde_json::from_str::<SavedState>(&text) else { return };
         self.settings = state.settings;
@@ -798,6 +936,7 @@ impl App {
             item.set_limit(s.limit_kbps);
             item.handoff_resume = s.handoff_resume;
             item.owner = s.owner;
+            item.guard_private = s.guard_private;
             self.items.push(item);
         }
         self.fix_settings();
@@ -864,6 +1003,7 @@ impl App {
                 limit_kbps: i.limit_kbps,
                 handoff_resume: i.handoff_resume,
                 owner: i.owner.clone(),
+                guard_private: i.guard_private,
             })
             .collect();
         let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items, handoff_queues: self.handoff_queues.clone() };
@@ -882,6 +1022,16 @@ impl App {
     /// Sample rows for `--demo` / `--screenshot`, so the window shows its whole layout.
     /// Nothing is downloaded or saved in this mode.
     fn load_demo(&mut self) {
+        // Sample activity of an assistant, for the AI assistants window.
+        for (at, tool, detail, error) in [
+            ("2026-11-08 09:41:07", "add_download", "https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso", None),
+            ("2026-11-08 09:41:09", "probe_link", "https://example.com/conference-talk.webm", None),
+            ("2026-11-08 09:42:31", "add_download", "http://192.168.0.1/admin/backup.bin", Some("forbidden")),
+            ("2026-11-08 09:44:02", "pause_download", "download 5", None),
+            ("2026-11-08 09:47:45", "move_download", "download 6 -> Night", None),
+        ] {
+            self.ai_log.push(crate::mcp::audit::Entry { at: at.into(), tool: tool.into(), detail: detail.into(), ok: error.is_none(), error: error.map(str::to_string) });
+        }
         let rows: [(&str, u64, f64, Status, Option<f64>, &str); 9] = [
             ("ubuntu-24.04-desktop-amd64.iso", 6_114_656_256, 0.4123, Status::Downloading, Some(4_620_000.0), "Sample: OS image"),
             ("project-report-final.pdf", 2_457_600, 1.0, Status::Complete, None, "SHA-256 matches"),

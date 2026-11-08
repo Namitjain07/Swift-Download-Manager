@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report a bug · Swift Download Manager</title>
+<meta name="description" content="Tell us what went wrong in Swift Download Manager. This page checks your report and opens a ready-made issue on GitHub.">
+<link rel="canonical" href="https://namitjain07.github.io/Swift-Download-Manager/report-bug/">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>
+(function () { try { var s = localStorage.getItem("sdm-site-theme"); var d = s ? s === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; document.documentElement.setAttribute("data-theme", d ? "dark" : "light"); } catch (e) {} })();
+</script>
+<link rel="stylesheet" href="../assets/styles.css">
+<style>
+  .rb { padding: 72px 0 110px; position: relative; isolation: isolate; overflow: clip; }
+  .rb-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 36px; align-items: start; margin-top: 8px; }
+  .form { border: 1px solid var(--line); border-radius: 24px; background: var(--card); box-shadow: var(--shadow-m); padding: 34px; display: grid; gap: 22px; }
+  .field { display: grid; gap: 8px; }
+  .field label, .field legend { font-weight: 650; font-size: 15.5px; letter-spacing: -.005em; }
+  .field .hint { font-size: 14px; color: var(--ink-3); margin-top: -3px; }
+  .field .req { color: var(--accent-ink); }
+  .field input, .field select, .field textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 12px 14px; transition: border-color .15s, box-shadow .15s; }
+  .field textarea { min-height: 112px; resize: vertical; line-height: 1.5; }
+  .field input:hover, .field select:hover, .field textarea:hover { border-color: var(--ink-3); }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .field.bad input, .field.bad select, .field.bad textarea { border-color: #dc2626; }
+  .field .err { color: #dc2626; font-size: 13.5px; display: none; }
+  .field.bad .err { display: block; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .check { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; font-size: 15px; color: var(--ink-2); }
+  .check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .side { display: grid; gap: 18px; position: sticky; top: 92px; }
+  .card { border: 1px solid var(--line); border-radius: 20px; background: var(--card); padding: 24px; box-shadow: var(--shadow-s); }
+  .card h3 { font-size: 19px; letter-spacing: -.02em; margin-bottom: 12px; }
+  .card ol, .card ul { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 15px; display: grid; gap: 8px; }
+  .card p { margin: 0 0 10px; color: var(--ink-2); font-size: 15px; }
+  .card a { color: var(--accent-ink); font-weight: 600; }
+  .card.warn { border-color: color-mix(in srgb, #f59e0b 50%, var(--line)); background: color-mix(in srgb, #f59e0b 7%, var(--card)); }
+  .preview { margin-top: 8px; border-radius: 14px; background: var(--code-bg); color: var(--code-ink); font-family: var(--mono); font-size: 12.5px; line-height: 1.6; padding: 16px 18px; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+  details.pv summary { padding: 0; font-size: 15px; font-weight: 650; }
+  details.pv { border: 0; background: none; }
+  .sent { display: none; padding: 16px 18px; border-radius: 14px; background: color-mix(in srgb, var(--good) 12%, transparent); color: var(--ink); font-size: 15px; }
+  .sent.show { display: block; }
+  .count { font-size: 13px; color: var(--ink-3); }
+  @media (max-width: 960px) { .rb-grid { grid-template-columns: 1fr; } .side { position: static; } .row2 { grid-template-columns: 1fr; } .form { padding: 22px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 .5a11.5 11.5 0 00-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a10.9 10.9 0 015.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0012 .5z"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5L15.5 9.5"/></symbol>
+</defs></svg>
+
+<header class="nav scrolled" id="nav">
+  <div class="wrap in">
+    <a class="brand" href="../" aria-label="Swift Download Manager, home"><span class="mark"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg></span>Swift Download Manager</a>
+    <span class="grow"></span>
+    <a class="btn sm ghost" href="../#download">Download</a>
+    <a class="stars" href="https://github.com/Namitjain07/Swift-Download-Manager" rel="noopener"><svg class="ico" aria-hidden="true"><use href="#i-github"/></svg><span>GitHub</span></a>
+    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch between light and dark"><svg class="ico moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="ico sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+  </div>
+</header>
+
+<main class="rb">
+  <span class="blob a" aria-hidden="true"></span><span class="blob b" aria-hidden="true"></span>
+  <div class="wrap">
+    <div class="sec-head" style="margin-bottom:34px">
+      <span class="eyebrow">Report a bug</span>
+      <h2>Tell us what went <span class="grad">wrong</span>.</h2>
+      <p>Answer a few questions and this page opens a ready-made issue on GitHub, so nothing gets lost on the way. Nothing you type here is sent anywhere until you press the button, and then only to GitHub.</p>
+    </div>
+
+    <div class="rb-grid">
+      <form class="form" id="form" novalidate>
+        <div class="row2">
+          <div class="field"><label for="f-version">Version <span class="req">*</span></label>
+            <input id="f-version" name="version" list="versions" placeholder="1.9.0" autocomplete="off" required>
+            <datalist id="versions"></datalist>
+            <div class="hint">In the app: Help → About.</div><div class="err">Please say which version you use.</div></div>
+          <div class="field"><label for="f-system">Your system <span class="req">*</span></label>
+            <select id="f-system" name="system" required>
+              <option>Windows 11</option><option>Windows 10</option><option>Ubuntu / Debian / Mint</option><option>Other Linux</option><option>macOS</option><option>Other</option>
+            </select></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="f-install">How you got the app <span class="req">*</span></label>
+            <select id="f-install" name="install" required>
+              <option>Windows installer (setup .exe)</option><option>SwiftDownloadManager.exe (Windows)</option><option>Windows .zip</option><option>Linux .deb</option><option>Arch package</option><option>Docker image</option><option>Built from the source myself</option><option>Other</option>
+            </select></div>
+          <div class="field"><label for="f-addon">Is the browser add-on involved? <span class="req">*</span></label>
+            <select id="f-addon" name="addon" required><option>No</option><option>Yes, in Chrome / Edge / Brave / Opera</option><option>Yes, in Firefox</option></select></div>
+        </div>
+        <div class="field"><label for="f-title">A short title <span class="req">*</span></label>
+          <input id="f-title" name="title" maxlength="120" placeholder="Cancelling a download leaves it paused" required>
+          <div class="err">A few words about the problem, please.</div></div>
+        <div class="field"><label for="f-what">What happened? <span class="req">*</span></label>
+          <textarea id="f-what" name="what" placeholder="What you saw. If the app showed a message, copy it here word for word." required></textarea>
+          <div class="err">Tell us what you saw.</div></div>
+        <div class="field"><label for="f-steps">How can we make it happen again? <span class="req">*</span></label>
+          <textarea id="f-steps" name="steps" placeholder="1. Click Add URL&#10;2. Paste a link&#10;3. Press OK&#10;4. ..." required></textarea>
+          <div class="hint">One step per line. A link that shows the problem helps a lot; remove tokens and passwords from it first.</div>
+          <div class="err">Please list the steps you took.</div></div>
+        <div class="field"><label for="f-expected">What did you expect instead? <span class="req">*</span></label>
+          <textarea id="f-expected" name="expected" style="min-height:84px" required></textarea><div class="err">Please say what should have happened.</div></div>
+        <div class="field"><label for="f-extra">Anything else?</label>
+          <textarea id="f-extra" name="extra" style="min-height:84px" placeholder="Your speed limit or proxy, how many connections, the theme you use ..."></textarea></div>
+        <label class="check"><input type="checkbox" id="f-dup"><span>I looked through the <a href="https://github.com/Namitjain07/Swift-Download-Manager/issues?q=is%3Aissue" rel="noopener" style="color:var(--accent-ink);font-weight:600">existing issues</a> and did not find this one.</span></label>
+        <label class="check"><input type="checkbox" id="f-latest"><span>I use the latest release (or I say above why not).</span></label>
+        <details class="pv"><summary>Show what will be sent to GitHub</summary><div class="preview" id="preview" aria-live="polite"></div></details>
+        <div class="actions">
+          <button class="btn primary" type="submit" id="send"><svg class="ico" aria-hidden="true"><use href="#i-github"/></svg>Open the issue on GitHub</button>
+          <button class="btn" type="button" id="copy"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Copy the report</button>
+          <span class="count" id="count"></span>
+        </div>
+        <div class="sent" id="sent" role="status"></div>
+      </form>
+
+      <aside class="side">
+        <div class="card warn"><h3>A security problem?</h3><p>Please do not post it in public. <a href="https://github.com/Namitjain07/Swift-Download-Manager/security/advisories/new" rel="noopener">Report it privately</a>; the <a href="https://github.com/Namitjain07/Swift-Download-Manager/blob/main/SECURITY.md" rel="noopener">security policy</a> explains how.</p></div>
+        <div class="card"><h3>Good to include</h3><ul>
+          <li>The <b>exact message</b> the app showed.</li>
+          <li>Whether it happens with <b>every</b> link or just one, and whether the server supports resuming.</li>
+          <li>Your <b>speed limit, proxy</b> and number of <b>connections</b>.</li>
+          <li>A <b>screenshot</b>: you can drag images into the GitHub page that opens.</li>
+        </ul></div>
+        <div class="card"><h3>Finding your version</h3><ol>
+          <li>Open the app.</li><li>Choose <b>Help → About</b>.</li><li>Or, from a terminal: <span class="kbd">swift_download_manager --version</span>.</li></ol>
+          <p style="margin-top:12px">The app's <b>Help → Report a bug</b> opens this page with the version and your system already filled in.</p></div>
+        <div class="card"><h3>Something else?</h3><p><a href="https://github.com/Namitjain07/Swift-Download-Manager/issues/new?template=feature_request.yml" rel="noopener">Suggest a feature</a> · <a href="../#faq">Read the questions people ask</a></p></div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<footer><div class="wrap"><div class="legal" style="margin-top:0;padding-top:0;border:0"><span>Open source under the Apache License 2.0.</span><a href="../" style="color:var(--ink-2)">Back to the website</a></div></div></footer>
+<script src="../assets/report.js" defer></script>
+</body>
+</html>

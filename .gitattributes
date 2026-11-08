@@ -1,0 +1,7 @@
+# Scripts, and the files they read, keep Unix line endings in every checkout. A Windows checkout would otherwise turn them
+# into CRLF, and then they fail in Git Bash, in make and inside Docker ("$'\r': command not found").
+*.sh        text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+source/packaging/cross/targets.txt text eol=lf
+source/packaging/arch/PKGBUILD     text eol=lf

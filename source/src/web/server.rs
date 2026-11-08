@@ -7,7 +7,7 @@
 //! * **Shared**: a server for several people. Everybody logs in with their own account and sees only their own
 //!   downloads; administrators see all. Put it behind HTTPS (a reverse proxy) when it leaves a trusted network.
 
-use super::auth::{same_secret, Sessions, Throttle, Users};
+use super::auth::{same_secret, Sessions, Throttle, Tokens, Users};
 use super::http::{self, parse_range, read_request, ReadError, Req, Span};
 use crate::mcp::command::{Command, Who};
 use crate::mcp::control::{self, Request};
@@ -186,8 +186,10 @@ fn handle(state: &Shared, stream: TcpStream, peer: IpAddr) -> io::Result<()> {
             return reply(&stream, 403, &json!({ "error": "unexpected Host header" }), &[]);
         }
     }
+    // A program that sends its own Authorization header (a script, the add-on) is not a page that another site can
+    // drive with the visitor's cookies, so the origin rule is for the cookie users only.
     let origin = req.header("origin");
-    if !origin.is_empty() && origin.split_once("://").map(|(_, h)| h) != Some(req.header("host")) {
+    if req.header("authorization").is_empty() && !origin.is_empty() && origin.split_once("://").map(|(_, h)| h) != Some(req.header("host")) {
         return reply(&stream, 403, &json!({ "error": "web pages from other sites may not use this" }), &[]);
     }
     let head_only = req.method == "HEAD";
@@ -210,6 +212,8 @@ fn handle(state: &Shared, stream: TcpStream, peer: IpAddr) -> io::Result<()> {
             page(&stream, head_only)
         }
         ("GET", "/favicon.ico") => reply(&stream, 204, &json!({}), &[]),
+        // For Docker, a load balancer or an uptime check: no sign-in, and nothing about the downloads.
+        ("GET", "/healthz") => reply(&stream, 200, &json!({ "status": "ok" }), &[]),
         ("POST", "/api/login") => login(state, &stream, &req, peer),
         ("POST", "/api/logout") => {
             if let Some(t) = req.cookie(COOKIE) {
@@ -218,11 +222,11 @@ fn handle(state: &Shared, stream: TcpStream, peer: IpAddr) -> io::Result<()> {
             reply(&stream, 200, &json!({ "ok": true }), &[("Set-Cookie", format!("{COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"))])
         }
         _ => {
-            let Some(who) = identify(state, &req) else {
+            let Some((who, via)) = identify(state, &req) else {
                 let shared = state.cfg.mode == Mode::Shared;
                 return reply(&stream, 401, &json!({ "error": "sign in first", "shared": shared }), &[]);
             };
-            authenticated(state, &stream, &req, method, head_only, &who)
+            authenticated(state, &stream, &req, method, head_only, &who, via)
         }
     }
 }
@@ -232,8 +236,19 @@ fn cookie(state: &Shared, token: &str, req: &Req) -> String {
     format!("{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800{}", if secure { "; Secure" } else { "" })
 }
 
-/// Who is asking, from the session cookie or (for scripts) the access key.
-fn identify(state: &Shared, req: &Req) -> Option<Who> {
+/// How somebody proved who they are.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Via {
+    /// A signed-in page.
+    Cookie,
+    /// The personal access key.
+    Key,
+    /// A token made by an account (for scripts and the add-on).
+    Token,
+}
+
+/// Who is asking: from the session cookie, or (for scripts) the personal access key or an account's token.
+fn identify(state: &Shared, req: &Req) -> Option<(Who, Via)> {
     if let Some(s) = req.cookie(COOKIE).and_then(|t| state.sessions.lookup(&t)) {
         // The account may have been removed since.
         // The accounts are read fresh each time, so people added or removed with `--add-user` / `--remove-user`
@@ -241,15 +256,24 @@ fn identify(state: &Shared, req: &Req) -> Option<Who> {
         if state.cfg.mode == Mode::Shared {
             let users = Users::load(&state.cfg.dir);
             let admin = users.names().into_iter().find(|(n, _)| *n == s.user).map(|(_, a)| a)?;
-            return Some(Who { name: s.user, admin });
+            return Some((Who { name: s.user, admin }, Via::Cookie));
         }
-        return Some(Who { name: s.user, admin: s.admin });
+        return Some((Who { name: s.user, admin: s.admin }, Via::Cookie));
     }
     let bearer = req.header("authorization").strip_prefix("Bearer ").unwrap_or("");
-    if state.cfg.mode == Mode::Personal && !bearer.is_empty() && same_secret(bearer, &state.key) {
-        return Some(Who { name: String::new(), admin: true });
+    if bearer.is_empty() {
+        return None;
     }
-    None
+    match state.cfg.mode {
+        Mode::Personal if same_secret(bearer, &state.key) => Some((Who { name: String::new(), admin: true }, Via::Key)),
+        Mode::Shared => {
+            // The token names an account; the account must still exist (its rights are read now, not when the token was made).
+            let owner = Tokens::load(&state.cfg.dir).owner(bearer)?.to_string();
+            let admin = Users::load(&state.cfg.dir).names().into_iter().find(|(n, _)| *n == owner).map(|(_, a)| a)?;
+            Some((Who { name: owner, admin }, Via::Token))
+        }
+        _ => None,
+    }
 }
 
 fn login(state: &Shared, stream: &TcpStream, req: &Req, peer: IpAddr) -> io::Result<()> {
@@ -285,8 +309,8 @@ fn ask(state: &Shared, who: &Who, cmd: Command) -> Result<Value, (u16, String)> 
     state.ctx.request_repaint();
     match wait.recv_timeout(Duration::from_secs(10)) {
         Ok(Ok(v)) => Ok(v),
-        Ok(Err(m)) if m.contains("No download with id") => Err((404, m)),
-        Ok(Err(m)) => Err((400, m)),
+        Ok(Err(e)) if e.kind == crate::mcp::error::ErrorKind::NotFound => Err((404, e.message)),
+        Ok(Err(e)) => Err((400, e.message)),
         Err(_) => Err((504, "the app did not answer in time".into())),
     }
 }
@@ -298,12 +322,15 @@ fn answer(stream: &TcpStream, r: Result<Value, (u16, String)>) -> io::Result<()>
     }
 }
 
-fn authenticated(state: &Shared, stream: &TcpStream, req: &Req, method: &str, head_only: bool, who: &Who) -> io::Result<()> {
+fn authenticated(state: &Shared, stream: &TcpStream, req: &Req, method: &str, head_only: bool, who: &Who, via: Via) -> io::Result<()> {
     let parts: Vec<&str> = req.path.trim_matches('/').split('/').collect();
     let id = |s: &str| s.parse::<u64>().ok();
     let json_body = || serde_json::from_slice::<Value>(&req.body).unwrap_or(Value::Null);
     match (method, parts.as_slice()) {
-        ("GET", ["api", "me"]) => reply(stream, 200, &json!({ "user": who.name, "admin": who.admin, "shared": state.cfg.mode == Mode::Shared }), &[]),
+        ("GET", ["api", "me"]) => {
+            let shared = state.cfg.mode == Mode::Shared;
+            reply(stream, 200, &json!({ "user": who.name, "admin": who.admin, "shared": shared, "tokens": shared && via != Via::Token }), &[])
+        }
         ("GET", ["api", "status"]) => answer(stream, ask(state, who, Command::GetStatus)),
         ("GET", ["api", "queues"]) => answer(stream, ask(state, who, Command::ListQueues)),
         ("GET", ["api", "downloads"]) => {
@@ -340,9 +367,185 @@ fn authenticated(state: &Shared, stream: &TcpStream, req: &Req, method: &str, he
             Some(id) => send_file(state, stream, req, head_only, who, id),
             None => reply(stream, 404, &json!({ "error": "no such download" }), &[]),
         },
+        ("POST", ["api", "downloads", "batch"]) => {
+            let b = json_body();
+            let text = |k: &str| b[k].as_str().map(str::to_string);
+            let mut urls: Vec<String> = b["urls"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+            // A pasted list: one link per line; blank lines and lines starting with # are skipped.
+            if let Some(list) = b["text"].as_str() {
+                urls.extend(list.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).map(str::to_string));
+            }
+            answer(stream, ask(state, who, Command::AddMany { urls, category: text("category"), queue: text("queue"), start: b["start"].as_bool() }))
+        }
+        ("POST", ["api", "downloads", "pause-all"]) => answer(stream, ask(state, who, Command::PauseAll)),
+        ("POST", ["api", "downloads", "resume-all"]) => answer(stream, ask(state, who, Command::ResumeAll)),
+        ("POST", ["api", "downloads", "clear-completed"]) => answer(stream, ask(state, who, Command::ClearCompleted)),
+        ("GET", ["api", "networks"]) => answer(stream, ask(state, who, Command::ListNetworks)),
+        ("POST", ["api", "networks"]) => {
+            let b = json_body();
+            // A list of names, or absent; anything else is a mistake worth telling about.
+            let list = |k: &str| -> Result<Option<Vec<String>>, ()> {
+                match &b[k] {
+                    Value::Null => Ok(None),
+                    Value::Array(a) if a.iter().all(Value::is_string) => Ok(Some(a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())),
+                    _ => Err(()),
+                }
+            };
+            let (Ok(names), Ok(off)) = (list("chosen"), list("off")) else { return reply(stream, 400, &json!({ "error": "chosen and off are lists of network names" }), &[]) };
+            answer(stream, ask(state, who, Command::SetNetworks { on: b["enabled"].as_bool(), auto: b["automatic"].as_bool(), names, off }))
+        }
+        ("POST", ["api", "speed-limit"]) => {
+            let b = json_body();
+            if !b["kbps"].is_null() && b["kbps"].as_u64().is_none() {
+                return reply(stream, 400, &json!({ "error": "kbps is a whole number of KB/s (0 switches the limit off)" }), &[]);
+            }
+            answer(stream, ask(state, who, Command::SetSpeedLimit { kbps: b["kbps"].as_u64() }))
+        }
+        ("GET", ["metrics"]) => metrics(state, stream, who),
+        ("GET", ["api", "users"]) => users_list(state, stream, who),
+        ("POST", ["api", "users"]) => users_set(state, stream, who, &json_body()),
+        ("DELETE", ["api", "users", name]) => users_remove(state, stream, who, &http::percent_decode(name)),
+        ("GET", ["api", "tokens"]) => tokens_do(state, stream, who, via, TokenAction::List),
+        ("POST", ["api", "tokens"]) => tokens_do(state, stream, who, via, TokenAction::Create(json_body()["label"].as_str().unwrap_or("").to_string())),
+        ("DELETE", ["api", "tokens", id]) => tokens_do(state, stream, who, via, TokenAction::Revoke(id.to_string())),
         ("GET" | "POST" | "DELETE", _) => reply(stream, 404, &json!({ "error": "unknown address" }), &[]),
         _ => reply(stream, 405, &json!({ "error": "method not allowed" }), &[]),
     }
+}
+
+// ---------------------------------------------------------------- accounts, tokens, metrics
+
+/// The accounts are for administrators of a shared server; a personal page has none.
+fn accounts_gate(state: &Shared, stream: &TcpStream, who: &Who) -> Option<io::Result<()>> {
+    if state.cfg.mode != Mode::Shared {
+        return Some(reply(stream, 404, &json!({ "error": "this server has no accounts" }), &[]));
+    }
+    if !who.admin {
+        return Some(reply(stream, 403, &json!({ "error": "only an administrator can manage accounts" }), &[]));
+    }
+    None
+}
+
+/// Every account with what it has downloaded and how many tokens it holds.
+fn users_list(state: &Shared, stream: &TcpStream, who: &Who) -> io::Result<()> {
+    if let Some(done) = accounts_gate(state, stream, who) {
+        return done;
+    }
+    let usage = match ask(state, who, Command::Usage) {
+        Ok(v) => v,
+        Err((code, m)) => return reply(stream, code, &json!({ "error": m }), &[]),
+    };
+    let tokens = Tokens::load(&state.cfg.dir);
+    let list: Vec<Value> = Users::load(&state.cfg.dir)
+        .names()
+        .into_iter()
+        .map(|(name, admin)| {
+            let mine = usage["users"].as_array().and_then(|a| a.iter().find(|u| u["name"] == name.as_str())).cloned().unwrap_or(Value::Null);
+            let n = |k: &str| mine[k].as_u64().unwrap_or(0);
+            json!({
+                "name": name, "admin": admin, "tokens": tokens.of(&name).len(),
+                "downloads": n("downloads"), "active": n("active"), "complete": n("complete"), "downloaded_bytes": n("downloaded_bytes"),
+                "speed_bytes_per_sec": mine["speed_bytes_per_sec"].as_f64().unwrap_or(0.0),
+            })
+        })
+        .collect();
+    reply(stream, 200, &json!({ "users": list }), &[])
+}
+
+/// Make an account, or change its password and rights.
+fn users_set(state: &Shared, stream: &TcpStream, who: &Who, b: &Value) -> io::Result<()> {
+    if let Some(done) = accounts_gate(state, stream, who) {
+        return done;
+    }
+    let (name, password, admin) = (b["name"].as_str().unwrap_or(""), b["password"].as_str().unwrap_or(""), b["admin"].as_bool().unwrap_or(false));
+    let mut users = Users::load(&state.cfg.dir);
+    // Somebody has to be able to manage the server.
+    let other_admins = users.names().iter().filter(|(n, a)| *a && n != name).count();
+    if !admin && other_admins == 0 {
+        return reply(stream, 400, &json!({ "error": "there must be at least one administrator" }), &[]);
+    }
+    match users.set(name, password, admin) {
+        Ok(()) => reply(stream, 200, &json!({ "ok": true, "user": { "name": name, "admin": admin } }), &[]),
+        Err(m) => reply(stream, 400, &json!({ "error": m }), &[]),
+    }
+}
+
+fn users_remove(state: &Shared, stream: &TcpStream, who: &Who, name: &str) -> io::Result<()> {
+    if let Some(done) = accounts_gate(state, stream, who) {
+        return done;
+    }
+    if name == who.name {
+        return reply(stream, 400, &json!({ "error": "you cannot remove your own account" }), &[]);
+    }
+    let mut users = Users::load(&state.cfg.dir);
+    let list = users.names();
+    let Some((_, was_admin)) = list.iter().find(|(n, _)| n == name) else { return reply(stream, 404, &json!({ "error": "no such account" }), &[]) };
+    if *was_admin && list.iter().filter(|(n, a)| *a && n != name).count() == 0 {
+        return reply(stream, 400, &json!({ "error": "there must be at least one administrator" }), &[]);
+    }
+    match users.remove(name) {
+        Ok(_) => {
+            // Its tokens go with it (its signed-in pages stop working by themselves: the account is checked on every request).
+            let _ = Tokens::load(&state.cfg.dir).revoke_all(name);
+            reply(stream, 200, &json!({ "ok": true, "removed": name, "note": "Their downloads stay on the list and their files stay on the server." }), &[])
+        }
+        Err(m) => reply(stream, 500, &json!({ "error": m }), &[]),
+    }
+}
+
+enum TokenAction {
+    List,
+    Create(String),
+    Revoke(String),
+}
+
+/// A person's own access tokens. Only a signed-in page may manage them: a leaked token must not be able to make more.
+fn tokens_do(state: &Shared, stream: &TcpStream, who: &Who, via: Via, action: TokenAction) -> io::Result<()> {
+    if state.cfg.mode != Mode::Shared {
+        return reply(stream, 404, &json!({ "error": "tokens are for servers with accounts; on this computer use the link from the app" }), &[]);
+    }
+    if via == Via::Token {
+        return reply(stream, 403, &json!({ "error": "tokens are managed from a signed-in page, not with a token" }), &[]);
+    }
+    let mut tokens = Tokens::load(&state.cfg.dir);
+    let shown = |t: &super::auth::TokenRecord| json!({ "id": t.id, "label": t.label, "created": t.created });
+    match action {
+        TokenAction::List => reply(stream, 200, &json!({ "tokens": tokens.of(&who.name).iter().map(shown).collect::<Vec<_>>() }), &[]),
+        TokenAction::Create(label) => match tokens.create(&who.name, &label) {
+            // The token is in this answer and nowhere else, ever.
+            Ok((record, token)) => reply(stream, 200, &json!({ "id": record.id, "label": record.label, "created": record.created, "token": token }), &[]),
+            Err(m) => reply(stream, 400, &json!({ "error": m }), &[]),
+        },
+        TokenAction::Revoke(id) => match tokens.revoke(&who.name, &id) {
+            Ok(true) => reply(stream, 200, &json!({ "ok": true }), &[]),
+            Ok(false) => reply(stream, 404, &json!({ "error": "no such token" }), &[]),
+            Err(m) => reply(stream, 500, &json!({ "error": m }), &[]),
+        },
+    }
+}
+
+/// Numbers for a monitoring system (Prometheus text format). Administrators only: it covers everybody.
+fn metrics(state: &Shared, stream: &TcpStream, who: &Who) -> io::Result<()> {
+    if !who.admin {
+        return reply(stream, 403, &json!({ "error": "only an administrator can read the metrics" }), &[]);
+    }
+    let s = match ask(state, who, Command::GetStatus) {
+        Ok(v) => v,
+        Err((code, m)) => return reply(stream, code, &json!({ "error": m }), &[]),
+    };
+    let n = |k: &str| s[k].as_u64().unwrap_or(0);
+    let mut text = String::from("# HELP sdm_downloads Downloads on the list, by state.\n# TYPE sdm_downloads gauge\n");
+    for key in ["active", "queued", "paused", "complete", "failed"] {
+        text += &format!("sdm_downloads{{state=\"{key}\"}} {}\n", n(key));
+    }
+    text += &format!("# HELP sdm_speed_bytes_per_second Download speed right now, all downloads together.\n# TYPE sdm_speed_bytes_per_second gauge\nsdm_speed_bytes_per_second {}\n", s["speed_bytes_per_sec"].as_f64().unwrap_or(0.0));
+    text += &format!("# HELP sdm_speed_limit_kbps The overall speed limit in KB/s, 0 for none.\n# TYPE sdm_speed_limit_kbps gauge\nsdm_speed_limit_kbps {}\n", s["speed_limit_kbps"].as_u64().unwrap_or(0));
+    let mut headers = security_headers();
+    headers.push(("Content-Type", "text/plain; version=0.0.4; charset=utf-8".into()));
+    headers.push(("Content-Length", text.len().to_string()));
+    let mut out = stream;
+    http::write_head(&mut out, 200, &headers)?;
+    out.write_all(text.as_bytes())
 }
 
 /// Send a finished file to the browser, in pieces if it asks (so a broken transfer can carry on).

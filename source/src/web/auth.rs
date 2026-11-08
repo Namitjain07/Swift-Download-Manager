@@ -171,6 +171,122 @@ impl Users {
     }
 }
 
+// ---------------------------------------------------------------- access tokens
+
+/// Most tokens one person may have (they are for scripts, the browser add-on and the like).
+pub const MAX_TOKENS: usize = 10;
+
+/// An access token as it is stored: never the token itself, only its SHA-256.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct TokenRecord {
+    /// Short name for it in lists and for revoking it.
+    pub id: String,
+    pub user: String,
+    /// What it is for, in the owner's words ("laptop add-on").
+    pub label: String,
+    pub hash: String,
+    /// Seconds since 1970.
+    pub created: u64,
+}
+
+fn write_private(path: &Path, text: &str) -> io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    use std::io::Write;
+    opts.open(&tmp)?.write_all(text.as_bytes())?;
+    std::fs::rename(tmp, path)
+}
+
+/// Long-lived keys for programs (a script, the browser add-on) that cannot sign in with a page. Each belongs
+/// to one account and acts as that account, with its rights. Only a hash is kept on disk.
+pub struct Tokens {
+    path: PathBuf,
+    list: Vec<TokenRecord>,
+}
+
+fn token_hash(token: &str) -> String {
+    hex(&Sha256::digest(token.as_bytes()))
+}
+
+impl Tokens {
+    pub fn load(dir: &Path) -> Tokens {
+        let path = dir.join("tokens.json");
+        let list = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        Tokens { path, list }
+    }
+
+    fn save(&self) -> Result<(), String> {
+        write_private(&self.path, &serde_json::to_string_pretty(&self.list).unwrap_or_default()).map_err(|e| format!("Could not save the tokens: {e}"))
+    }
+
+    /// Make a token for `user`. The token itself is returned once, here, and cannot be looked at again.
+    pub fn create(&mut self, user: &str, label: &str) -> Result<(TokenRecord, String), String> {
+        let label = label.trim();
+        if label.is_empty() || label.chars().count() > 40 || label.chars().any(char::is_control) {
+            return Err("Give the token a short name (1 to 40 characters).".into());
+        }
+        if self.list.iter().filter(|t| t.user == user).count() >= MAX_TOKENS {
+            return Err(format!("There can be at most {MAX_TOKENS} tokens; remove one first."));
+        }
+        let token = format!("sdm_{}", random_hex(24));
+        let created = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let record = TokenRecord { id: random_hex(4), user: user.to_string(), label: label.to_string(), hash: token_hash(&token), created };
+        self.list.push(record.clone());
+        self.save()?;
+        Ok((record, token))
+    }
+
+    pub fn of(&self, user: &str) -> Vec<TokenRecord> {
+        self.list.iter().filter(|t| t.user == user).cloned().collect()
+    }
+
+    /// Take away one of `user`'s tokens (nobody can revoke somebody else's by guessing its id).
+    pub fn revoke(&mut self, user: &str, id: &str) -> Result<bool, String> {
+        let before = self.list.len();
+        self.list.retain(|t| !(t.user == user && t.id == id));
+        let removed = self.list.len() != before;
+        if removed {
+            self.save()?;
+        }
+        Ok(removed)
+    }
+
+    /// Take away every token of an account that is being removed.
+    pub fn revoke_all(&mut self, user: &str) -> Result<usize, String> {
+        let before = self.list.len();
+        self.list.retain(|t| t.user != user);
+        let n = before - self.list.len();
+        if n > 0 {
+            self.save()?;
+        }
+        Ok(n)
+    }
+
+    /// Whose token this is. Every stored hash is compared, whether or not an earlier one matched.
+    pub fn owner(&self, token: &str) -> Option<&str> {
+        if !token.starts_with("sdm_") {
+            return None;
+        }
+        let given = token_hash(token);
+        let mut found = None;
+        for t in &self.list {
+            if same(given.as_bytes(), t.hash.as_bytes()) {
+                found = Some(t.user.as_str());
+            }
+        }
+        found
+    }
+}
+
 // ---------------------------------------------------------------- sessions
 
 #[derive(Clone, Debug, PartialEq)]
@@ -350,5 +466,52 @@ mod tests {
         assert!(!t.blocked_at(ip, t0 + WINDOW + Duration::from_secs(1)));
         t.succeeded(ip);
         assert!(!t.blocked_at(ip, t0));
+    }
+
+    #[test]
+    fn a_token_is_shown_once_stored_only_as_a_hash_and_found_by_its_owner() {
+        let dir = scratch("tokens");
+        let mut t = Tokens::load(&dir);
+        let (record, token) = t.create("anna", "laptop add-on").unwrap();
+        assert!(token.starts_with("sdm_") && token.len() == 4 + 48, "{token}");
+        assert_eq!(t.owner(&token), Some("anna"));
+        assert_eq!(t.owner("sdm_0000000000000000000000000000000000000000000000000"), None);
+        assert_eq!(t.owner(""), None);
+        assert_eq!(t.owner(&token[4..]), None, "the prefix is part of the token");
+        // What is on disk is the hash, never the token.
+        let text = std::fs::read_to_string(dir.join("tokens.json")).unwrap();
+        assert!(!text.contains(&token) && text.contains(&record.hash) && text.contains("laptop add-on"), "{text}");
+        // It survives a restart.
+        let again = Tokens::load(&dir);
+        assert_eq!(again.owner(&token), Some("anna"));
+        assert_eq!(again.of("anna").len(), 1);
+        assert!(again.of("ben").is_empty());
+    }
+
+    #[test]
+    fn tokens_have_a_short_name_a_limit_and_can_be_revoked_only_by_their_owner() {
+        let dir = scratch("tokens-rules");
+        let mut t = Tokens::load(&dir);
+        for bad in ["", "   ", &"x".repeat(41), "tab\there"] {
+            assert!(t.create("anna", bad).is_err(), "{bad:?}");
+        }
+        let (a, token_a) = t.create("anna", "one").unwrap();
+        let (_, token_b) = t.create("ben", "two").unwrap();
+        assert_ne!(token_a, token_b);
+        // Ben cannot revoke Anna's by id.
+        assert_eq!(t.revoke("ben", &a.id), Ok(false));
+        assert_eq!(t.owner(&token_a), Some("anna"));
+        assert_eq!(t.revoke("anna", &a.id), Ok(true));
+        assert_eq!(t.owner(&token_a), None, "a revoked token stops working at once");
+        assert_eq!(t.owner(&token_b), Some("ben"));
+        // At most ten each.
+        for i in 0..MAX_TOKENS {
+            t.create("ben", &format!("t{i}")).ok();
+        }
+        assert_eq!(t.of("ben").len(), MAX_TOKENS);
+        assert!(t.create("ben", "one too many").unwrap_err().contains("at most"));
+        // Removing an account takes all its tokens.
+        assert_eq!(t.revoke_all("ben"), Ok(MAX_TOKENS));
+        assert_eq!(t.owner(&token_b), None);
     }
 }

@@ -14,14 +14,15 @@ use egui_extras::{Column, TableBuilder};
 
 impl eframe::App for App {
     /// Closing the window keeps everything: an MCP client that is still attached takes over.
-    fn on_exit(&mut self) {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.save();
         self.close_control();
         // Let go of the download list so an MCP engine can pick it up at once.
         self.state_lock = None;
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.winui_sync(&ui.ctx().clone(), frame);
         self.draw(ui);
     }
 }
@@ -32,6 +33,8 @@ impl App {
         self.frame += 1;
         let ctx = ui.ctx().clone();
         theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme), self.color_theme_override.unwrap_or(self.settings.color_theme));
+        // The Mica of the WinUI 3 theme is the bottom layer of the window (nothing when another theme is in use).
+        self.paint_material(&ctx);
         if !self.demo && !self.quitting && ctx.input(|i| i.viewport().close_requested()) {
             self.on_close_requested(&ctx);
         }
@@ -80,6 +83,8 @@ impl App {
         self.properties_window(&ctx);
         self.browser_window(&ctx);
         self.ai_window(&ctx);
+        self.onboarding_window(&ctx);
+        self.updates_window(&ctx);
         self.about_window(&ctx);
         self.close_window(&ctx);
         self.toast_area(&ctx);
@@ -462,6 +467,15 @@ impl App {
         if menu_item(ui, "AI assistants…", "", true).clicked() {
             self.ai_open = true;
         }
+        if menu_item(ui, "Check for updates…", "", true).clicked() {
+            self.updates.open = true;
+            if self.updates.checked.is_none() {
+                self.check_updates(true);
+            }
+        }
+        if menu_item(ui, "Report a bug…", "", true).clicked() {
+            open_path(std::path::Path::new(&updates::report_bug_url()));
+        }
         if menu_item(ui, "About", "", true).clicked() {
             self.about_open = true;
         }
@@ -599,6 +613,11 @@ impl App {
                     if compact {
                         // Only the essentials fit.
                         return;
+                    }
+                    if let Some((txt, strong)) = self.update_hint()
+                        && status_chip(ui, Some(pal.accent), &txt, if strong { pal.accent_ink } else { pal.secondary }).on_hover_text("Updates…").clicked()
+                    {
+                        self.updates.open = true;
                     }
                     if !self.demo {
                         let (txt, dot, col) = match &self.listener {
@@ -829,6 +848,7 @@ impl App {
                         let cat = truncated(p, &item.category, egui::FontId::proportional(d.caption), pal.tertiary, max_w);
                         let top = rect.center().y - (name.size().y + cat.size().y) / 2.0;
                         let below = top + name.size().y;
+                        crate::widgets::elided_tooltip(ui, &name, egui::pos2(x, top), &item.name, ("row_name", item.id));
                         p.galley(egui::pos2(x, top), name, pal.label);
                         p.galley(egui::pos2(x, below), cat, pal.tertiary);
                     });

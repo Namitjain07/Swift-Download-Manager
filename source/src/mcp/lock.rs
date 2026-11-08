@@ -34,7 +34,8 @@ fn request_handoff(dir: &Path, timeout: Duration) -> Result<(), String> {
     match control::call_with_timeout(dir, &Command::Handoff, timeout) {
         Ok(_) => Ok(()),
         Err(CallError::NoApp) => Err("the engine is not answering".into()),
-        Err(CallError::Tool(m) | CallError::Other(m)) => Err(m),
+        Err(CallError::Tool(e)) => Err(e.message),
+        Err(CallError::Other(m)) => Err(m),
     }
 }
 

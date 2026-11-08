@@ -137,12 +137,13 @@ fn caption_button(ui: &mut Ui, cell: Rect, kind: Caption, maximized: bool) -> bo
     let down = fade(&ctx, resp.id.with("down"), resp.is_pointer_button_down_on(), 0.06);
     let inset = vec2(4.0, 4.0) * d.pill;
     let face = cell.shrink2(inset);
-    let radius = CornerRadius::same(d.round(face.height()).min(14));
+    // Windows 11 caption buttons are square and flush with the corner of the window.
+    let radius = if d.is_winui() { CornerRadius::ZERO } else { CornerRadius::same(d.round(face.height()).min(14)) };
     let red = Color32::from_rgb(0xC4, 0x2B, 0x1C);
     let (fill, ink) = if kind == Caption::Close {
         (red.gamma_multiply(0.85 + 0.15 * down), pal.label.lerp_to_gamma(Color32::WHITE, hover))
     } else {
-        (pal.press.gamma_multiply(0.5 + 0.5 * down), pal.label)
+        (if d.is_winui() { pal.hover.lerp_to_gamma(pal.press, down) } else { pal.press.gamma_multiply(0.5 + 0.5 * down) }, pal.label)
     };
     ui.painter().rect_filled(face, radius, fill.gamma_multiply(hover));
     glyph(ui.painter(), face.center(), kind, maximized, ink, ctx.pixels_per_point());

@@ -1,6 +1,7 @@
 //! What happens when the window is closed: quit, or keep downloading in the background.
 
 use super::*;
+use crate::bridge::Source;
 use crate::widgets::{check_row, plain_button, primary_button, secondary_button, sheet};
 use serde::{Deserialize, Serialize};
 
@@ -128,11 +129,6 @@ impl App {
 
     // ---- used by the background process (no window)
 
-    /// (downloads running, downloads waiting, total speed in bytes per second)
-    pub fn background_summary(&self) -> (usize, usize, f64) {
-        let active: Vec<&Item> = self.items.iter().filter(|i| i.status().is_active()).collect();
-        (active.len(), self.items.iter().filter(|i| i.status() == Status::Queued).count(), active.iter().map(|i| i.speed()).sum())
-    }
 
     /// Pause everything that is running.
     pub fn pause_all(&mut self) {
@@ -151,10 +147,168 @@ impl App {
         }
     }
 
+    // ---- the tray icon (in the window's process and in the background one)
+
+    /// What the tray shows now: the status line, the running downloads with their percentages, and the switches.
+    pub fn tray_state(&self) -> crate::background::TrayState {
+        use crate::background::{row_text, TrayState, MAX_ROWS};
+        let active: Vec<&Item> = self.items.iter().filter(|i| i.status().is_active()).collect();
+        let queued = self.items.iter().filter(|i| i.status() == Status::Queued).count();
+        TrayState {
+            status: crate::background::status_text(active.len(), queued, active.iter().map(|i| i.speed()).sum()),
+            rows: active.iter().take(MAX_ROWS).map(|i| row_text((i.progress() * 100.0) as u32, &i.name)).collect(),
+            autostart: self.settings.launch_at_login,
+            update: self.update_hint().filter(|(_, strong)| *strong).map(|(t, _)| t),
+        }
+    }
+
+    /// Add the link on the clipboard (it starts at once in the background; the window asks first).
+    pub fn add_clipboard_link(&mut self) {
+        let text = arboard::Clipboard::new().and_then(|mut b| b.get_text()).unwrap_or_default();
+        let link = text.trim();
+        if (link.starts_with("http://") || link.starts_with("https://")) && !link.contains(char::is_whitespace) && url::Url::parse(link).is_ok() {
+            self.inbox.lock().unwrap().push(Incoming { url: link.to_string(), name: String::new(), referer: String::new(), cookies: String::new(), user_agent: String::new(), source: Source::CommandLine });
+            self.ctx.request_repaint();
+        } else {
+            self.toast("There is no download link on the clipboard");
+        }
+    }
+
+    pub fn open_download_folder(&self) {
+        open_path(&self.settings.folder);
+    }
+
+    /// Start with the system: on or off.
+    pub fn set_autostart(&mut self, on: bool) {
+        let done = if on { crate::autostart::enable() } else { crate::autostart::disable() };
+        match done {
+            Ok(()) => {
+                self.settings.launch_at_login = on;
+                self.dirty = true;
+            }
+            Err(e) => self.toast(format!("Could not change starting with the system: {e}")),
+        }
+    }
+
+    /// The tray icon of the window: made on the first frame (it must be made by the thread that runs the window), kept
+    /// up to date once a second, and listened to.
+    pub(super) fn tray_tick(&mut self, ctx: &egui::Context) {
+        if self.demo || self.headless || self.shot.is_some() {
+            return;
+        }
+        if self.tray.is_none() && !self.tray_tried {
+            self.tray_tried = true;
+            match crate::background::Tray::new(&self.tray_state()) {
+                Ok(t) => {
+                    crate::background::tray::forward_events(ctx.clone());
+                    self.tray = Some(t);
+                }
+                Err(e) => eprintln!("swift-download-manager: no tray icon: {e}"),
+            }
+        }
+        let cmds = self.tray.as_ref().map(|t| t.poll()).unwrap_or_default();
+        for cmd in cmds {
+            use crate::background::TrayCmd;
+            match cmd {
+                TrayCmd::Open => self.raise_window(ctx),
+                TrayCmd::PauseAll => self.pause_all(),
+                TrayCmd::ResumeAll => self.resume_all(),
+                TrayCmd::AddClipboard => {
+                    self.add_clipboard_link();
+                    self.raise_window(ctx);
+                }
+                TrayCmd::OpenFolder => self.open_download_folder(),
+                TrayCmd::CheckUpdates => {
+                    self.raise_window(ctx);
+                    self.updates.open = true;
+                    self.check_updates(true);
+                }
+                TrayCmd::Autostart(on) => self.set_autostart(on),
+                TrayCmd::Quit => self.quit_now(ctx),
+            }
+        }
+        if self.tray_shown.elapsed().as_millis() >= 1000 {
+            self.tray_shown = Instant::now();
+            let state = self.tray_state();
+            if let Some(t) = &mut self.tray {
+                t.update(&state);
+            }
+        }
+        // The tray wakes the window itself (see `forward_events`); this is only a safety net.
+        ctx.request_repaint_after(std::time::Duration::from_secs(if self.tray.is_some() { 5 } else { 15 }));
+    }
+
+    /// Bring the window back, whatever state it is in (hidden, minimized, behind others).
+    pub(super) fn raise_window(&self, ctx: &egui::Context) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
+
+    // ---- the browser add-on's window into the app (see `bridge`)
+
+    /// The status the pop-up of the add-on shows, as JSON: totals and the newest unfinished downloads.
+    fn bridge_snapshot(&self) -> String {
+        let name = |s: Status| match s {
+            Status::Queued => "queued",
+            Status::Connecting => "connecting",
+            Status::Downloading => "downloading",
+            Status::Paused => "paused",
+            Status::Complete => "complete",
+            Status::Error => "error",
+        };
+        let rows: Vec<serde_json::Value> = self
+            .items
+            .iter()
+            .rev()
+            .filter(|i| i.status() != Status::Complete)
+            .take(8)
+            .map(|i| serde_json::json!({ "id": i.id, "name": i.name, "status": name(i.status()), "progress": i.progress(), "speed": i.speed() as u64, "size": i.total() }))
+            .collect();
+        let count = |f: &dyn Fn(Status) -> bool| self.items.iter().filter(|i| f(i.status())).count();
+        serde_json::json!({
+            "app": "swift-download-manager",
+            "version": env!("CARGO_PKG_VERSION"),
+            "active": count(&|s| s.is_active()),
+            "queued": count(&|s| s == Status::Queued),
+            "paused": count(&|s| s == Status::Paused),
+            "complete": count(&|s| s == Status::Complete),
+            "speed": self.items.iter().filter(|i| i.status().is_active()).map(|i| i.speed()).sum::<f64>() as u64,
+            "update": self.update_hint().filter(|(_, strong)| *strong).map(|(t, _)| t),
+            "downloads": rows,
+        })
+        .to_string()
+    }
+
+    /// Per frame: keep the snapshot fresh (half a second old at most) and do what the add-on asked.
+    pub(super) fn bridge_tick(&mut self, ctx: &egui::Context) {
+        use crate::bridge::Command;
+        if self.listener.is_err() {
+            return;
+        }
+        if self.bridge_shown.elapsed().as_millis() >= 500 {
+            self.bridge_shown = Instant::now();
+            *self.bridge_link.status.lock().unwrap() = self.bridge_snapshot();
+        }
+        let cmds = std::mem::take(&mut *self.bridge_link.commands.lock().unwrap());
+        for c in cmds {
+            match c {
+                Command::Pause(id) => self.stop_item(id),
+                Command::Resume(id) => self.start_item(id),
+                Command::PauseAll => self.stop_all(),
+                Command::ResumeAll => self.resume_all(),
+                Command::Open if self.headless => {
+                    let _ = crate::background::spawn_window();
+                }
+                Command::Open => self.raise_window(ctx),
+            }
+        }
+    }
+
     /// Accept links from the browser add-on without a window: they start straight away.
     pub fn enable_browser_bridge(&mut self) {
         if self.settings.browser_listen && self.listener.is_err() {
-            self.listener = bridge::start_listener(bridge::PORT, self.inbox.clone(), self.ctx.clone());
+            self.listener = bridge::start_listener_with(bridge::PORT, self.inbox.clone(), self.bridge_link.clone(), self.ctx.clone());
         }
     }
 }

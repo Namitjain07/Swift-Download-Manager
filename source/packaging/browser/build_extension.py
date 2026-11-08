@@ -60,6 +60,7 @@ def main():
     # Firefox runs the same script as a background page.
     firefox = json.loads(json.dumps(base))
     firefox["background"] = {"scripts": ["background.js"]}
+    firefox.pop("minimum_chrome_version", None)
     os.makedirs(OUT, exist_ok=True)
     for kind, m in (("chrome", chrome), ("firefox", firefox)):
         print("Made", os.path.relpath(build(kind, m), ROOT))

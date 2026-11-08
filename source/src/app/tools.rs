@@ -418,6 +418,7 @@ impl App {
                             let w = ui.available_width();
                             let g = truncated(ui.painter(), &item.name, FontId::new(16.0, theme::semibold()), pal.label, w);
                             let (rect, _) = ui.allocate_exact_size(g.size(), Sense::hover());
+                            crate::widgets::elided_tooltip(ui, &g, rect.min, &item.name, ("done_name", id));
                             ui.painter().galley(rect.min, g, pal.label);
                             ui.add(egui::Label::new(RichText::new(format!("{}  ·  {}", human_size(item.total()), item.folder.display())).size(12.5).color(pal.tertiary)).truncate());
                         });
@@ -524,21 +525,28 @@ impl App {
         }
     }
 
-    /// Help > AI assistants: the switch, the state, and setup text to copy.
+    /// Help > AI assistants: the switch, what assistants may do, the limits, what they did, and setup text to copy.
     pub(super) fn ai_window(&mut self, ctx: &egui::Context) {
         if !self.ai_open {
+            self.ai_sites_text = None;
             return;
         }
+        use crate::mcp::policy::{parse_sites, Level};
         // The sample window (--demo, screenshots) shows a placeholder instead of this machine's path.
         let exe = if self.demo { "/path/to/swift_download_manager".to_string() } else { std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "swift_download_manager".into()) };
         let (state, mut on) = (self.ai_state(), self.settings.mcp_enabled);
         let (code, desktop) = (crate::mcp::setup::claude_code_command(&exe), crate::mcp::setup::desktop_config(&exe));
         let mut copied = None;
         let mut close = false;
-        let pal = theme::current(ctx);
-        let out = sheet("ai", "AI assistants (MCP)").width(600.0).backdrop_closes().show(ctx, |s| {
+        let (pal, d) = (theme::current(ctx), theme::design(ctx));
+        // The lists of sites are typed as text, one per line, and kept (cleaned up) as the text changes.
+        let (mut allow_text, mut block_text) = self.ai_sites_text.take().unwrap_or_else(|| (self.settings.mcp_allow_hosts.join("\n"), self.settings.mcp_block_hosts.join("\n")));
+        let mut level = self.settings.mcp_level;
+        let (mut block_private, mut hold, mut keep_log, mut per_hour) = (self.settings.mcp_block_private, self.settings.mcp_hold, self.settings.mcp_audit, self.settings.mcp_adds_per_hour);
+        let recent: Vec<crate::mcp::audit::Entry> = self.ai_log.recent(8).into_iter().cloned().collect();
+        let out = sheet("ai", "AI assistants (MCP)").width(640.0).backdrop_closes().show(ctx, |s| {
             s.body(|ui| {
-                ui.add(egui::Label::new(RichText::new("Let an AI assistant such as Claude look at your downloads and add, pause, resume or remove them. It cannot delete files from your disk or pick the folder a file is saved in.").color(pal.secondary)).wrap());
+                ui.add(egui::Label::new(RichText::new("Let an AI assistant such as Claude look at your downloads and manage them. It cannot delete files from your disk or pick the folder a file is saved in. Everything below is enforced by this app, whatever the assistant is told.").color(pal.secondary)).wrap());
                 ui.add_space(12.0);
                 let (icon, tint, ink, text) = match state {
                     AiState::Off => (Icon::Info, pal.surface2, pal.secondary, "Off: assistants are refused"),
@@ -551,6 +559,8 @@ impl App {
                 });
                 ui.add_space(8.0);
                 crate::widgets::notice(ui, icon, text, tint, ink);
+
+                // What a first-time user needs comes first; the settings follow.
                 for (title, snippet) in [("Claude Code: run this once", &code), ("Claude Desktop and other apps: add this to their MCP settings", &desktop)] {
                     crate::widgets::section_title(ui, title);
                     code_box(ui, snippet);
@@ -559,7 +569,57 @@ impl App {
                         copied = Some(snippet.clone());
                     }
                 }
-                crate::widgets::hint(ui, "The assistant starts this program itself and shares your open window, or runs the downloads without one while it is closed. Clients ask you before each action unless you tell them not to.");
+                crate::widgets::hint(ui, "The assistant starts this program itself and shares your open window, or runs the downloads without one while it is closed. Add --read-only after --mcp to limit one connection to looking only, whatever is set below. Clients ask you before each action unless you tell them not to.");
+
+                crate::widgets::section_title(ui, "What they may do");
+                let level_w = segmented_width(ui, &["Look only", "Standard", "Full"]);
+                card(ui, |g| {
+                    g.enable(on);
+                    let about = match level {
+                        Level::ReadOnly => "They can look at downloads, queues and settings, and check links. Nothing can be changed.",
+                        Level::Standard => "They can also add, pause, resume, move and remove downloads, and run queues.",
+                        Level::Full => "They can also set the speed limit, look at your networks and clear finished downloads in one go.",
+                    };
+                    g.row("Access level", Some(about), level_w, |ui| segmented(ui, &[(Level::ReadOnly, "Look only"), (Level::Standard, "Standard"), (Level::Full, "Full")], &mut level));
+                });
+
+                crate::widgets::section_title(ui, "Safety");
+                card(ui, |g| {
+                    g.enable(on);
+                    g.toggle("Refuse links to private networks and to this computer", Some("A page an assistant reads could tell it to fetch something from your router or your own computer. Leave this on unless you need it."), &mut block_private);
+                    g.toggle("Their downloads wait until I start them", Some("What an assistant adds is queued and does not begin by itself."), &mut hold);
+                    g.row("Most downloads they may add in an hour", Some("0 means no limit."), 140.0, |ui| number_field(ui, &mut per_hour, 0..=1000, "an hour", 140.0));
+                    g.toggle("Keep a log of what they do", Some("Written to mcp-audit.log in the settings folder, without passwords or keys."), &mut keep_log);
+                });
+
+                crate::widgets::section_title(ui, "Sites");
+                ui.add_enabled_ui(on, |ui| {
+                    ui.label(RichText::new("Only these sites (and their subdomains), one per line. Empty means any public site.").color(pal.secondary));
+                    ui.add_space(4.0);
+                    ui.add(field_multiline(&mut allow_text, 2).desired_width(f32::INFINITY).hint_text("example.com"));
+                    ui.add_space(10.0);
+                    ui.label(RichText::new("Never these sites, one per line.").color(pal.secondary));
+                    ui.add_space(4.0);
+                    ui.add(field_multiline(&mut block_text, 2).desired_width(f32::INFINITY).hint_text("ads.example.net"));
+                });
+
+                crate::widgets::section_title(ui, "Recent activity");
+                card(ui, |g| {
+                    if recent.is_empty() {
+                        g.free(|ui| {
+                            ui.label(RichText::new("Nothing yet. Changes, links looked at and refusals are listed here.").color(pal.tertiary));
+                        });
+                    }
+                    for e in &recent {
+                        g.free(|ui| {
+                            let colour = if e.ok { pal.secondary } else { pal.orange_ink };
+                            let time = e.at.get(11..).unwrap_or(&e.at);
+                            let outcome = e.error.as_deref().map(|k| format!("  ({})", k.replace('_', " "))).unwrap_or_default();
+                            ui.add(egui::Label::new(RichText::new(format!("{time}  {}  {}{outcome}", e.tool, e.detail)).size(d.caption + 1.0).color(colour)).truncate());
+                        });
+                    }
+                });
+
             });
             s.footer(|ui| {
                 if primary_button(ui, "Done").clicked() {
@@ -567,16 +627,51 @@ impl App {
                 }
             });
         });
+        let mut changed = false;
         if on != self.settings.mcp_enabled {
             self.settings.mcp_enabled = on;
+            changed = true;
+        }
+        if level != self.settings.mcp_level {
+            self.settings.mcp_level = level;
+            changed = true;
+        }
+        if block_private != self.settings.mcp_block_private {
+            self.settings.mcp_block_private = block_private;
+            changed = true;
+        }
+        if hold != self.settings.mcp_hold {
+            self.settings.mcp_hold = hold;
+            changed = true;
+        }
+        if keep_log != self.settings.mcp_audit {
+            self.settings.mcp_audit = keep_log;
+            changed = true;
+        }
+        if per_hour != self.settings.mcp_adds_per_hour {
+            self.settings.mcp_adds_per_hour = per_hour;
+            changed = true;
+        }
+        let (allow, block) = (parse_sites(&allow_text), parse_sites(&block_text));
+        if allow != self.settings.mcp_allow_hosts {
+            self.settings.mcp_allow_hosts = allow;
+            changed = true;
+        }
+        if block != self.settings.mcp_block_hosts {
+            self.settings.mcp_block_hosts = block;
+            changed = true;
+        }
+        if changed {
             self.dirty = true;
         }
+        self.ai_sites_text = Some((allow_text, block_text));
         if let Some(text) = copied {
             ctx.copy_text(text);
             self.toast("Copied");
         }
         if out.close || close {
             self.ai_open = false;
+            self.ai_sites_text = None;
         }
     }
 

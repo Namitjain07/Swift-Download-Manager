@@ -1,18 +1,21 @@
 # Builds every file of a release on GitHub's own computers and publishes it.
 #
-#   git tag v1.3.0 && git push origin v1.3.0      # builds, signs and publishes a release
-#   (a version with a dash, such as 1.5.0-beta.1, is published as a pre-release)
+#   git tag v1.9.0 && git push origin v1.9.0      # builds, signs and publishes a release
+#   (a version with a dash, such as 1.9.0-beta.1, is published as a pre-release)
 #   Actions > Release > Run workflow              # a dry run: builds and signs, publishes nothing
 #
-# The tag must match the version in source/Cargo.toml. The release gets the Windows program (built with
-# the native Microsoft toolchain and signed), the Linux .deb, the browser add-ons, the source code,
-# a SHA256SUMS file, and the notes written for that version in CHANGELOG.md.
+# The tag must match the version in source/Cargo.toml. The release gets, for Intel/AMD and for ARM:
+#   * Windows: the setup program (installer), a zip with the program, and the bare program (x64 and arm64)
+#   * Debian, Ubuntu, Mint: a .deb (amd64 and arm64)
+#   * Arch Linux: a .pkg.tar.zst (x86_64 and aarch64) and its .sig
+# and the browser add-ons, the source code, a SHA256SUMS file with its signature (SHA256SUMS.asc), the public
+# keys, and the notes written for that version in CHANGELOG.md.
 #
-# Signing: the Windows exe is signed with the project's own code-signing key. The private key is NOT in
-# this repository; it is stored only in the repository secrets WINDOWS_SIGNING_PFX_BASE64 and
-# WINDOWS_SIGNING_PFX_PASSWORD. The matching public certificate is committed at
-# source/packaging/windows/swift-download-manager-codesign.cer. Without those secrets (for example in a
-# fork) the exe is built but left unsigned.
+# Signing: the private keys are NOT in this repository; they are stored only in the repository secrets
+#   SDM_CODESIGN_PFX_BASE64 / SDM_CODESIGN_PFX_PASSWORD   Windows code signing (programs and installers)
+#   SDM_GPG_PRIVATE_KEY / SDM_GPG_PASSPHRASE              Arch packages and the SHA256SUMS file
+# The matching public parts are committed in source/packaging (windows/*.cer and keys/*.gpg.asc). Without the
+# secrets (for example in a fork) everything is built but left unsigned.
 #
 # Actions from outside GitHub are pinned to a full commit SHA (the version is in the comment), so a moved
 # tag cannot change what runs here. Dependabot keeps the pins up to date (see dependabot.yml).
@@ -49,12 +52,23 @@ jobs:
           echo "Building version $version"
 
   windows:
-    name: Windows program (built and signed)
+    name: Windows ${{ matrix.arch }} (program and installer)
     needs: version
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-pc-windows-msvc
+            exe: SwiftDownloadManager.exe
+          - arch: arm64
+            target: aarch64-pc-windows-msvc
+            exe: SwiftDownloadManager-arm64.exe
     env:
       VERSION: ${{ needs.version.outputs.version }}
-      HAVE_KEY: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 != '' }}
+      HAVE_KEY: ${{ secrets.SDM_CODESIGN_PFX_BASE64 != '' }}
+      SDM_PFX_PASSWORD: ${{ secrets.SDM_CODESIGN_PFX_PASSWORD }}
     defaults:
       run:
         working-directory: source
@@ -63,55 +77,54 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: source
+          key: ${{ matrix.target }}
       - name: Build (native Microsoft toolchain, C runtime linked in)
-        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+        run: cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Stage the program
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/x86_64-pc-windows-msvc/release/swift_download_manager.exe dist/SwiftDownloadManager.exe
+          Copy-Item target/${{ matrix.target }}/release/swift_download_manager.exe dist/${{ matrix.exe }}
+
+      - name: Put the signing key in a file
+        if: env.HAVE_KEY == 'true'
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.SDM_CODESIGN_PFX_BASE64 }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'sdm-codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+          "SDM_PFX_PATH=$pfx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Sign the program
         if: env.HAVE_KEY == 'true'
         shell: pwsh
-        env:
-          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
-          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
-        run: |
-          $pfx = Join-Path $env:RUNNER_TEMP 'sdm-codesign.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
-            Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
-          if (-not $signtool) { throw 'signtool.exe was not found on this runner' }
-          $signed = $false
-          foreach ($ts in 'http://timestamp.digicert.com', 'http://timestamp.sectigo.com', 'http://timestamp.globalsign.com/tsa/r6advanced1') {
-            & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:PFX_PASSWORD /tr $ts /td SHA256 `
-              /d 'Swift Download Manager' /du 'https://github.com/Namitjain07/Swift-Download-Manager' dist/SwiftDownloadManager.exe
-            if ($LASTEXITCODE -eq 0) { $signed = $true; break }
-            Write-Warning "Signing with timestamp server $ts failed, trying the next one"
-          }
-          Remove-Item $pfx -Force
-          if (-not $signed) { throw 'The program could not be signed' }
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/sign.ps1 dist/${{ matrix.exe }}
 
-      - name: Check the result
+      - name: Check the program
         shell: pwsh
         run: |
-          $exe = 'dist/SwiftDownloadManager.exe'
+          $exe = 'dist/${{ matrix.exe }}'
           $info = (Get-Item $exe).VersionInfo
           "Product:      $($info.ProductName)"
-          "Description:  $($info.FileDescription)"
           "File version: $($info.FileVersion)"
           if ($info.ProductName -ne 'Swift Download Manager') { throw 'The version information is missing from the program' }
           if ($info.FileVersion -notlike "$env:VERSION*") { throw "The program says version $($info.FileVersion), expected $env:VERSION" }
+          # The right kind of program: 0x8664 is x64, 0xAA64 is ARM64 (read from the PE header).
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path $exe))
+          $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
+          $want = if ('${{ matrix.arch }}' -eq 'arm64') { 0xAA64 } else { 0x8664 }
+          "Machine type: 0x{0:X4}" -f $machine
+          if ($machine -ne $want) { throw "The program is built for the wrong processor (0x$('{0:X4}' -f $machine))" }
           $sig = Get-AuthenticodeSignature $exe
           "Signature:    $($sig.Status) ($($sig.StatusMessage))"
           if ($env:HAVE_KEY -eq 'true') {
-            $expected = (Get-PfxCertificate -FilePath packaging/windows/swift-download-manager-codesign.cer).Thumbprint
+            $expected = (Get-PfxCertificate -FilePath packaging/windows/swift-download-manager-codesign-2.cer).Thumbprint
             "Signed by:    $($sig.SignerCertificate.Subject)"
             "Thumbprint:   $($sig.SignerCertificate.Thumbprint)"
             if ($sig.SignerCertificate.Thumbprint -ne $expected) { throw 'The program is signed with an unexpected certificate' }
@@ -120,38 +133,110 @@ jobs:
             Write-Warning 'No signing key available: the program is NOT signed.'
           }
 
-      - name: Package
+      - name: Make sure Inno Setup is installed
         shell: pwsh
         run: |
-          $out = "dist/SwiftDownloadManager-$env:VERSION-windows-x64"
+          $found = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ }
+          if (-not $found) { choco install innosetup -y --no-progress; if ($LASTEXITCODE -ne 0) { throw 'Inno Setup could not be installed' } }
+
+      - name: Build the installer (signed, with its uninstaller)
+        shell: pwsh
+        run: |
+          $options = @{ Arch = '${{ matrix.arch }}'; SkipBuild = $true; Exe = 'dist/${{ matrix.exe }}' }
+          if ($env:HAVE_KEY -eq 'true') { $options.Sign = $true }
+          ./packaging/windows/build-installer.ps1 @options
+
+      - name: Check the installer
+        shell: pwsh
+        run: |
+          $setup = "dist/SwiftDownloadManager-$env:VERSION-setup-${{ matrix.arch }}.exe"
+          if (-not (Test-Path $setup)) { throw "$setup was not made" }
+          $sig = Get-AuthenticodeSignature $setup
+          "Installer signature: $($sig.Status)"
+          if ($env:HAVE_KEY -eq 'true') {
+            $expected = (Get-PfxCertificate -FilePath packaging/windows/swift-download-manager-codesign-2.cer).Thumbprint
+            if ($sig.SignerCertificate.Thumbprint -ne $expected) { throw 'The installer is signed with an unexpected certificate' }
+            if ($null -eq $sig.TimeStamperCertificate) { throw 'The installer signature has no timestamp' }
+          }
+
+      # An x64 runner can run the x64 installer, so it is tried for real: install quietly, start the program, uninstall.
+      - name: Try the installer (install, run, uninstall)
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path "dist/SwiftDownloadManager-$env:VERSION-setup-x64.exe").Path
+          $dir = Join-Path $env:RUNNER_TEMP 'sdm-installed'
+          $log = Join-Path $env:RUNNER_TEMP 'setup.log'
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', "/DIR=$dir", "/LOG=$log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 40; throw "The installer failed with exit code $($p.ExitCode)" }
+          foreach ($f in 'SwiftDownloadManager.exe', 'README.md', 'LICENSE', 'browser-extension\manifest.json', 'browser-extension\popup.html', 'swift-download-manager-codesign-2.cer', 'unins000.exe') {
+            if (-not (Test-Path (Join-Path $dir $f))) { throw "The installation lacks $f" }
+          }
+          # A program with a window does not set $LASTEXITCODE when started with &, so start it and wait for it.
+          $out = Join-Path $env:RUNNER_TEMP 'networks.txt'
+          $r = Start-Process -FilePath "$dir\SwiftDownloadManager.exe" -ArgumentList '--networks' -Wait -PassThru -RedirectStandardOutput $out
+          Get-Content $out
+          if ($r.ExitCode -ne 0) { throw "The installed program did not run (exit code $($r.ExitCode))" }
+          if (-not (Select-String -Path $out -Pattern '^Name\s+Kind')) { throw 'The installed program did not list the networks' }
+          if ($env:HAVE_KEY -eq 'true') {
+            $u = Get-AuthenticodeSignature "$dir\unins000.exe"
+            "Uninstaller signature: $($u.Status)"
+            if (-not $u.SignerCertificate) { throw 'The uninstaller is not signed' }
+          }
+          $q = Start-Process -FilePath "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($q.ExitCode -ne 0) { throw "The uninstaller failed with exit code $($q.ExitCode)" }
+          Start-Sleep -Seconds 2
+          if (Test-Path (Join-Path $dir 'SwiftDownloadManager.exe')) { throw 'The uninstaller left the program behind' }
+          'Installed, started and removed again.'
+
+      - name: Make the zip with the program
+        shell: pwsh
+        run: |
+          $out = "dist/SwiftDownloadManager-$env:VERSION-windows-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force "$out/browser-extension" | Out-Null
-          Copy-Item dist/SwiftDownloadManager.exe "$out/SwiftDownloadManager.exe"
+          Copy-Item dist/${{ matrix.exe }} "$out/SwiftDownloadManager.exe"
           Copy-Item browser-extension/* "$out/browser-extension/" -Recurse
           Copy-Item README.md "$out/README.md"
-          Copy-Item packaging/windows/swift-download-manager-codesign.cer "$out/swift-download-manager-codesign.cer"
+          Copy-Item packaging/windows/swift-download-manager-codesign-2.cer "$out/swift-download-manager-codesign-2.cer"
           @'
-          Swift Download Manager for Windows
+          Swift Download Manager for Windows (portable)
 
           1. Double-click SwiftDownloadManager.exe to start it (no installing needed).
              Windows may say the publisher is unknown: the program is signed with the project's own
-             certificate (swift-download-manager-codesign.cer), not one from a paid authority.
+             certificate (swift-download-manager-codesign-2.cer), not one from a paid authority.
              Click "More info", then "Run anyway".
           2. To catch downloads from your browser, see browser-extension\README.txt.
+          Prefer an installer? Use the SwiftDownloadManager-<version>-setup file from the same release.
           '@ | Set-Content -Encoding utf8 "$out/START HERE.txt"
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
 
+      - name: Remove the signing key from the computer
+        if: always() && env.HAVE_KEY == 'true'
+        shell: pwsh
+        run: |
+          if ($env:SDM_PFX_PATH -and (Test-Path $env:SDM_PFX_PATH)) { Remove-Item $env:SDM_PFX_PATH -Force }
+
       - uses: actions/upload-artifact@v7
         with:
-          name: windows
+          name: windows-${{ matrix.arch }}
           if-no-files-found: error
           path: |
-            source/dist/SwiftDownloadManager.exe
+            source/dist/*.exe
             source/dist/*.zip
 
   linux:
-    name: Linux installer (.deb)
+    name: Debian package (${{ matrix.arch }})
     needs: version
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 22.04 keeps the packages working on every system from 22.04 / Debian 12 on.
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
     defaults:
       run:
         working-directory: source
@@ -163,12 +248,91 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: source
+          key: deb-${{ matrix.arch }}
       - run: bash packaging/linux/build-deb.sh
+      - name: Try the package (install, run, check, remove)
+        run: |
+          deb=$(ls dist/*_${{ matrix.arch }}.deb)
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb" | grep -E 'usr/bin/swift-download-manager|\.desktop|copyright|browser-extension/manifest.json'
+          test "$(dpkg-deb --field "$deb" Architecture)" = "${{ matrix.arch }}"
+          sudo dpkg -i "$deb"
+          swift-download-manager --networks
+          dpkg -L swift-download-manager | grep -c .
+          dpkg --verify swift-download-manager
+          file "$(command -v swift-download-manager)"
+          sudo dpkg -r swift-download-manager
+          # (command -v would still answer from bash's own memory of the path)
+          test ! -e /usr/bin/swift-download-manager
       - uses: actions/upload-artifact@v7
         with:
-          name: linux
+          name: linux-${{ matrix.arch }}
           if-no-files-found: error
           path: source/dist/*.deb
+
+  arch:
+    name: Arch Linux package (${{ matrix.arch }})
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            image: archlinux:base-devel
+          # Arch Linux ARM is a separate project; its image is the one that runs on 64-bit ARM.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: menci/archlinuxarm:latest
+    env:
+      GPG_KEY: ${{ secrets.SDM_GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.SDM_GPG_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and try the package inside Arch Linux
+        run: |
+          docker run --rm -v "$PWD:/work" "${{ matrix.image }}" bash -euxc '
+            # Inside a container pacman cannot set up its own download sandbox (Landlock), so it is switched off here.
+            sed -i "/^\[options\]/a DisableSandbox" /etc/pacman.conf
+            pacman-key --init || true
+            pacman-key --populate || true
+            pacman -Syu --noconfirm --needed base-devel git rust sudo pkgconf libxkbcommon wayland libx11 libxcursor libxrandr libxi
+            useradd -m builder
+            echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+            git config --system --add safe.directory "*"
+            # makepkg will not run as root, so the folder goes to a build user and is given back at the end.
+            owner=$(stat -c %u:%g /work)
+            chown -R builder:builder /work
+            su builder -c "cd /work/source && bash packaging/arch/build-arch.sh"
+            pkg=$(ls /work/source/dist/arch/swift-download-manager-[0-9]*.pkg.tar.zst)
+            pacman -Qp "$pkg"
+            pacman -U --noconfirm "$pkg"
+            test "$(pacman -Q swift-download-manager | cut -d" " -f1)" = swift-download-manager
+            swift-download-manager --networks
+            pacman -Ql swift-download-manager | grep -E "usr/bin/swift-download-manager|\.desktop|browser-extension/manifest.json"
+            pacman -R --noconfirm swift-download-manager
+            if [ -e /usr/bin/swift-download-manager ]; then echo "still installed after removing" >&2; exit 1; fi
+            chown -R "$owner" /work
+          '
+          ls -l source/dist/arch
+      - name: Sign the package
+        if: env.GPG_KEY != ''
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          printf '%s\n' "$GPG_KEY" | gpg --batch --import
+          for f in source/dist/arch/*.pkg.tar.zst; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --output "$f.sig" "$f"
+            gpg --verify "$f.sig" "$f"
+          done
+          rm -rf "$GNUPGHOME"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: arch-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            source/dist/arch/*.pkg.tar.zst
+            source/dist/arch/*.sig
 
   addon:
     name: Browser add-ons
@@ -206,12 +370,14 @@ jobs:
 
   release:
     name: Collect the files and publish
-    needs: [version, windows, linux, addon, source]
+    needs: [version, windows, linux, arch, addon, source]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      GPG_KEY: ${{ secrets.SDM_GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.SDM_GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
@@ -221,7 +387,20 @@ jobs:
         run: |
           mkdir release-assets
           find parts -type f -exec cp {} release-assets/ \;
+          # The public keys, so that signatures can be checked from the release alone.
+          cp source/packaging/keys/swift-download-manager-release.gpg.asc release-assets/
+          cp source/packaging/windows/swift-download-manager-codesign-2.cer release-assets/
           (cd release-assets && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - name: Sign SHA256SUMS
+        if: env.GPG_KEY != ''
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          printf '%s\n' "$GPG_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --armor --detach-sign --output release-assets/SHA256SUMS.asc release-assets/SHA256SUMS
+          # Check it against the public key that is committed, not the one just imported.
+          export GNUPGHOME="$(mktemp -d)"
+          gpg --batch --import source/packaging/keys/swift-download-manager-release.gpg.asc
+          gpg --verify release-assets/SHA256SUMS.asc release-assets/SHA256SUMS
       - name: Take this version's notes from CHANGELOG.md
         run: |
           awk -v v="$VERSION" '
@@ -232,12 +411,22 @@ jobs:
             echo "No section for $VERSION in CHANGELOG.md" >&2
             exit 1
           fi
-          thumb=$(openssl x509 -inform der -in source/packaging/windows/swift-download-manager-codesign.cer -noout -fingerprint -sha256 | cut -d= -f2)
+          thumb=$(openssl x509 -inform der -in source/packaging/windows/swift-download-manager-codesign-2.cer -noout -fingerprint -sha256 | cut -d= -f2)
+          gpgfpr=$(gpg --show-keys --with-colons source/packaging/keys/swift-download-manager-release.gpg.asc | awk -F: '/^fpr/ {print $10; exit}')
           {
             echo
-            echo "### Checking the Windows program"
-            echo "The Windows exe is signed with this project's own certificate (SHA-256 fingerprint \`$thumb\`,"
-            echo "public certificate in the zip and in the repository). Compare the file's SHA-256 with \`SHA256SUMS\`."
+            echo "### Which file to take"
+            echo "| System | File |"
+            echo "| --- | --- |"
+            echo "| Windows 10/11, Intel or AMD | \`SwiftDownloadManager-$VERSION-setup-x64.exe\` |"
+            echo "| Windows 11 on ARM | \`SwiftDownloadManager-$VERSION-setup-arm64.exe\` |"
+            echo "| Ubuntu, Debian, Mint, Raspberry Pi OS | \`swift-download-manager_${VERSION}_amd64.deb\` or \`..._arm64.deb\` |"
+            echo "| Arch Linux, Manjaro, EndeavourOS | \`swift-download-manager-$VERSION-1-x86_64.pkg.tar.zst\` (Arch Linux ARM: \`aarch64\`), with its \`.sig\` |"
+            echo "| Portable Windows | \`SwiftDownloadManager-$VERSION-windows-x64.zip\` or \`-arm64.zip\` |"
+            echo
+            echo "### Checking the files"
+            echo "- Windows programs and installers are signed with this project's own certificate (SHA-256 fingerprint \`$thumb\`, public certificate attached). It is self-signed, so Windows may still say *unknown publisher*; see SECURITY.md."
+            echo "- \`SHA256SUMS\` lists every file and is signed with the GPG key \`$gpgfpr\` (\`SHA256SUMS.asc\`, public key attached): \`gpg --import swift-download-manager-release.gpg.asc && gpg --verify SHA256SUMS.asc SHA256SUMS && sha256sum -c SHA256SUMS --ignore-missing\`."
           } >> release-notes.md
           cat release-notes.md
       - uses: actions/upload-artifact@v7

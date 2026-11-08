@@ -5,3 +5,7 @@
 *.pem
 *.key
 *.jks
+
+# What the build scripts make for trying out (programs, installers, packages) goes to out/; only its README is kept.
+/out/*
+!/out/README.md

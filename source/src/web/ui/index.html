@@ -129,6 +129,61 @@ input::placeholder { color: var(--tertiary); }
 .empty { text-align: center; color: var(--secondary); padding: 64px 16px; background: var(--card); border: 1px solid var(--sep); border-radius: var(--radius); }
 .empty b { display: block; font-size: 20px; color: var(--label); margin-bottom: 4px; }
 
+/* Bulk buttons, sorting, selects and text areas */
+.tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
+.btn.small { height: 32px; padding: 0 14px; font-size: 13px; }
+.btn.small svg { width: 16px; height: 16px; }
+.btn.outline { background: transparent; box-shadow: inset 0 0 0 1px var(--sep-strong); }
+.btn.outline:hover { background: var(--hover); }
+.btn.danger { background: var(--red-tint); color: var(--red-ink); }
+select { height: var(--ctl); border-radius: 12px; border: 1px solid var(--border); background: var(--card); padding: 0 12px; }
+select.small { height: 32px; border-radius: 999px; border-color: var(--sep-strong); padding: 0 12px; font-size: 13px; }
+select:focus-visible, textarea:focus-visible { outline: 2px solid var(--label); outline-offset: 2px; }
+textarea { width: 100%; min-height: 128px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); padding: 12px 14px; resize: vertical; line-height: 1.5; }
+textarea::placeholder { color: var(--tertiary); }
+.add .many { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; }
+.add .opts { flex: 1 1 100%; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.add .opts label { color: var(--secondary); font-size: 13px; display: inline-flex; align-items: center; gap: 8px; }
+.bar .sort { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--tertiary); font-size: 13px; }
+.bar .count { margin-left: 0; }
+
+/* A switch, like the one in the app */
+.switch { position: relative; width: 51px; height: 31px; flex: none; display: inline-block; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.switch .track { position: absolute; inset: 0; border-radius: 999px; background: var(--surface3); transition: background .2s; pointer-events: none; }
+.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .2s cubic-bezier(.2,.8,.3,1); }
+.switch input:checked + .track { background: var(--green); }
+.switch input:checked + .track::after { transform: translateX(20px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--label); outline-offset: 2px; }
+.switch input:disabled { cursor: default; }
+.switch input:disabled + .track { opacity: .5; }
+
+/* The settings sheet */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; z-index: 20; padding: 16px; }
+.sheet { width: min(680px, 100%); max-height: min(88vh, 800px); background: var(--card); border-radius: 24px; box-shadow: var(--shadow-sheet); display: flex; flex-direction: column; overflow: hidden; }
+.sheet .head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 14px 24px; border-bottom: 1px solid var(--sep); }
+.sheet .head h2 { margin: 0; font-size: 20px; flex: 1; letter-spacing: -.01em; }
+.sheet .tabs { padding: 12px 24px 0; }
+.sheet .body { padding: 8px 24px 24px; overflow: auto; }
+.sheet h3 { margin: 18px 0 4px; font-size: 15px; }
+.sheet p.note { margin: 2px 0 8px; color: var(--secondary); font-size: 13px; }
+.item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--sep); }
+.item:first-of-type { border-top: 0; }
+.item .grow { flex: 1; min-width: 0; }
+.item .t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item .s { color: var(--tertiary); font-size: 12.5px; }
+.item .live { font-variant-numeric: tabular-nums; color: var(--secondary); font-size: 12.5px; white-space: nowrap; }
+.item .live.bad { color: var(--orange-ink); }
+.form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.form input[type=text], .form input[type=password], .form input[type=number] { flex: 1 1 160px; }
+input[type=number] { height: var(--ctl); border-radius: 12px; border: 1px solid var(--border); background: var(--card); padding: 0 14px; min-width: 0; }
+.reveal { margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--green-tint); }
+.reveal b { display: block; margin-bottom: 6px; color: var(--green-ink); }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: var(--surface); border-radius: 10px; padding: 10px 12px; word-break: break-all; user-select: all; }
+.reveal .row2 { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; }
+.reveal .row2 .code { flex: 1; }
+.pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-tint); color: var(--accent-ink); margin-left: 6px; vertical-align: middle; }
+
 /* Sign in */
 .login { max-width: 400px; margin: 12vh auto 0; background: var(--card); border: 1px solid var(--sep); border-radius: 24px; box-shadow: var(--shadow-sheet); padding: 32px; display: flex; flex-direction: column; gap: 12px; }
 .login .logo { margin-bottom: 4px; }
@@ -169,6 +224,8 @@ const ICONS = {
   close: "M6 6l12 12M18 6L6 18",
   down: "M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14",
   plus: "M12 5v14M5 12h14",
+  gear: "M15 12a3 3 0 11-6 0 3 3 0 016 0zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z",
+  copy: "M9 9h11v11H9zM5 15V5h10",
 };
 function svg(path) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -218,6 +275,8 @@ function catColor(name) {
 }
 
 let me = null, items = [], stat = null, filter = "all", query = "", timer = null, lastJson = "";
+// How the list is ordered, whether the add form takes many links, and the queues and categories to pick from.
+let sortBy = "new", bulk = false, lists = { queues: [], categories: [] };
 
 async function api(method, path, body) {
   const opts = { method, credentials: "same-origin", headers: { "X-SDM-Request": "1" } };
@@ -242,6 +301,7 @@ function header() {
     logo(),
     h("h1", null, "Swift Download Manager"),
     me && me.shared ? h("span", { class: "who" }, me.user + (me.admin ? " (administrator)" : "")) : null,
+    me && (me.admin || me.tokens) ? iconButton("Settings", ICONS.gear, () => openSettings()) : null,
     me && me.shared ? h("button", { class: "btn", type: "button", onclick: logout }, "Sign out") : null));
 }
 
@@ -284,27 +344,80 @@ function tiles() {
     tile("done", "check", "Finished", s.complete || 0, "done"));
 }
 
+// A <select> of plain choices; the first one (value "") means "let the server decide".
+function pick(label, first, values) {
+  const s = h("select", { "aria-label": label }, h("option", { value: "" }, first), values.map((v) => h("option", { value: v }, v)));
+  return s;
+}
+
 function addForm() {
-  const url = h("input", { class: "url", type: "url", placeholder: "Paste a download link", "aria-label": "Download link", required: true });
-  const name = h("input", { class: "name", type: "text", placeholder: "File name (optional)", "aria-label": "File name" });
-  const btn = h("button", { class: "btn primary", type: "submit" }, svg(ICONS.plus), "Add download");
+  const url = h("input", { class: "url", type: "url", placeholder: "Paste a download link", "aria-label": "Download link", required: !bulk, hidden: bulk });
+  const name = h("input", { class: "name", type: "text", placeholder: "File name (optional)", "aria-label": "File name", hidden: bulk });
+  const many = h("textarea", { placeholder: "One link per line. Lines that start with # are skipped.", "aria-label": "Download links, one per line", required: bulk });
+  const btn = h("button", { class: "btn primary", type: "submit" }, svg(ICONS.plus), bulk ? "Add all" : "Add download");
+  const toggle = h("button", { class: "btn plain", type: "button", onclick: () => { bulk = !bulk; render(); } }, bulk ? "Add one link" : "Add several links");
+  const category = pick("Category", "Category: by file type", lists.categories);
+  const queue = pick("Queue", "Queue: main", lists.queues);
+  const opts = h("div", { class: "opts" }, category, lists.queues.length > 1 ? queue : null, toggle);
+  const manyBox = h("div", { class: "many", hidden: !bulk }, many);
   return h("form", { class: "add", onsubmit: async (e) => {
     e.preventDefault();
     btn.disabled = true;
-    const r = await api("POST", "/api/downloads", { url: url.value.trim(), name: name.value.trim() || undefined });
-    btn.disabled = false;
-    if (r.ok) { url.value = ""; name.value = ""; refresh(); } else toast(r.data.error || "Could not add the link");
-  } }, url, name, btn);
+    const extra = { category: category.value || undefined, queue: queue.value || undefined };
+    if (bulk) {
+      const r = await api("POST", "/api/downloads/batch", { text: many.value, ...extra });
+      btn.disabled = false;
+      if (!r.ok) { toast(r.data.error || "Could not add the links"); return; }
+      const bad = (r.data.results || []).find((x) => !x.ok);
+      toast(r.data.added + (r.data.added === 1 ? " download added" : " downloads added") + (r.data.failed ? ", " + r.data.failed + " could not be added" + (bad ? ": " + bad.error : "") : ""));
+      if (r.data.added) { many.value = ""; refresh(); }
+    } else {
+      const r = await api("POST", "/api/downloads", { url: url.value.trim(), name: name.value.trim() || undefined, ...extra });
+      btn.disabled = false;
+      if (r.ok) { url.value = ""; name.value = ""; refresh(); } else toast(r.data.error || "Could not add the link");
+    }
+  } }, url, name, manyBox, btn, opts);
+}
+
+// Pause, resume or tidy everything of the person's at once.
+function toolsRow() {
+  const busy = items.some((i) => ["downloading", "connecting", "queued"].includes(i.status));
+  const idle = items.some((i) => ["paused", "error", "queued"].includes(i.status));
+  const done = items.some((i) => i.status === "complete");
+  const run = async (path, text) => {
+    const r = await api("POST", path);
+    if (r.ok) toast(text(r.data)); else toast(r.data.error || "That did not work");
+    refresh();
+  };
+  const b = (label, icon, on, enabled) => { const x = h("button", { class: "btn small outline", type: "button", onclick: on }, svg(icon), label); x.disabled = !enabled; return x; };
+  return h("div", { class: "tools" },
+    b("Pause all", ICONS.pause, () => run("/api/downloads/pause-all", (d) => d.paused + " paused"), busy),
+    b("Resume all", ICONS.play, () => run("/api/downloads/resume-all", (d) => d.resumed + " resumed"), idle),
+    b("Clear finished", ICONS.trash, () => { if (confirm("Remove the finished downloads from the list? The files are kept on the server.")) run("/api/downloads/clear-completed", (d) => d.removed + " removed from the list"); }, done));
+}
+
+const SORTS = [["new", "Newest first"], ["old", "Oldest first"], ["name", "Name"], ["size", "Largest"], ["progress", "Most complete"], ["status", "Status"]];
+const ORDER = ["downloading", "connecting", "queued", "paused", "error", "complete"];
+function sorted(list) {
+  const by = {
+    new: (a, b) => b.id - a.id,
+    old: (a, b) => a.id - b.id,
+    name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+    size: (a, b) => (b.size_bytes || 0) - (a.size_bytes || 0),
+    progress: (a, b) => (b.progress || 0) - (a.progress || 0),
+    status: (a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || b.id - a.id,
+  }[sortBy] || (() => 0);
+  return list.slice().sort(by);
 }
 
 function visible() {
   const q = query.trim().toLowerCase();
-  return items.filter((i) => {
+  return sorted(items.filter((i) => {
     if (filter === "active" && !["downloading", "connecting", "queued", "paused"].includes(i.status)) return false;
     if (filter === "done" && i.status !== "complete") return false;
     if (filter === "failed" && i.status !== "error") return false;
     return !q || i.name.toLowerCase().includes(q);
-  });
+  }));
 }
 
 function card(i) {
@@ -346,7 +459,8 @@ function render() {
   input.addEventListener("input", (e) => { query = e.target.value; clear.hidden = !query; renderList(); });
   const search = h("div", { class: "search" }, svg(ICONS.search), input, clear);
   const holder = h("div", { id: "list" });
-  $app.replaceChildren(header(), h("div", { class: "wrap" }, tiles(), addForm(), h("div", { class: "bar" }, seg, search, h("span", { class: "count" }, list.length + (list.length === 1 ? " download" : " downloads"))), holder));
+  const order = h("select", { class: "small", "aria-label": "Order", onchange: (e) => { sortBy = e.target.value; renderList(); } }, SORTS.map(([k, label]) => h("option", { value: k, selected: sortBy === k }, label)));
+  $app.replaceChildren(header(), h("div", { class: "wrap" }, tiles(), addForm(), toolsRow(), h("div", { class: "bar" }, seg, search, h("span", { class: "count" }, list.length + (list.length === 1 ? " download" : " downloads")), h("label", { class: "sort" }, "Order", order)), holder));
   renderList();
 }
 
@@ -363,6 +477,197 @@ function renderList() {
   }
 }
 
+// ---------------------------------------------------------------- the settings sheet
+
+function switchEl(checked, onchange, label, disabled) {
+  const input = h("input", { type: "checkbox", role: "switch", "aria-label": label, disabled: !!disabled });
+  input.checked = !!checked;
+  input.addEventListener("change", () => onchange(input.checked));
+  return h("label", { class: "switch" }, input, h("span", { class: "track" }));
+}
+
+function copyText(text, btn) {
+  const done = () => { if (!btn) return; const t = btn.lastChild.textContent; btn.lastChild.textContent = "Copied"; setTimeout(() => { btn.lastChild.textContent = t; }, 1500); };
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, () => toast("Select the text and copy it")); return; }
+  // A page opened over plain http on a network has no clipboard: fall back to the old way.
+  const ta = h("textarea", { style: "position:fixed;left:-9999px", "aria-hidden": "true" });
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { if (document.execCommand("copy")) done(); else toast("Select the text and copy it"); } catch (e) { toast("Select the text and copy it"); }
+  ta.remove();
+}
+
+let sheetStop = null;
+function closeSettings() {
+  if (sheetStop) { sheetStop(); sheetStop = null; }
+  document.querySelectorAll(".overlay").forEach((o) => o.remove());
+  document.removeEventListener("keydown", onSheetKey);
+}
+function onSheetKey(e) { if (e.key === "Escape") closeSettings(); }
+
+function openSettings(first) {
+  closeSettings();
+  const tabs = [];
+  if (me.admin) tabs.push(["net", "Networks and speed", netTab]);
+  if (me.tokens) tabs.push(["tok", "Access tokens", tokTab]);
+  if (me.shared && me.admin) tabs.push(["usr", "Users", usrTab]);
+  if (!tabs.length) return;
+  let current = tabs.find((t) => t[0] === first) || tabs[0];
+  const body = h("div", { class: "body" });
+  const tabBar = h("div", { class: "tabs" });
+  const show = () => {
+    if (sheetStop) { sheetStop(); sheetStop = null; }
+    tabBar.replaceChildren(h("div", { class: "seg", role: "group", "aria-label": "Settings" }, tabs.map((t) => h("button", { type: "button", "aria-pressed": String(t === current), onclick: () => { current = t; show(); } }, t[1]))));
+    body.replaceChildren(h("p", { class: "note" }, "Loading…"));
+    sheetStop = current[2](body) || null;
+  };
+  const close = iconButton("Close", ICONS.close, closeSettings);
+  const overlay = h("div", { class: "overlay", onclick: (e) => { if (e.target === overlay) closeSettings(); } },
+    h("div", { class: "sheet", role: "dialog", "aria-modal": "true", "aria-label": "Settings" }, h("div", { class: "head" }, h("h2", null, "Settings"), close), tabs.length > 1 ? tabBar : null, body));
+  document.body.appendChild(overlay);
+  document.addEventListener("keydown", onSheetKey);
+  show();
+  close.focus();
+}
+
+// Networks of the server, and the overall speed limit (administrators).
+function netTab(body) {
+  let n = null, lastKey = "", timer = null, stopped = false;
+  const key = (x) => JSON.stringify([x.enabled, x.automatic, x.chosen, x.off, x.available]);
+  const spans = new Map();
+  const liveFor = (name) => (n.live || []).find((x) => x.name === name);
+  const liveText = (c) => {
+    const l = liveFor(c.name);
+    if (!l) return "";
+    if (l.state === "gone") return "not connected";
+    if (l.state === "resting") return "resting";
+    return fmtBytes(l.speed_bytes_per_sec) + "/s · " + l.connections + (l.connections === 1 ? " connection" : " connections");
+  };
+  const used = (c) => (n.automatic ? !n.off.includes(c.name) : n.chosen.includes(c.name));
+  const save = async (patch) => {
+    const r = await api("POST", "/api/networks", patch);
+    if (!r.ok) { toast(r.data.error || "That did not work"); draw(); return; }
+    n = r.data; lastKey = key(n); draw();
+  };
+  const toggle = (c, on) => {
+    // By hand the switch means "use it"; in automatic mode it means "do not leave it out".
+    const which = n.automatic ? "off" : "chosen";
+    const list = n[which].filter((x) => x !== c.name);
+    if (n.automatic ? !on : on) list.push(c.name);
+    save({ [which]: list });
+  };
+  const setLimit = async (kbps) => {
+    const r = await api("POST", "/api/speed-limit", { kbps });
+    if (!r.ok) { toast(r.data.error || "That did not work"); return; }
+    stat = Object.assign({}, stat, { speed_limit_kbps: r.data.speed_limit_kbps });
+    draw();
+  };
+  function draw() {
+    spans.clear();
+    const limit = stat && stat.speed_limit_kbps;
+    const kb = h("input", { type: "number", min: "1", max: "1000000", placeholder: "KB/s", "aria-label": "Speed limit in KB/s", value: limit || "" });
+    const rows = n.available.length ? n.available.map((c) => {
+      const l = liveFor(c.name);
+      const live = h("span", { class: "live" + (l && l.state !== "working" ? " bad" : "") }, liveText(c));
+      spans.set(c.name, live);
+      return h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "t" }, c.name), h("div", { class: "s" }, c.kind + " · " + c.address)), live, switchEl(used(c), (on) => toggle(c, on), c.name + " in use", !n.enabled));
+    }) : [h("p", { class: "note" }, "No connected network was found on the server.")];
+    body.replaceChildren(
+      h("h3", null, "Several networks at once"),
+      h("p", { class: "note" }, "Each download is spread over every network picked here (Wi-Fi, Ethernet, a phone with USB tethering ...), so their speeds add up. A network plugged in or unplugged while a download runs is picked up or skipped within a few seconds."),
+      h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "t" }, "Download over several networks")), switchEl(n.enabled, (on) => save({ enabled: on }), "Download over several networks")),
+      h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "t" }, "Use every connected network automatically"), h("div", { class: "s" }, "Includes ones plugged in later. Stands back while a VPN is connected.")), switchEl(n.automatic, (on) => save({ automatic: on }), "Use every connected network automatically", !n.enabled)),
+      ...rows,
+      h("h3", null, "Overall speed limit"),
+      h("p", { class: "note" }, limit ? "All downloads together are limited to " + limit + " KB/s." : "There is no limit."),
+      h("div", { class: "form" }, kb,
+        h("button", { class: "btn small primary", type: "button", onclick: () => { const v = Number.parseInt(kb.value, 10); if (v > 0) setLimit(v); else toast("Enter the limit in KB/s"); } }, "Set limit"),
+        limit ? h("button", { class: "btn small outline", type: "button", onclick: () => setLimit(0) }, "Remove limit") : null));
+  }
+  const tick = async () => {
+    const r = await api("GET", "/api/networks");
+    if (stopped) return;
+    if (!r.ok) { if (!n) body.replaceChildren(h("p", { class: "note" }, r.data.error || "Could not load the networks")); return; }
+    const first = !n;
+    n = r.data;
+    if (first || key(n) !== lastKey) {
+      // Do not redraw under somebody who is typing a limit.
+      if (!first && document.activeElement && document.activeElement.type === "number") return;
+      lastKey = key(n); draw();
+    } else {
+      for (const c of n.available) { const s = spans.get(c.name); if (s) s.textContent = liveText(c); }
+    }
+  };
+  tick();
+  timer = setInterval(tick, 2000);
+  return () => { stopped = true; clearInterval(timer); };
+}
+
+// Access tokens: keys for scripts and the browser add-on, each acting as the person who made it.
+function tokTab(body) {
+  let fresh = null;
+  const draw = (list) => {
+    const label = h("input", { type: "text", placeholder: "What is it for? (for example: laptop add-on)", maxlength: "40", "aria-label": "Name of the token" });
+    const make = async () => {
+      const r = await api("POST", "/api/tokens", { label: label.value });
+      if (r.ok) { fresh = r.data.token; load(); } else toast(r.data.error || "Could not make the token");
+    };
+    let reveal = null;
+    if (fresh) {
+      const cp = h("button", { class: "btn small", type: "button", onclick: () => copyText(fresh, cp) }, svg(ICONS.copy), h("span", null, "Copy"));
+      const curl = 'curl -H "Authorization: Bearer ' + fresh + '" -H "Content-Type: application/json" -d \'{"url":"https://example.com/file.zip"}\' ' + location.origin + "/api/downloads";
+      reveal = h("div", { class: "reveal" }, h("b", null, "Copy this token now. It is not shown again."), h("div", { class: "row2" }, h("div", { class: "code" }, fresh), cp), h("p", { class: "note" }, "To send a link from a script:"), h("div", { class: "code" }, curl));
+    }
+    body.replaceChildren(
+      h("h3", null, "Access tokens"),
+      h("p", { class: "note" }, "A token lets a program (a script, the browser add-on) use your downloads without signing in. It can do what you can do, and no more. Anybody who has the token can use it, so keep it secret; remove it here when it is no longer needed."),
+      ...(list.length ? list.map((t) => h("div", { class: "item" }, h("div", { class: "grow" }, h("div", { class: "t" }, t.label), h("div", { class: "s" }, "Made " + new Date(t.created * 1000).toLocaleDateString())),
+        h("button", { class: "btn small danger", type: "button", onclick: async () => { if (!confirm("Remove the token “" + t.label + "”? Programs that use it stop working.")) return; const r = await api("DELETE", "/api/tokens/" + t.id); if (r.ok) load(); else toast(r.data.error || "That did not work"); } }, "Remove"))) : [h("p", { class: "note" }, "You have no tokens yet.")]),
+      h("div", { class: "form" }, label, h("button", { class: "btn small primary", type: "button", onclick: make }, "Make a token")),
+      ...(reveal ? [reveal] : []));
+  };
+  const load = async () => {
+    const r = await api("GET", "/api/tokens");
+    if (!r.ok) { body.replaceChildren(h("p", { class: "note" }, r.data.error || "Could not load the tokens")); return; }
+    draw(r.data.tokens || []);
+  };
+  load();
+  // The secret is dropped from memory when the tab is left.
+  return () => { fresh = null; };
+}
+
+// The accounts of a shared server (administrators).
+function usrTab(body) {
+  const draw = (users) => {
+    const name = h("input", { type: "text", placeholder: "User name", maxlength: "32", autocomplete: "off", autocapitalize: "none", "aria-label": "User name" });
+    const pw = h("input", { type: "password", placeholder: "Password (8 or more characters)", autocomplete: "new-password", "aria-label": "Password" });
+    const admin = h("input", { type: "checkbox", "aria-label": "Administrator" });
+    const save = async () => {
+      const r = await api("POST", "/api/users", { name: name.value.trim(), password: pw.value, admin: admin.checked });
+      if (r.ok) { toast("Saved " + name.value.trim()); pw.value = ""; load(); } else toast(r.data.error || "Could not save the account");
+    };
+    body.replaceChildren(
+      h("h3", null, "Accounts"),
+      h("p", { class: "note" }, "Everybody downloads into a folder of their own and sees only their own downloads. Administrators see everybody's."),
+      ...users.map((u) => h("div", { class: "item" },
+        h("div", { class: "grow" }, h("div", { class: "t" }, u.name, u.admin ? h("span", { class: "pill" }, "administrator") : null),
+          h("div", { class: "s" }, u.downloads + (u.downloads === 1 ? " download" : " downloads") + " · " + fmtBytes(u.downloaded_bytes) + " fetched · " + u.tokens + (u.tokens === 1 ? " token" : " tokens"))),
+        h("button", { class: "btn small danger", type: "button", disabled: u.name === me.user, title: u.name === me.user ? "You cannot remove your own account" : "", onclick: async () => {
+          if (!confirm("Remove the account " + u.name + "? Their downloads stay on the list and their files stay on the server.")) return;
+          const r = await api("DELETE", "/api/users/" + encodeURIComponent(u.name));
+          if (r.ok) load(); else toast(r.data.error || "That did not work");
+        } }, "Remove"))),
+      h("h3", null, "Add an account, or change a password"),
+      h("div", { class: "form" }, name, pw, h("label", { style: "display:inline-flex;align-items:center;gap:8px" }, admin, "Administrator"), h("button", { class: "btn small primary", type: "button", onclick: save }, "Save account")));
+  };
+  const load = async () => {
+    const r = await api("GET", "/api/users");
+    if (!r.ok) { body.replaceChildren(h("p", { class: "note" }, r.data.error || "Could not load the accounts")); return; }
+    draw(r.data.users || []);
+  };
+  load();
+  return null;
+}
+
 async function refresh() {
   const [d, s] = await Promise.all([api("GET", "/api/downloads?limit=500"), api("GET", "/api/status")]);
   if (d.status === 401 || s.status === 401) { showLogin(!!(d.data && d.data.shared), "Your session ended. Please sign in again."); return; }
@@ -373,9 +678,14 @@ async function refresh() {
   if (json === lastJson) return;
   lastJson = json;
   // Keep the cursor in the search box while the list updates.
+  // The tab shows the speed, so a download can be watched from another tab.
+  const sp = (stat && stat.speed_bytes_per_sec) || 0;
+  document.title = (sp > 0 ? "↓ " + fmtBytes(sp) + "/s · " : "") + "Swift Download Manager";
   if (document.getElementById("list")) {
     const t = document.querySelector(".tiles");
     if (t) t.replaceWith(tiles());
+    const bar = document.querySelector(".tools");
+    if (bar) bar.replaceWith(toolsRow());
     renderList();
   } else render();
 }
@@ -389,6 +699,9 @@ async function boot() {
   if (!r.ok) { $app.replaceChildren(h("div", { class: "wrap" }, h("div", { class: "empty" }, h("b", null, "Cannot reach the server"), "Reload the page to try again."))); return; }
   me = r.data;
   lastJson = "";
+  // The queues and file types to choose from when adding (the page still works without them).
+  const q = await api("GET", "/api/queues");
+  if (q.ok) lists = { queues: (q.data.queues || []).map((x) => x.name), categories: q.data.categories || [] };
   await refresh();
   render();
   start();

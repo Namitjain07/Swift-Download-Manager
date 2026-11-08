@@ -76,6 +76,22 @@ pub struct Palette {
     pub blue: Color32,
     pub blue_ink: Color32,
     pub blue_tint: Color32,
+    // Controls (buttons, fields, switches), the way WinUI draws them: a fill at rest, under the pointer and while pressed,
+    // a thin outline whose bottom edge is a little stronger, and a strong stroke for the outline of a check box or an
+    // off switch. Other themes fill these from their own colours.
+    /// Fill of a standard control at rest.
+    pub ctl: Color32,
+    pub ctl_hover: Color32,
+    pub ctl_press: Color32,
+    /// Outline of a control (the top and the sides), and its bottom edge.
+    pub ctl_stroke: Color32,
+    pub ctl_stroke_bottom: Color32,
+    /// Outline of a check box or an off switch; the thumb of an off switch.
+    pub ctl_strong: Color32,
+    /// The accent button under the pointer.
+    pub accent_hover: Color32,
+    /// The focus ring.
+    pub focus: Color32,
     /// Base colour of drop shadows (alpha is applied where they are drawn).
     pub shadow: Color32,
 }
@@ -135,6 +151,14 @@ impl Palette {
         blue: rgb(0x007AFF),
         blue_ink: rgb(0x0058BE),
         blue_tint: rgba(0x007AFF, 28),
+        ctl: rgb(0xF2F2F2),
+        ctl_hover: rgb(0xE8E8E8),
+        ctl_press: rgb(0xE8E8E8),
+        ctl_stroke: rgb(0xDDDDDD),
+        ctl_stroke_bottom: rgb(0xDDDDDD),
+        ctl_strong: rgb(0x909090),
+        accent_hover: rgb(0xD70466),
+        focus: rgb(0x222222),
         shadow: rgb(0x000000),
     };
 
@@ -177,6 +201,14 @@ impl Palette {
         blue: rgb(0x0A84FF),
         blue_ink: rgb(0x409CFF),
         blue_tint: rgba(0x0A84FF, 46),
+        ctl: rgb(0x2C2C2E),
+        ctl_hover: rgb(0x3A3A3C),
+        ctl_press: rgb(0x3A3A3C),
+        ctl_stroke: rgba(0xFFFFFF, 46),
+        ctl_stroke_bottom: rgba(0xFFFFFF, 46),
+        ctl_strong: rgb(0x76767B),
+        accent_hover: rgb(0xFF385C),
+        focus: rgb(0xF5F5F7),
         shadow: rgb(0x000000),
     };
 
@@ -186,7 +218,8 @@ impl Palette {
         lerp_fields!(
             self, other, t, bg, card, surface2, surface3, raised, sidebar, chrome, segment_on, track, scrim, hover, press, separator, separator_strong,
             control_border, label, secondary, tertiary, disabled, accent, accent_ink, accent_solid, accent_press, on_accent, accent_tint, green,
-            green_ink, green_tint, orange, orange_ink, orange_tint, red, red_ink, red_tint, red_solid, blue, blue_ink, blue_tint, shadow
+            green_ink, green_tint, orange, orange_ink, orange_tint, red, red_ink, red_tint, red_solid, blue, blue_ink, blue_tint, ctl, ctl_hover, ctl_press, ctl_stroke,
+            ctl_stroke_bottom, ctl_strong, accent_hover, focus, shadow
         )
     }
 }

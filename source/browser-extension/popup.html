@@ -9,68 +9,107 @@
   <body>
     <header>
       <svg class="mark" viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
-        <rect width="36" height="36" rx="9" fill="#e31c5f" />
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a7e" /><stop offset=".55" stop-color="#e31c5f" /><stop offset="1" stop-color="#b30f4a" /></linearGradient>
+        </defs>
+        <rect width="36" height="36" rx="8.1" fill="url(#g)" />
         <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 8.5v13" />
-          <path d="M12.2 16.2 18 22l5.8-5.8" />
-          <path d="M10.5 27.5h15" />
+          <path d="M18 7.4v12.2" />
+          <path d="M12 16.4 18 22.4l6-6" />
+          <path d="M9 21.6v5.4h18v-5.4" />
         </g>
       </svg>
       <div class="title">
         <h1>Swift Download Manager</h1>
         <span id="status" class="pill wait" role="status"><i></i><span id="statusText">Checking…</span></span>
       </div>
+      <button type="button" class="open" id="openApp" title="Open the app window">Open</button>
     </header>
 
-    <main>
-      <section class="card">
-        <label class="row" for="catchAll">
-          <span class="text">
-            <b>Send browser downloads to the app</b>
-            <small>Files you download in the browser open in Swift Download Manager instead.</small>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="catchAll" role="switch" />
-            <span class="track"><span class="knob"></span></span>
-          </span>
-        </label>
-      </section>
-      <p id="offline" class="notice" hidden>Downloads stay in the browser until you open Swift Download Manager.</p>
+    <nav class="tabs" role="tablist" aria-label="Pop-up sections">
+      <button type="button" role="tab" id="t-downloads" aria-selected="true" aria-controls="p-downloads">Downloads<span class="count" id="countDownloads" hidden></span></button>
+      <button type="button" role="tab" id="t-page" aria-selected="false" aria-controls="p-page" tabindex="-1">This page<span class="count" id="countPage" hidden></span></button>
+      <button type="button" role="tab" id="t-settings" aria-selected="false" aria-controls="p-settings" tabindex="-1">Settings</button>
+    </nav>
 
-      <h2>Videos and sounds on this page</h2>
-      <section class="card" id="media">
-        <div class="empty" id="empty">
+    <main>
+      <!-- What the app is downloading now -->
+      <section id="p-downloads" role="tabpanel" aria-labelledby="t-downloads">
+        <p id="offline" class="notice" hidden>The app is not running. Downloads stay in the browser until you open Swift Download Manager.</p>
+        <div id="update" class="notice update" hidden></div>
+        <div class="summary" id="summary" hidden>
+          <div><b id="sumSpeed">0 B/s</b><small id="sumText"></small></div>
+          <div class="actions">
+            <button type="button" class="btn small" id="pauseAll">Pause all</button>
+            <button type="button" class="btn small" id="resumeAll">Resume all</button>
+          </div>
+        </div>
+        <div id="downloads" class="list"></div>
+        <div class="empty" id="emptyDownloads">
           <svg viewBox="0 0 240 96" width="240" height="96" aria-hidden="true">
             <g fill="none" stroke="var(--accent)" stroke-opacity=".32" stroke-width="1.5" stroke-linecap="round">
-              <path id="c1" d="M14 12C103 12 87 48 174 48" />
-              <path id="c2" d="M14 30C103 30 87 48 174 48" />
-              <path id="c3" d="M14 48C103 48 87 48 174 48" />
-              <path id="c4" d="M14 66C103 66 87 48 174 48" />
-              <path id="c5" d="M14 84C103 84 87 48 174 48" />
+              <path id="c1" d="M14 12C103 12 87 48 174 48" /><path id="c2" d="M14 30C103 30 87 48 174 48" /><path id="c3" d="M14 48C103 48 87 48 174 48" /><path id="c4" d="M14 66C103 66 87 48 174 48" /><path id="c5" d="M14 84C103 84 87 48 174 48" />
             </g>
-            <g fill="var(--card)" stroke="var(--accent)" stroke-width="1.5">
-              <circle cx="14" cy="12" r="4" /><circle cx="14" cy="30" r="4" /><circle cx="14" cy="48" r="4" /><circle cx="14" cy="66" r="4" /><circle cx="14" cy="84" r="4" />
-            </g>
+            <g fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"><circle cx="14" cy="12" r="4" /><circle cx="14" cy="30" r="4" /><circle cx="14" cy="48" r="4" /><circle cx="14" cy="66" r="4" /><circle cx="14" cy="84" r="4" /></g>
             <g fill="var(--accent)">
               <circle r="2.6" opacity="0"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-0.2s"><mpath href="#c1" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.4s" repeatCount="indefinite" begin="-0.2s" /></circle>
-              <circle r="2.6" opacity="0"><animateMotion dur="2.4s" repeatCount="indefinite" begin="-1.4s"><mpath href="#c1" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.4s" repeatCount="indefinite" begin="-1.4s" /></circle>
               <circle r="2.6" opacity="0"><animateMotion dur="2.9s" repeatCount="indefinite" begin="-0.9s"><mpath href="#c2" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.9s" repeatCount="indefinite" begin="-0.9s" /></circle>
               <circle r="2.6" opacity="0"><animateMotion dur="2.1s" repeatCount="indefinite" begin="-0.5s"><mpath href="#c3" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.1s" repeatCount="indefinite" begin="-0.5s" /></circle>
-              <circle r="2.6" opacity="0"><animateMotion dur="2.1s" repeatCount="indefinite" begin="-1.5s"><mpath href="#c3" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.1s" repeatCount="indefinite" begin="-1.5s" /></circle>
               <circle r="2.6" opacity="0"><animateMotion dur="3s" repeatCount="indefinite" begin="-0.1s"><mpath href="#c4" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="3s" repeatCount="indefinite" begin="-0.1s" /></circle>
               <circle r="2.6" opacity="0"><animateMotion dur="2.6s" repeatCount="indefinite" begin="-1.2s"><mpath href="#c5" /></animateMotion><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.8;1" dur="2.6s" repeatCount="indefinite" begin="-1.2s" /></circle>
             </g>
             <rect x="176" y="24" width="48" height="48" rx="12" fill="var(--accent-tint)" stroke="var(--accent)" stroke-width="1.5" />
-            <g fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M200 37v15" /><path d="M193.5 46 200 52.5 206.5 46" /><path d="M192 60h16" />
-            </g>
+            <g fill="none" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M200 37v15" /><path d="M193.5 46 200 52.5 206.5 46" /><path d="M192 60h16" /></g>
           </svg>
-          <p><b>Nothing found yet</b></p>
-          <p>Play the video or sound on the page, then open this again.</p>
+          <p><b>Nothing is downloading</b></p>
+          <p>Start a download in the browser, or use the Page tab.</p>
         </div>
       </section>
 
-      <p class="hint">Tip: right-click any link and choose “Download with Swift Download Manager”.</p>
+      <!-- Videos, sounds and links on the page in front -->
+      <section id="p-page" role="tabpanel" aria-labelledby="t-page" hidden>
+        <h2>Videos and sounds</h2>
+        <div id="media" class="list"></div>
+        <div class="empty small" id="emptyMedia"><p><b>Nothing found yet</b></p><p>Play the video or sound on the page, then open this again.</p></div>
+
+        <h2>Files linked on this page</h2>
+        <div class="filters" id="filters" role="group" aria-label="Show" hidden></div>
+        <div id="links" class="list links"></div>
+        <div class="empty small" id="emptyLinks"><p id="linksText"><b>Looking…</b></p></div>
+        <div class="bar" id="linkBar" hidden>
+          <label class="check"><input type="checkbox" id="pickAll" /><span>All shown</span></label>
+          <button type="button" class="btn primary" id="sendLinks" disabled>Download</button>
+        </div>
+      </section>
+
+      <!-- What the add-on catches -->
+      <section id="p-settings" role="tabpanel" aria-labelledby="t-settings" hidden>
+        <div class="card">
+          <label class="row" for="catchAll">
+            <span class="text"><b>Send browser downloads to the app</b><small>Files you download in the browser open in Swift Download Manager instead.</small></span>
+            <span class="switch"><input type="checkbox" id="catchAll" role="switch" /><span class="track"><span class="knob"></span></span></span>
+          </label>
+        </div>
+        <h2>What to catch</h2>
+        <div class="card form">
+          <label class="field">
+            <span>Only files bigger than</span>
+            <span class="inline"><input type="number" id="minSize" min="0" max="100000" step="1" inputmode="numeric" /><em>MB</em></span>
+            <small>Smaller files are left to the browser. 0 catches everything.</small>
+          </label>
+          <label class="field">
+            <span>Only these file types</span>
+            <input type="text" id="onlyTypes" placeholder="zip rar exe iso mp4 (empty: all)" spellcheck="false" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>Leave these sites to the browser</span>
+            <textarea id="excludeHosts" rows="3" placeholder="example.com&#10;files.example.org" spellcheck="false"></textarea>
+            <small>One site per line. Its subdomains are included.</small>
+          </label>
+        </div>
+        <p class="hint"><b>Tip:</b> hold <kbd>Alt</kbd> while you click a link to let the browser download that one itself. Right-click a link and choose “Download with Swift Download Manager” to send it by hand.</p>
+        <p class="saved" id="saved" role="status" hidden>Saved</p>
+      </section>
     </main>
     <script src="popup.js"></script>
   </body>

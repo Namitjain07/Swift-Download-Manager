@@ -10,15 +10,17 @@
 //! - `install_fonts` loads Inter for text and Phosphor for icons (both bundled, so the app looks
 //!   the same on every system).
 
+pub mod mica;
 pub mod palette;
 pub mod themes;
+pub mod winui;
 
 use eframe::egui::{
     self, epaint::Shadow, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Id, Stroke, TextStyle, Theme, ThemePreference,
 };
 pub use palette::Palette;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 pub use themes::{ColorTheme, Shape};
 
 /// Which theme the person wants. `System` follows the operating system live.
@@ -69,6 +71,10 @@ pub struct Design {
     pub nav_indicator: bool,
     /// Side of a round or square icon button.
     pub icon_btn: f32,
+    /// 1 for the WinUI 3 look: Segoe UI at regular weight, button outlines with a stronger bottom edge, an accent line under the text
+    /// field being typed in, a thin progress bar, a small knob on the switch, square caption buttons. It moves between 0 and 1 while
+    /// the theme changes, like `pill`.
+    pub winui: f32,
     /// Height of the title bar that holds the window title and the minimise, maximise and close buttons.
     pub titlebar: f32,
 }
@@ -96,6 +102,7 @@ pub const DESIGN: Design = Design {
     nav_indicator: false,
     icon_btn: 36.0,
     titlebar: 38.0,
+    winui: 0.0,
 };
 
 /// The Fluent shape of Files: 4 px controls, 8 px cards, 32 px tall, a thin switch.
@@ -121,6 +128,7 @@ pub const FLUENT: Design = Design {
     nav_indicator: true,
     icon_btn: 32.0,
     titlebar: 32.0,
+    winui: 0.0,
 };
 
 /// The Carbon shape: nearly square corners, 40 px controls.
@@ -146,6 +154,35 @@ pub const SHARP: Design = Design {
     nav_indicator: true,
     icon_btn: 36.0,
     titlebar: 32.0,
+    winui: 0.0,
+};
+
+/// The sizes of WinUI 3 (Windows 11): `ControlCornerRadius` 4 and `OverlayCornerRadius` 8, controls 32 px high, list rows 36 px
+/// (`NavigationViewItemOnLeftMinHeight`), the 40 x 20 toggle switch, the 32 px title bar, and the type ramp of the Windows
+/// type scale (Body 14, Caption 12, Subtitle 20, Title 28).
+pub const WINUI: Design = Design {
+    radius_sm: 4,
+    radius_md: 4,
+    radius_lg: 8,
+    radius_xl: 8,
+    control_h: 32.0,
+    small_h: 28.0,
+    row_h: 48.0,
+    sidebar_w: 280.0,
+    nav_h: 36.0,
+    menu_row_h: 32.0,
+    inset: 16.0,
+    body: 14.0,
+    caption: 12.0,
+    overline: 12.0,
+    title: 20.0,
+    heading: 28.0,
+    switch: (40.0, 20.0),
+    pill: 0.0,
+    nav_indicator: true,
+    icon_btn: 32.0,
+    titlebar: 32.0,
+    winui: 1.0,
 };
 
 impl Shape {
@@ -154,12 +191,18 @@ impl Shape {
         match self {
             Shape::Pill => DESIGN,
             Shape::Fluent => FLUENT,
+            Shape::WinUi => WINUI,
             Shape::Sharp => SHARP,
         }
     }
 }
 
 impl Design {
+    /// Whether the WinUI 3 look is (mostly) in force.
+    pub fn is_winui(&self) -> bool {
+        self.winui > 0.5
+    }
+
     /// The corner radius of something `height` tall that is round in the pill shape and an ordinary
     /// rounded rectangle otherwise (buttons, the search box, a segmented control).
     pub fn round(&self, height: f32) -> u8 {
@@ -193,6 +236,7 @@ impl Design {
             nav_indicator: if t < 0.5 { self.nav_indicator } else { other.nav_indicator },
             icon_btn: f(self.icon_btn, other.icon_btn),
             titlebar: f(self.titlebar, other.titlebar),
+            winui: f(self.winui, other.winui),
         }
     }
 }
@@ -232,26 +276,62 @@ pub fn icon_fill_font() -> FontFamily {
     FontFamily::Name("icons-fill".into())
 }
 
-/// Loads the bundled fonts once per context. Safe to call every frame.
-pub fn install_fonts(ctx: &egui::Context) {
-    let flag = Id::unique("sdm_fonts_installed");
-    if ctx.data(|d| d.get_temp::<bool>(flag)).unwrap_or(false) {
-        return;
-    }
-    ctx.data_mut(|d| d.insert_temp(flag, true));
+/// Segoe UI (regular and semibold) from the system's font folder, when there is one. It is the typeface of Windows and of WinUI 3;
+/// it belongs to Windows and is not ours to ship, so it is read from there and not bundled.
+fn segoe() -> Option<&'static (Vec<u8>, Vec<u8>)> {
+    static SEGOE: OnceLock<Option<(Vec<u8>, Vec<u8>)>> = OnceLock::new();
+    SEGOE
+        .get_or_init(|| {
+            let windows = std::env::var_os("WINDIR").or_else(|| std::env::var_os("SystemRoot"))?;
+            let fonts = std::path::PathBuf::from(windows).join("Fonts");
+            Some((std::fs::read(fonts.join("segoeui.ttf")).ok()?, std::fs::read(fonts.join("seguisb.ttf")).ok()?))
+        })
+        .as_ref()
+}
+
+/// The fonts of the app: Inter for text and Phosphor for icons (egui's own stay behind as fallbacks, for emoji and other
+/// scripts), or Segoe UI in front of Inter for the WinUI 3 theme.
+fn font_definitions(segoe_first: bool) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     for (name, bytes) in [("inter", INTER_REGULAR), ("inter-semibold", INTER_SEMIBOLD), ("phosphor", PHOSPHOR), ("phosphor-fill", PHOSPHOR_FILL)] {
         fonts.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
     }
-    // Inter first; egui's own fonts stay behind it as fallbacks (emoji, other scripts).
     let prop = fonts.families.entry(FontFamily::Proportional).or_default();
     prop.insert(0, "inter".to_owned());
     let mut bold_chain = prop.clone();
     bold_chain.insert(0, "inter-semibold".to_owned());
+    if let (true, Some((regular, semibold_face))) = (segoe_first, segoe()) {
+        fonts.font_data.insert("segoe".to_owned(), Arc::new(FontData::from_owned(regular.clone())));
+        fonts.font_data.insert("segoe-semibold".to_owned(), Arc::new(FontData::from_owned(semibold_face.clone())));
+        let prop = fonts.families.entry(FontFamily::Proportional).or_default();
+        prop.insert(0, "segoe".to_owned());
+        bold_chain.insert(0, "segoe".to_owned());
+        bold_chain.insert(0, "segoe-semibold".to_owned());
+    }
     fonts.families.insert(semibold(), bold_chain);
     fonts.families.insert(icon_font(), vec!["phosphor".to_owned()]);
     fonts.families.insert(icon_fill_font(), vec!["phosphor-fill".to_owned()]);
-    ctx.set_fonts(fonts);
+    fonts
+}
+
+/// Loads the bundled fonts once per context. Safe to call every frame.
+pub fn install_fonts(ctx: &egui::Context) {
+    set_typeface_to(ctx, false);
+}
+
+/// Sets the typeface to the one of the WinUI 3 theme (`winui` true) or back to the app's own. Does nothing when it already is;
+/// safe to call every frame. Without Segoe UI on the system the app's own typeface stays.
+pub fn set_typeface(ctx: &egui::Context, winui: bool) {
+    set_typeface_to(ctx, winui && segoe().is_some());
+}
+
+fn set_typeface_to(ctx: &egui::Context, segoe_first: bool) {
+    let flag = Id::unique("sdm_typeface");
+    if ctx.data(|d| d.get_temp::<bool>(flag)) == Some(segoe_first) {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(flag, segoe_first));
+    ctx.set_fonts(font_definitions(segoe_first));
 }
 
 // ---------------------------------------------------------------- what is shown
@@ -272,7 +352,7 @@ impl Look {
 /// A change of theme or mode in progress.
 #[derive(Clone, Copy)]
 struct Transition {
-    key: (ColorTheme, bool),
+    key: (ColorTheme, bool, u32),
     from: Look,
     from_dark: bool,
     to: Look,
@@ -317,6 +397,11 @@ fn wants_dark(ctx: &egui::Context, mode: ThemeMode) -> bool {
     }
 }
 
+/// Whether the app is in its dark colours now: the choice, or the system's while the choice is "automatic".
+pub fn is_dark(ctx: &egui::Context, mode: ThemeMode) -> bool {
+    wants_dark(ctx, mode)
+}
+
 /// Seconds a change of theme takes.
 pub const TRANSITION_SECS: f64 = 0.35;
 
@@ -330,6 +415,8 @@ fn ease_in_out(t: f32) -> f32 {
 /// result into egui's style only while something changes, so an idle window costs nothing.
 pub fn apply(ctx: &egui::Context, mode: ThemeMode, theme: ColorTheme) {
     install_fonts(ctx);
+    // WinUI 3 is set in Segoe UI, from the system, when the system has it.
+    set_typeface(ctx, theme == ColorTheme::WinUi);
     let mode_id = Id::unique("sdm_theme_mode");
     if ctx.data(|d| d.get_temp::<ThemeMode>(mode_id)) != Some(mode) {
         ctx.data_mut(|d| d.insert_temp(mode_id, mode));
@@ -341,7 +428,8 @@ pub fn apply(ctx: &egui::Context, mode: ThemeMode, theme: ColorTheme) {
         });
     }
     let dark = wants_dark(ctx, mode);
-    let key = (theme, dark);
+    // A change of the system accent or of the material is a change of look too: WinUI 3 animates to it.
+    let key = (theme, dark, if theme == ColorTheme::WinUi { winui::runtime().version } else { 0 });
     let now = ctx.input(|i| i.time);
     let mut tr = ctx.data(|d| d.get_temp::<Transition>(transition_id())).unwrap_or_else(|| {
         let look = Look { pal: theme.palette(dark), design: theme.shape().design() };
@@ -373,7 +461,7 @@ pub fn apply(ctx: &egui::Context, mode: ThemeMode, theme: ColorTheme) {
     });
     ctx.all_styles_mut(|s| {
         layout_style(s, &look.design);
-        color_style(s, &look.pal, dark_now);
+        color_style(s, &look.pal, dark_now, look.design.is_winui());
     });
 }
 
@@ -392,7 +480,8 @@ fn layout_style(style: &mut egui::Style, d: &Design) {
     style.spacing.tooltip_width = 360.0;
     style.spacing.scroll = egui::style::ScrollStyle::floating();
     style.text_styles.insert(TextStyle::Body, FontId::new(d.body, FontFamily::Proportional));
-    style.text_styles.insert(TextStyle::Button, FontId::new(d.body, semibold()));
+    // WinUI sets button labels in the regular weight; the other themes in semibold.
+    style.text_styles.insert(TextStyle::Button, FontId::new(d.body, if d.is_winui() { FontFamily::Proportional } else { semibold() }));
     style.text_styles.insert(TextStyle::Small, FontId::new(d.caption, FontFamily::Proportional));
     style.text_styles.insert(TextStyle::Monospace, FontId::new(12.5, FontFamily::Monospace));
     style.text_styles.insert(TextStyle::Heading, FontId::new(d.heading, semibold()));
@@ -407,7 +496,7 @@ fn layout_style(style: &mut egui::Style, d: &Design) {
 }
 
 /// Colours of every egui widget, from the palette.
-fn color_style(style: &mut egui::Style, p: &Palette, dark: bool) {
+fn color_style(style: &mut egui::Style, p: &Palette, dark: bool, winui: bool) {
     let v = &mut style.visuals;
     v.dark_mode = dark;
     v.panel_fill = p.bg;
@@ -455,6 +544,20 @@ fn color_style(style: &mut egui::Style, p: &Palette, dark: bool) {
     v.widgets.open.weak_bg_fill = p.hover;
     v.widgets.open.bg_stroke = Stroke::new(1.0, p.label);
     v.widgets.open.fg_stroke = Stroke::new(1.0, p.label);
+
+    if winui {
+        // A WinUI text box is a control fill inside a thin outline; the accent line under it while it is typed in is drawn by the
+        // field itself (`widgets::field`), so egui gets no ring of its own. Selected text is the accent, a little transparent.
+        v.text_edit_bg_color = Some(p.ctl);
+        v.extreme_bg_color = p.ctl;
+        v.selection.bg_fill = p.accent.gamma_multiply(0.45);
+        v.selection.stroke = Stroke::NONE;
+        for (w, fill) in [(&mut v.widgets.inactive, p.ctl), (&mut v.widgets.hovered, p.ctl_hover), (&mut v.widgets.active, p.ctl_press), (&mut v.widgets.open, p.ctl_hover)] {
+            w.bg_fill = fill;
+            w.weak_bg_fill = fill;
+            w.bg_stroke = Stroke::new(1.0, p.ctl_stroke);
+        }
+    }
 }
 
 fn shadow_level(level: Elevation, dark: bool) -> Shadow {
@@ -636,6 +739,51 @@ mod tests {
         assert_eq!(ctx.fonts(|f| f.definitions().clone()), defs);
     }
 
+
+    #[test]
+    fn winui_uses_the_metrics_of_winui_3() {
+        assert_eq!(ColorTheme::WinUi.shape().design(), WINUI);
+        assert_eq!((WINUI.radius_md, WINUI.radius_lg, WINUI.radius_xl), (4, 8, 8), "ControlCornerRadius 4, OverlayCornerRadius 8");
+        assert_eq!((WINUI.control_h, WINUI.nav_h, WINUI.titlebar, WINUI.switch), (32.0, 36.0, 32.0, (40.0, 20.0)));
+        assert_eq!((WINUI.body, WINUI.caption, WINUI.title, WINUI.heading), (14.0, 12.0, 20.0, 28.0), "Body, Caption, Subtitle and Title of the Windows type ramp");
+        assert!(WINUI.is_winui() && !FLUENT.is_winui() && !DESIGN.is_winui() && !SHARP.is_winui());
+        assert_eq!(WINUI.round(32.0), 4, "buttons are not capsules");
+    }
+
+    #[test]
+    fn switching_to_winui_animates_the_whole_look_and_then_settles() {
+        let ctx = themed_with(ThemeMode::Light, ColorTheme::Airbnb);
+        for _ in 0..3 {
+            frame_with(&ctx, ThemeMode::Light, ColorTheme::WinUi);
+        }
+        let mid = design(&ctx);
+        assert!(mid.winui > 0.0 && mid.winui < 1.0, "{}", mid.winui);
+        for _ in 0..40 {
+            frame_with(&ctx, ThemeMode::Light, ColorTheme::WinUi);
+        }
+        assert_eq!(design(&ctx), WINUI);
+        let st = ctx.global_style();
+        assert_eq!(st.spacing.interact_size.y, 32.0);
+        assert_eq!(st.visuals.window_corner_radius, CornerRadius::same(8));
+        assert_eq!(st.text_styles[&TextStyle::Button].family, FontFamily::Proportional, "button labels are regular, not semibold");
+        assert_eq!(st.text_styles[&TextStyle::Heading].size, 28.0);
+        assert_eq!(st.visuals.selection.stroke, Stroke::NONE, "the focus line is the field's own");
+    }
+
+    #[test]
+    fn segoe_ui_leads_the_text_fonts_in_winui_when_the_system_has_it_and_inter_otherwise() {
+        let ctx = themed_with(ThemeMode::Light, ColorTheme::WinUi);
+        frame_with(&ctx, ThemeMode::Light, ColorTheme::WinUi);
+        let defs = ctx.fonts(|f| f.definitions().clone());
+        let (text, bold) = if segoe().is_some() { ("segoe", "segoe-semibold") } else { ("inter", "inter-semibold") };
+        assert_eq!(defs.families[&FontFamily::Proportional][0], text);
+        assert_eq!(defs.families[&semibold()][0], bold);
+        // Icons stay Phosphor. Another theme goes back to Inter.
+        assert_eq!(defs.families[&icon_font()], vec!["phosphor".to_string()]);
+        frame_with(&ctx, ThemeMode::Light, ColorTheme::Airbnb);
+        frame_with(&ctx, ThemeMode::Light, ColorTheme::Airbnb);
+        assert_eq!(ctx.fonts(|f| f.definitions().families[&FontFamily::Proportional][0].clone()), "inter");
+    }
     #[test]
     fn shadows_grow_with_elevation_and_are_stronger_in_the_dark() {
         let light = themed(ThemeMode::Light);

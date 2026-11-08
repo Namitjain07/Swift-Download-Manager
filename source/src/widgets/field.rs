@@ -10,10 +10,59 @@ use crate::theme;
 use eframe::egui::{self, vec2, Align, Align2, Color32, CornerRadius, FontId, Frame, Layout, Margin, Pos2, Rect, Response, Sense, Stroke, StrokeKind, TextEdit, Ui, UiBuilder};
 use std::ops::RangeInclusive;
 
-/// A single-line text field set up for this design. Add it with `ui.add(...)`; give it a width with
-/// `.desired_width(...)`, or use `field_full` to fill the row.
-pub fn field(text: &mut String) -> TextEdit<'_> {
-    TextEdit::singleline(text).margin(Margin::symmetric(14, 8)).align(Align2::LEFT_CENTER)
+/// A text field set up for this design. It is a text edit with the settings the app uses (`desired_width`, `hint_text`, `password`,
+/// `margin`, `id`), and in the WinUI 3 theme it also draws the line along the bottom edge that makes a WinUI text box: a little
+/// stronger than the outline at rest and a 2 px accent line while it is being typed in. Add it with `ui.add(...)`.
+pub struct Field<'t> {
+    edit: TextEdit<'t>,
+}
+
+impl<'t> Field<'t> {
+    pub fn desired_width(mut self, width: f32) -> Self {
+        self.edit = self.edit.desired_width(width);
+        self
+    }
+
+    pub fn hint_text(mut self, hint: impl Into<egui::WidgetText>) -> Self {
+        self.edit = self.edit.hint_text(hint);
+        self
+    }
+
+    pub fn password(mut self, password: bool) -> Self {
+        self.edit = self.edit.password(password);
+        self
+    }
+
+    pub fn margin(mut self, margin: impl Into<Margin>) -> Self {
+        self.edit = self.edit.margin(margin);
+        self
+    }
+
+    pub fn id(mut self, id: egui::Id) -> Self {
+        self.edit = self.edit.id(id);
+        self
+    }
+}
+
+impl egui::Widget for Field<'_> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let resp = ui.add(self.edit);
+        let ctx = ui.ctx().clone();
+        let d = theme::design(&ctx);
+        if d.is_winui() {
+            let pal = theme::current(&ctx);
+            let (colour, width) = if resp.has_focus() { (pal.accent, 2.0) } else { (pal.ctl_stroke_bottom, 1.0) };
+            let r = f32::from(d.radius_md);
+            let y = resp.rect.bottom() - width / 2.0;
+            ui.painter().line_segment([egui::pos2(resp.rect.left() + r, y), egui::pos2(resp.rect.right() - r, y)], Stroke::new(width, colour));
+        }
+        resp
+    }
+}
+
+/// A single-line text field set up for this design. Give it a width with `.desired_width(...)`, or use `field_full` to fill the row.
+pub fn field(text: &mut String) -> Field<'_> {
+    Field { edit: TextEdit::singleline(text).margin(Margin::symmetric(14, 8)).align(Align2::LEFT_CENTER) }
 }
 
 /// A field as wide as the room there is.
@@ -23,8 +72,8 @@ pub fn field_full(ui: &mut Ui, text: &mut String, hint: &str) -> Response {
 }
 
 /// A multi-line field with `rows` lines.
-pub fn field_multiline<'t>(text: &'t mut String, rows: usize) -> TextEdit<'t> {
-    TextEdit::multiline(text).margin(Margin::symmetric(14, 12)).desired_rows(rows)
+pub fn field_multiline<'t>(text: &'t mut String, rows: usize) -> Field<'t> {
+    Field { edit: TextEdit::multiline(text).margin(Margin::symmetric(14, 12)).desired_rows(rows) }
 }
 
 /// The rounded search box: a magnifier, the text, and a clear button while there is text.
