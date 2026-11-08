@@ -6,6 +6,8 @@
 #   make deb                  the Debian/Ubuntu package for this computer (amd64 or arm64)
 #   make arch                 the Arch Linux package for this computer (x86_64 or aarch64)
 #   make windows-installer    the Windows setup program (run in Git Bash or PowerShell on Windows; ARCH=arm64 for ARM)
+#   make cross                builds for many platforms in Docker, into out/: Linux (Intel/AMD, ARM, RISC-V, POWER, IBM Z, static and glibc),
+#                             Windows (x64, x86, ARM) and BSD; CROSS='linux-aarch64 windows-*' for some only; make cross-list shows them
 #   make checksums            SHA256SUMS for everything in source/dist, and make sign-checksums to sign that file
 #
 # The program lives in the folder "source". Everything built goes to source/dist.
@@ -25,7 +27,7 @@ ARCH       ?= x64
 GPG_KEY    ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help build test check fmt run clean install uninstall deb arch windows-installer extension docker checksums sign-checksums version
+.PHONY: help build test check fmt run clean install uninstall deb arch windows-installer cross cross-list cross-test out extension docker checksums sign-checksums version
 
 help: ## Show this list
 	@echo "Swift Download Manager $(VERSION)"
@@ -82,6 +84,20 @@ arch: ## Arch Linux package for this computer (run as a normal user on Arch; pac
 
 windows-installer: ## Windows setup program, ARCH=x64 or arm64 (on Windows; SIGN=1 signs it, see packaging/windows/sign.ps1)
 	powershell -NoProfile -ExecutionPolicy Bypass -File $(APP)/packaging/windows/build-installer.ps1 -Arch $(ARCH) $(if $(SIGN),-Sign,)
+
+cross: ## Build for many platforms in Docker into out/ (CROSS='linux-aarch64 windows-*' for some; see cross-list)
+	bash $(APP)/packaging/cross/cross.sh build $(CROSS)
+
+cross-list: ## List the platforms "make cross" can build for
+	@bash $(APP)/packaging/cross/cross.sh list $(CROSS)
+
+cross-test: ## Start the Linux programs from "make cross" on their own CPU in Docker (emulated) and check them
+	bash $(APP)/packaging/cross/cross.sh test $(CROSS)
+
+out: ## Copy the installers and packages of this version (windows-installer, deb, arch) from source/dist into out/, next to the cross builds
+	mkdir -p out
+	find $(APP)/dist -maxdepth 2 -type f -name '*$(VERSION)*' \( -name '*-setup-*.exe' -o -name '*.deb' -o -name '*.pkg.tar.zst' \) -exec cp -f {} out/ \;
+	@ls -1 out
 
 extension: ## Browser add-on packages (Chrome zip, Firefox xpi)
 	cd $(APP) && python3 packaging/browser/build_extension.py

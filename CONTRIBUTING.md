@@ -28,6 +28,8 @@ cargo test              # runs the automatic tests
 The [`Makefile`](Makefile) in the main folder has the same and more (`make help` lists it): `make build test`, `make install`,
 and the packages (`make deb`, `make arch`, `make windows-installer`; the Windows installer needs [Inno Setup](https://jrsoftware.org/isinfo.php)).
 How releases are signed and how to check them is in [SECURITY.md](SECURITY.md); the private keys are never in the repository.
+To build for other systems and CPUs (Linux on ARM, RISC-V, POWER, static Linux, Windows, BSD) from any computer with Docker, use
+`make cross` (see [`source/packaging/cross`](source/packaging/cross/README.md)).
 
 On Linux the app also needs the usual desktop libraries (they are already there on desktop systems).
 To try the window without a screen, `cargo run --release -- --demo` shows sample data and downloads nothing.

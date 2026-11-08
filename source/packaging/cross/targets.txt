@@ -1,0 +1,44 @@
+# The platforms the cross-compile image builds for. One line per platform, columns separated by spaces:
+#
+#   name         the name used in the file name of the archive and on the command line
+#   rust-target  the Rust target triple
+#   glibc        the oldest glibc the program is linked against (Linux "gnu" targets), or - for everything else
+#   kind         gui    = the window, the web interface and the command-line modes
+#                server = no window: the web interface and the command-line modes only (a static program cannot load the
+#                         OpenGL and X11/Wayland libraries that a window needs)
+#   file-says    a piece of what `file` prints for a correct program for this platform (the build fails the check if it is
+#                not there; an underscore stands for a space)
+#   platform     the Docker platform to try the program on with `cross.sh test` (QEMU emulates it), or -
+#   test-image   the image to try it in, or -
+#
+# The Docker image adds every rust-target listed here (see Dockerfile) and build-cross.sh builds the ones asked for.
+
+# Linux, glibc (any distribution with that glibc or newer, 2.19 is the first with POWER little-endian; the window needs the system's OpenGL and X11 or Wayland libraries)
+linux-x86_64            x86_64-unknown-linux-gnu         2.17  gui     x86-64            linux/amd64    ubuntu:24.04
+linux-aarch64           aarch64-unknown-linux-gnu        2.17  gui     ARM_aarch64       linux/arm64    ubuntu:24.04
+linux-armv7             armv7-unknown-linux-gnueabihf    2.17  gui     ARM,_EABI5        linux/arm/v7   ubuntu:24.04
+linux-armv6             arm-unknown-linux-gnueabihf      2.17  gui     ARM,_EABI5        linux/arm/v7   ubuntu:24.04
+linux-i686              i686-unknown-linux-gnu           2.17  gui     Intel_80386       linux/386      debian:bookworm-slim
+linux-riscv64           riscv64gc-unknown-linux-gnu      2.27  gui     UCB_RISC-V        linux/riscv64  ubuntu:24.04
+linux-ppc64le           powerpc64le-unknown-linux-gnu    2.19  gui     64-bit_PowerPC    linux/ppc64le  ubuntu:24.04
+linux-s390x             s390x-unknown-linux-gnu          2.17  gui     IBM_S/390         linux/s390x    ubuntu:24.04
+linux-loongarch64       loongarch64-unknown-linux-gnu    2.36  gui     LoongArch         -              -
+
+# Linux, musl, static (runs on any Linux of that CPU, Alpine included, with nothing installed)
+linux-musl-x86_64       x86_64-unknown-linux-musl        -     server  x86-64            linux/amd64    alpine:3.20
+linux-musl-aarch64      aarch64-unknown-linux-musl       -     server  ARM_aarch64       linux/arm64    alpine:3.20
+linux-musl-armv7        armv7-unknown-linux-musleabihf   -     server  ARM,_EABI5        linux/arm/v7   alpine:3.20
+linux-musl-i686         i686-unknown-linux-musl          -     server  Intel_80386       linux/386      alpine:3.20
+linux-musl-riscv64      riscv64gc-unknown-linux-musl     -     server  UCB_RISC-V        linux/riscv64  alpine:3.20
+linux-musl-ppc64le      powerpc64le-unknown-linux-musl   -     server  64-bit_PowerPC    linux/ppc64le  alpine:3.20
+linux-musl-loongarch64  loongarch64-unknown-linux-musl   -     server  LoongArch         -              -
+
+# Windows (built with MinGW, so there is no Visual C++ runtime to install; the programs are not signed)
+windows-x86_64          x86_64-pc-windows-gnu            -     gui     PE32+_executable  -              -
+windows-i686            i686-pc-windows-gnu              -     gui     PE32_executable   -              -
+windows-aarch64         aarch64-pc-windows-gnullvm       -     gui     Aarch64           -              -
+
+# BSD
+freebsd-x86_64          x86_64-unknown-freebsd           -     gui     FreeBSD           -              -
+freebsd-aarch64         aarch64-unknown-freebsd          -     gui     FreeBSD           -              -
+netbsd-x86_64           x86_64-unknown-netbsd            -     gui     NetBSD            -              -
