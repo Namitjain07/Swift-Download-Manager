@@ -13,14 +13,14 @@
 #
 # The Docker image adds every rust-target listed here (see Dockerfile) and build-cross.sh builds the ones asked for.
 
-# Linux, glibc (any distribution with that glibc or newer, 2.19 is the first with POWER little-endian; the window needs the system's OpenGL and X11 or Wayland libraries)
+# Linux, glibc (any distribution with that glibc or newer, 2.32 is the first that Zig can link for POWER little-endian (its unwinder needs the IEEE long double of glibc 2.32); the window needs the system's OpenGL and X11 or Wayland libraries)
 linux-x86_64            x86_64-unknown-linux-gnu         2.17  gui     x86-64            linux/amd64    ubuntu:24.04
 linux-aarch64           aarch64-unknown-linux-gnu        2.17  gui     ARM_aarch64       linux/arm64    ubuntu:24.04
 linux-armv7             armv7-unknown-linux-gnueabihf    2.17  gui     ARM,_EABI5        linux/arm/v7   ubuntu:24.04
 linux-armv6             arm-unknown-linux-gnueabihf      2.17  gui     ARM,_EABI5        linux/arm/v7   ubuntu:24.04
 linux-i686              i686-unknown-linux-gnu           2.17  gui     Intel_80386       linux/386      debian:bookworm-slim
 linux-riscv64           riscv64gc-unknown-linux-gnu      2.27  gui     UCB_RISC-V        linux/riscv64  ubuntu:24.04
-linux-ppc64le           powerpc64le-unknown-linux-gnu    2.19  gui     64-bit_PowerPC    linux/ppc64le  ubuntu:24.04
+linux-ppc64le           powerpc64le-unknown-linux-gnu    2.32  gui     64-bit_PowerPC    linux/ppc64le  ubuntu:24.04
 linux-s390x             s390x-unknown-linux-gnu          2.17  gui     IBM_S/390         linux/s390x    ubuntu:24.04
 linux-loongarch64       loongarch64-unknown-linux-gnu    2.36  gui     LoongArch         -              -
 
