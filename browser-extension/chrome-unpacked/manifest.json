@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Swift Download Manager Helper",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Sends downloads, links and videos from the browser to Swift Download Manager.",
   "minimum_chrome_version": "121",
   "icons": {

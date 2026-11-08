@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### The browser add-on keeps working after the window is closed to the background
+- **Downloads no longer go to the browser's own downloader once the window has been closed.** The window and the background process pass the add-on's port (9614) to each other. The background process asked for it once, a moment too early, while the closing window still held it, was refused, and never asked again, so the add-on found nobody and the browser kept every download. The door now waits for a busy port and opens by itself as soon as it is free (every 100 ms, then every second), is closed the moment its owner lets go, and the background process opens it before anything else. Every request is answered on its own thread, so one silent connection cannot hold the others up.
+- **No link is lost in the hand-over.** The add-on takes a download away from the browser as soon as the app says "added", so a link that had reached a closing window but had not been looked at yet simply vanished. The door now closes first, and whatever had already arrived is added before the downloads change hands.
+- **Add-on 1.6.1** tries again for about 2 seconds (a click) or 5 seconds (a download the browser has started, which it keeps downloading meanwhile) when nobody answers, so the short moment between the window going and the background process taking over no longer sends a download to the browser. A small file the browser finished in that time is left alone.
+- The status bar says "Browser: waiting" instead of "unavailable" while the port is busy, and the Browser integration window says what is happening.
+
 ## [1.9.0] - 2026-11-08
 
 ### Downloads that stay smooth, a status that tells the truth, a tenth of the memory

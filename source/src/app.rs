@@ -644,7 +644,10 @@ pub struct App {
     last_schedule_check: Instant,
     inbox: Inbox,
     clipboard_on: Arc<AtomicBool>,
-    listener: Result<(), String>,
+    /// The local door of the browser add-on (see `bridge`). Passed between the window and the background process.
+    listener: bridge::Listener,
+    /// The port of that door (tests use another one, so they never meet a real copy of the app).
+    bridge_port: u16,
     toast: Option<(String, Instant)>,
     /// Forces a theme for this run only (`--theme`), without touching the saved choice.
     theme_override: Option<ThemeMode>,
@@ -761,7 +764,8 @@ impl App {
             inbox: Arc::new(Mutex::new(Vec::new())),
             clipboard_on: Arc::new(AtomicBool::new(false)),
             // The sample window (--demo, screenshots) shows the add-on as connected.
-            listener: if demo { Ok(()) } else { Err("off".into()) },
+            listener: if demo { bridge::Listener::pretend() } else { bridge::Listener::off() },
+            bridge_port: bridge::PORT,
             toast: None,
             theme_override,
             color_theme_override,
@@ -806,9 +810,7 @@ impl App {
                 } else {
                     app.toast("AI assistants cannot control the downloads: another copy of the app owns them");
                 }
-                if app.settings.browser_listen {
-                    app.listener = bridge::start_listener_with(bridge::PORT, app.inbox.clone(), app.bridge_link.clone(), app.ctx.clone());
-                }
+                app.enable_browser_bridge();
                 bridge::start_clipboard_watch(app.clipboard_on.clone(), app.inbox.clone(), app.ctx.clone());
             }
         }

@@ -17,6 +17,7 @@ impl eframe::App for App {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.save();
         self.close_control();
+        self.stop_browser_listener();
         // Let go of the download list so an MCP engine can pick it up at once.
         self.state_lock = None;
     }
@@ -620,10 +621,11 @@ impl App {
                         self.updates.open = true;
                     }
                     if !self.demo {
-                        let (txt, dot, col) = match &self.listener {
-                            Ok(()) => ("Browser: connected", Some(pal.green), pal.secondary),
-                            Err(_) if !self.settings.browser_listen => ("Browser: off", None, pal.secondary),
-                            Err(_) => ("Browser: unavailable", Some(pal.red), pal.red_ink),
+                        let (txt, dot, col) = match self.listener.status() {
+                            crate::bridge::ListenerStatus::Listening => ("Browser: connected", Some(pal.green), pal.secondary),
+                            crate::bridge::ListenerStatus::Waiting(_) => ("Browser: waiting", Some(pal.orange), pal.orange_ink),
+                            crate::bridge::ListenerStatus::Off if !self.settings.browser_listen => ("Browser: off", None, pal.secondary),
+                            crate::bridge::ListenerStatus::Off => ("Browser: unavailable", Some(pal.red), pal.red_ink),
                         };
                         if status_chip(ui, dot, txt, col).on_hover_text("Browser integration…").clicked() {
                             self.browser_open = true;

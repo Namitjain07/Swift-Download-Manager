@@ -82,12 +82,11 @@ pub fn run() -> i32 {
 /// Owns the downloads and reacts to the tray until it is told to quit or a window takes over.
 fn engine_loop(cmd_rx: Receiver<TrayCmd>, status_tx: Sender<TrayState>) {
     let mut engine = Engine::new(default_config_dir());
+    // The browser add-on must find a door here as soon as the window has gone (see `Engine::start_local`).
+    engine.browser_bridge = true;
     if let Err(e) = engine.ensure_local(START_WAIT) {
         eprintln!("swift-download-manager: not running in the background: {e}");
         return;
-    }
-    if let Some(app) = engine.app_mut() {
-        app.enable_browser_bridge();
     }
     let mut last_status = Instant::now() - Duration::from_secs(10);
     loop {

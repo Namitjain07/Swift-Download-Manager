@@ -29,13 +29,29 @@ async function cookiesFor(url) {
   }
 }
 
-async function post(path, fields) {
-  const r = await fetch(APP + path, { method: "POST", body: new URLSearchParams(fields) });
-  return r.ok;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Pauses between attempts (milliseconds) when the app does not answer at all. Closing the app's window to the tray
+// hands the port from the window to the background process, and for a moment nobody has it: a download that is sent in
+// that moment must wait for the next owner, not fall back to the browser.
+const QUICK = [150, 300, 600, 1000]; // about 2 s: a click that someone is waiting on
+const PATIENT = [150, 300, 600, 1000, 1500, 2000]; // about 5.5 s: a download the browser has already started
+
+async function post(path, fields, pauses = QUICK) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(APP + path, { method: "POST", body: new URLSearchParams(fields) });
+      return r.ok;
+    } catch (e) {
+      // A refused connection: nothing was received, so sending again cannot add the link twice.
+      if (attempt >= pauses.length) throw e;
+      await sleep(pauses[attempt]);
+    }
+  }
 }
 
-async function sendToApp(url, referer, name) {
-  return post("/add", { url, referer: referer || "", name: name || "", cookies: await cookiesFor(url), ua: navigator.userAgent });
+async function sendToApp(url, referer, name, pauses) {
+  return post("/add", { url, referer: referer || "", name: name || "", cookies: await cookiesFor(url), ua: navigator.userAgent }, pauses);
 }
 
 /** Several links found on one page: they share the page's cookies and referrer. */
@@ -126,14 +142,18 @@ function wanted(item, s) {
 }
 
 // Catch downloads the browser starts and hand them to the app instead.
-// If the app is not running, the browser simply keeps the download.
+// The browser keeps going with its own copy while the app is tried (for a few seconds, see PATIENT); if the app does not
+// answer in that time, because it is not running, the browser simply keeps the download.
 api.downloads.onCreated.addListener(async (item) => {
   const s = await settings();
   if (!s.catchAll) return;
   const url = item.finalUrl || item.url;
   if (!/^https?:\/\//i.test(url) || bypassed(item.url) || bypassed(url) || !wanted(item, s)) return;
   try {
-    if (await sendToApp(url, item.referrer, baseName(item.filename))) {
+    if (await sendToApp(url, item.referrer, baseName(item.filename), PATIENT)) {
+      // A small file may have been finished by the browser while the app was starting: then it is left alone.
+      const [now] = await api.downloads.search({ id: item.id });
+      if (now && now.state === "complete") return;
       await api.downloads.cancel(item.id);
       await api.downloads.erase({ id: item.id });
       confirm(undefined);

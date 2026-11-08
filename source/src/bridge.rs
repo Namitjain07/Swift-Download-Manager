@@ -5,10 +5,10 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const PORT: u16 = 9614;
 
@@ -105,15 +105,188 @@ pub fn allowed(host: Option<&str>, origin: Option<&str>, fetch_site: Option<&str
 }
 
 
-/// Start the local listener. Fails when another copy of the app already listens.
-pub fn start_listener_with(port: u16, inbox: Inbox, link: Link, ctx: eframe::egui::Context) -> Result<(), String> {
-    let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
-    thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let _ = handle(stream, &inbox, &link, &ctx);
+/// What the add-on's door is doing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ListenerStatus {
+    /// Not started: switched off, or this process has no door to keep.
+    Off,
+    /// Started, but something else has the port for now (the window that is closing, or the background process that is
+    /// handing over). It keeps trying and takes the port by itself as soon as it is free. Holds what the system said.
+    Waiting(String),
+    Listening,
+}
+
+struct Shared {
+    stop: AtomicBool,
+    status: Mutex<ListenerStatus>,
+    /// The thread that accepts has let go of the port.
+    closed: AtomicBool,
+    /// Requests being answered right now.
+    open: AtomicUsize,
+}
+
+impl Shared {
+    fn status(&self) -> MutexGuard<'_, ListenerStatus> {
+        self.status.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn stopping(&self) -> bool {
+        self.stop.load(Ordering::Acquire)
+    }
+}
+
+/// The local door of the add-on (127.0.0.1 only). One process owns it at a time; the window and the background process
+/// pass it to each other, so a door that finds the port taken waits for it instead of giving up for good, and a door
+/// that is dropped gives the port back at once (the next owner starts a moment later, and the add-on tries again for a
+/// few seconds, see `browser-extension/background.js`).
+pub struct Listener {
+    port: u16,
+    shared: Arc<Shared>,
+}
+
+/// A request that is being answered: counted while it lives, even when its thread panics.
+struct Slot(Arc<Shared>);
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.open.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+const MAX_CONNECTIONS: usize = 32;
+
+impl Listener {
+    fn with_status(port: u16, status: ListenerStatus, closed: bool) -> Self {
+        Listener { port, shared: Arc::new(Shared { stop: AtomicBool::new(false), status: Mutex::new(status), closed: AtomicBool::new(closed), open: AtomicUsize::new(0) }) }
+    }
+
+    /// No door (switched off, or not started yet).
+    pub fn off() -> Self {
+        Self::with_status(0, ListenerStatus::Off, true)
+    }
+
+    /// Says it is listening without doing so (the sample window of the screenshots).
+    pub fn pretend() -> Self {
+        Self::with_status(0, ListenerStatus::Listening, true)
+    }
+
+    /// Open the door. Returns at once: when the port is taken, the status says so and a thread tries again.
+    pub fn start(port: u16, inbox: Inbox, link: Link, ctx: eframe::egui::Context) -> Self {
+        // The first try is made here, so a free port is reported as listening from the very first frame.
+        let first = TcpListener::bind(("127.0.0.1", port));
+        let status = match &first {
+            Ok(_) => ListenerStatus::Listening,
+            Err(e) => ListenerStatus::Waiting(e.to_string()),
+        };
+        let this = Self::with_status(port, status, false);
+        let shared = this.shared.clone();
+        let spawned = thread::Builder::new().name("sdm-bridge".into()).spawn({
+            let shared = shared.clone();
+            move || {
+                if let Some(listener) = first.ok().or_else(|| wait_for_port(port, &shared)) {
+                    if !shared.stopping() {
+                        *shared.status() = ListenerStatus::Listening;
+                        accept_loop(&listener, &shared, &inbox, &link, &ctx);
+                    }
+                    drop(listener);
+                }
+                shared.closed.store(true, Ordering::Release);
+            }
+        });
+        if let Err(e) = spawned {
+            *shared.status() = ListenerStatus::Waiting(format!("could not start a thread: {e}"));
+            shared.closed.store(true, Ordering::Release);
         }
-    });
-    Ok(())
+        this
+    }
+
+    pub fn status(&self) -> ListenerStatus {
+        self.shared.status().clone()
+    }
+
+    /// Started (listening, or waiting for the port).
+    pub fn is_on(&self) -> bool {
+        *self.shared.status() != ListenerStatus::Off
+    }
+
+    pub fn is_listening(&self) -> bool {
+        *self.shared.status() == ListenerStatus::Listening
+    }
+
+    /// Close the door and give the port back: it can be bound again as soon as this returns. Requests that were already
+    /// being answered are given a moment to finish, so a link that was accepted is in the inbox when this returns.
+    pub fn stop(&mut self) {
+        self.shared.stop.store(true, Ordering::Release);
+        let until = Instant::now() + Duration::from_secs(1);
+        // `accept` blocks, so the thread is woken with a connection of our own (repeated, in case it was not
+        // blocking yet the first time).
+        while !self.shared.closed.load(Ordering::Acquire) && Instant::now() < until {
+            if self.is_listening() {
+                let _ = TcpStream::connect_timeout(&([127, 0, 0, 1], self.port).into(), Duration::from_millis(100));
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        let handlers_until = Instant::now() + Duration::from_millis(300);
+        while self.shared.open.load(Ordering::Acquire) > 0 && Instant::now() < handlers_until {
+            thread::sleep(Duration::from_millis(5));
+        }
+        *self.shared.status() = ListenerStatus::Off;
+    }
+}
+
+impl Drop for Listener {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+/// Sleep, but wake up as soon as the listener is told to stop.
+fn sleep_unless_stopped(shared: &Shared, total: Duration) {
+    let until = Instant::now() + total;
+    while !shared.stopping() && Instant::now() < until {
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// The port is taken: try again, quickly at first (a closing window lets go within a moment), then once a second for as
+/// long as this process runs, so the door opens by itself whenever the other copy is gone. None when told to stop.
+fn wait_for_port(port: u16, shared: &Shared) -> Option<TcpListener> {
+    let started = Instant::now();
+    loop {
+        sleep_unless_stopped(shared, if started.elapsed() < Duration::from_secs(10) { Duration::from_millis(100) } else { Duration::from_secs(1) });
+        if shared.stopping() {
+            return None;
+        }
+        match TcpListener::bind(("127.0.0.1", port)) {
+            Ok(l) => return Some(l),
+            Err(e) => *shared.status() = ListenerStatus::Waiting(e.to_string()),
+        }
+    }
+}
+
+/// Answer every request on a thread of its own, so a client that connects and says nothing (a browser warming up a
+/// connection) cannot keep the add-on waiting.
+fn accept_loop(listener: &TcpListener, shared: &Arc<Shared>, inbox: &Inbox, link: &Link, ctx: &eframe::egui::Context) {
+    for stream in listener.incoming() {
+        if shared.stopping() {
+            break;
+        }
+        let Ok(stream) = stream else {
+            thread::sleep(Duration::from_millis(50));
+            continue;
+        };
+        if shared.open.fetch_add(1, Ordering::AcqRel) >= MAX_CONNECTIONS {
+            shared.open.fetch_sub(1, Ordering::AcqRel);
+            continue;
+        }
+        let slot = Slot(shared.clone());
+        let (inbox, link, ctx) = (inbox.clone(), link.clone(), ctx.clone());
+        // When no thread can be made the closure is dropped with its slot, which gives the count back.
+        let _ = thread::Builder::new().name("sdm-bridge-request".into()).spawn(move || {
+            let _slot = slot;
+            let _ = handle(stream, &inbox, &link, &ctx);
+        });
+    }
 }
 
 fn push(inbox: &Inbox, query: &str, url: String, src: Source) {
@@ -180,6 +353,9 @@ fn handle(mut s: TcpStream, inbox: &Inbox, link: &Link, ctx: &eframe::egui::Cont
         ("GET", "/ping") => ("200 OK", "text/plain", "swift-download-manager".to_string()),
         // What the pop-up of the add-on shows: the running downloads.
         ("GET", "/status") => {
+            // An idle window repaints only every 15 seconds, and the snapshot is made while it draws: asking wakes it, so the
+            // next answer (the pop-up asks once a second) is fresh.
+            ctx.request_repaint();
             let json = link.status.lock().unwrap().clone();
             ("200 OK", "application/json", if json.is_empty() { "{}".to_string() } else { json })
         }
@@ -298,7 +474,8 @@ mod tests {
     fn listener_accepts_links_from_browser_and_second_copy() {
         let inbox: Inbox = Arc::new(Mutex::new(Vec::new()));
         let port = 39614;
-        start_listener_with(port, inbox.clone(), Link::default(), eframe::egui::Context::default()).unwrap();
+        let door = Listener::start(port, inbox.clone(), Link::default(), eframe::egui::Context::default());
+        assert_eq!(door.status(), ListenerStatus::Listening);
         // A second copy of the app hands its link over.
         assert!(send_to_running(port, "https://example.com/a file.zip"));
         // The browser add-on posts a form.
@@ -365,7 +542,7 @@ mod access_tests {
         let link = Link::default();
         *link.status.lock().unwrap() = r#"{"active":2}"#.to_string();
         let port = 39616;
-        start_listener_with(port, inbox.clone(), link.clone(), eframe::egui::Context::default()).unwrap();
+        let _door = Listener::start(port, inbox.clone(), link.clone(), eframe::egui::Context::default());
         let ext = [("Origin", "chrome-extension://abc"), ("Sec-Fetch-Site", "none")];
 
         // The pop-up asks what is going on: it is told, and the answer carries the extension's origin back.
@@ -394,5 +571,158 @@ mod access_tests {
         assert!(ask(port, "POST", "/control", &ext, "cmd=pause").contains("400"), "a pause without a download");
         assert!(ask(port, "POST", "/control", &ext, "cmd=format-disk").contains("400"));
         assert_eq!(*link.commands.lock().unwrap(), vec![Command::Pause(7), Command::ResumeAll, Command::Open]);
+    }
+}
+
+#[cfg(test)]
+mod door_tests {
+    use super::*;
+
+    fn free_port() -> u16 {
+        TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port()
+    }
+
+    fn new_inbox() -> Inbox {
+        Arc::new(Mutex::new(Vec::new()))
+    }
+
+    fn open(port: u16, inbox: &Inbox) -> Listener {
+        Listener::start(port, inbox.clone(), Link::default(), eframe::egui::Context::default())
+    }
+
+    fn wait_for(what: &str, ready: impl Fn() -> bool) {
+        for _ in 0..400 {
+            if ready() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("gave up waiting for: {what}");
+    }
+
+    #[test]
+    fn a_door_that_finds_the_port_taken_waits_and_opens_by_itself() {
+        let port = free_port();
+        let other_copy = TcpListener::bind(("127.0.0.1", port)).unwrap();
+        let inbox = new_inbox();
+        let door = open(port, &inbox);
+        assert!(matches!(door.status(), ListenerStatus::Waiting(_)), "the port is taken: {:?}", door.status());
+        assert!(door.is_on() && !door.is_listening());
+        // The other copy goes away (a window that has finished closing).
+        drop(other_copy);
+        wait_for("the door to open once the port is free", || door.is_listening());
+        assert!(send_to_running(port, "https://example.com/late.zip"), "answers once it listens");
+        assert_eq!(inbox.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn dropping_the_door_gives_the_port_back_at_once() {
+        let port = free_port();
+        let door = open(port, &new_inbox());
+        assert_eq!(door.status(), ListenerStatus::Listening);
+        assert!(send_to_running(port, "https://example.com/a.zip"));
+        drop(door);
+        // Nothing to wait for: the next owner (the background process) can bind right now.
+        let next = TcpListener::bind(("127.0.0.1", port)).expect("the port is free as soon as the door is dropped");
+        drop(next);
+        assert!(!send_to_running(port, "https://example.com/b.zip"), "nobody listens any more");
+    }
+
+    #[test]
+    fn a_door_that_is_waiting_can_be_dropped_too() {
+        let port = free_port();
+        let other_copy = TcpListener::bind(("127.0.0.1", port)).unwrap();
+        let door = open(port, &new_inbox());
+        let started = Instant::now();
+        drop(door);
+        assert!(started.elapsed() < Duration::from_millis(500), "dropping a waiting door does not wait for the port: {:?}", started.elapsed());
+        // It really stopped: it does not grab the port when it frees up.
+        drop(other_copy);
+        thread::sleep(Duration::from_millis(300));
+        TcpListener::bind(("127.0.0.1", port)).expect("a dropped door must not take the port later");
+    }
+
+    #[test]
+    fn the_doors_of_a_hand_over_follow_each_other() {
+        // The window has the port, the background process starts and waits, the window lets go, the background process
+        // answers: the add-on talks to whoever has the door, with only a short gap.
+        let port = free_port();
+        let (window_inbox, background_inbox) = (new_inbox(), new_inbox());
+        let window = open(port, &window_inbox);
+        let background = open(port, &background_inbox);
+        assert_eq!(window.status(), ListenerStatus::Listening);
+        assert!(matches!(background.status(), ListenerStatus::Waiting(_)));
+        assert!(send_to_running(port, "https://example.com/one.zip"));
+        assert_eq!((window_inbox.lock().unwrap().len(), background_inbox.lock().unwrap().len()), (1, 0));
+
+        drop(window);
+        wait_for("the background process to take the port", || background.is_listening());
+        assert!(send_to_running(port, "https://example.com/two.zip"));
+        assert_eq!(background_inbox.lock().unwrap().iter().map(|i| i.url.as_str()).collect::<Vec<_>>(), ["https://example.com/two.zip"]);
+    }
+
+    #[test]
+    fn a_client_that_says_nothing_does_not_keep_the_others_waiting() {
+        let port = free_port();
+        let inbox = new_inbox();
+        let _door = open(port, &inbox);
+        // A browser warming up a connection: it connects and sends nothing (the door waits 3 s for it to speak).
+        let _silent: Vec<TcpStream> = (0..3).map(|_| TcpStream::connect(("127.0.0.1", port)).unwrap()).collect();
+        let started = Instant::now();
+        assert!(send_to_running(port, "https://example.com/quick.zip"));
+        assert!(started.elapsed() < Duration::from_secs(1), "answered in {:?}", started.elapsed());
+        assert_eq!(inbox.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_link_that_was_accepted_is_in_the_inbox_when_the_door_has_closed() {
+        let port = free_port();
+        let inbox = new_inbox();
+        let mut door = open(port, &inbox);
+        // Many links at once, then close at once: whatever was answered "added" must be there.
+        let senders: Vec<_> = (0..8).map(|n| thread::spawn(move || send_to_running(port, &format!("https://example.com/{n}.zip")))).collect();
+        door.stop();
+        let accepted = senders.into_iter().map(|t| t.join().unwrap()).filter(|ok| *ok).count();
+        assert_eq!(inbox.lock().unwrap().len(), accepted, "every link the add-on was told about is kept");
+        assert_eq!(door.status(), ListenerStatus::Off);
+    }
+
+    #[test]
+    fn a_door_that_is_off_or_pretending_does_nothing() {
+        let mut off = Listener::off();
+        assert_eq!(off.status(), ListenerStatus::Off);
+        assert!(!off.is_on());
+        off.stop();
+        let mut shown = Listener::pretend();
+        assert!(shown.is_listening() && shown.is_on());
+        shown.stop();
+        assert_eq!(shown.status(), ListenerStatus::Off);
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::*;
+
+    #[test]
+    fn asking_for_the_status_wakes_an_idle_window_so_the_next_answer_is_fresh() {
+        let port = TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
+        let ctx = eframe::egui::Context::default();
+        let _door = Listener::start(port, Arc::new(Mutex::new(Vec::new())), Link::default(), ctx.clone());
+        // A frame has been drawn and nothing else is wanted: the window sleeps.
+        for _ in 0..5 {
+            let mut frame = ctx.run_ui(Default::default(), |_| {});
+            frame.textures_delta.clear();
+            if !ctx.has_requested_repaint() {
+                break;
+            }
+        }
+        assert!(!ctx.has_requested_repaint(), "a window with nothing to do sleeps");
+        let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(s, "GET /status HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).unwrap();
+        assert!(resp.contains("200 OK"), "{resp}");
+        assert!(ctx.has_requested_repaint(), "asking for the status wakes the window, which then refreshes the snapshot");
     }
 }

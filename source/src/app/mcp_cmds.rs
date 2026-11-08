@@ -398,6 +398,10 @@ impl App {
 
     /// Another process is about to take over: pause what runs, remember it, save and let go.
     pub fn prepare_handoff(&mut self) {
+        // The door of the browser add-on first: nothing new comes in after this, and what already came in is added now.
+        // (The add-on has taken those downloads away from the browser, so a link that is only in the inbox would be lost.)
+        self.stop_browser_listener();
+        self.flush_incoming();
         self.handoff_queues = self.running.iter().cloned().collect();
         for item in &mut self.items {
             if item.status().is_active() {
