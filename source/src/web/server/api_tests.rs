@@ -217,7 +217,7 @@ fn a_token_follows_its_account_it_stops_when_the_account_is_removed_and_rights_a
 
 // ---------------------------------------------------------------- managing accounts from the page
 
-fn usage_answer(c: &Command) -> Result<Value, String> {
+fn usage_answer(c: &Command) -> Result<Value, crate::mcp::error::ToolError> {
     match c {
         Command::Usage => Ok(json!({ "users": [
             { "name": "anna", "downloads": 3, "active": 1, "complete": 2, "downloaded_bytes": 5000, "speed_bytes_per_sec": 1200.0 },

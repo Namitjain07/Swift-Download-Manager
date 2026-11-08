@@ -309,8 +309,8 @@ fn ask(state: &Shared, who: &Who, cmd: Command) -> Result<Value, (u16, String)> 
     state.ctx.request_repaint();
     match wait.recv_timeout(Duration::from_secs(10)) {
         Ok(Ok(v)) => Ok(v),
-        Ok(Err(m)) if m.contains("No download with id") => Err((404, m)),
-        Ok(Err(m)) => Err((400, m)),
+        Ok(Err(e)) if e.kind == crate::mcp::error::ErrorKind::NotFound => Err((404, e.message)),
+        Ok(Err(e)) => Err((400, e.message)),
         Err(_) => Err((504, "the app did not answer in time".into())),
     }
 }

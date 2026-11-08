@@ -5,6 +5,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### AI assistants (MCP): more tools, more control, safer
+- **21 tools** (were 10): `add_downloads` (up to 200 links at once), `pause_all`, `resume_all`, `move_download`, `probe_link` (look at a link before adding
+  it: does it answer, size, type, name, can it be resumed), `verify_download` (check a finished file's SHA-256 in the background), `get_settings`,
+  `get_audit_log`, and at the full level `set_speed_limit`, `list_networks` and `clear_completed`. Also **MCP resources** (`sdm://status`,
+  `sdm://downloads`, `sdm://queues`, `sdm://settings`, `sdm://download/{id}`) and four **prompts**; tools answer with text and `structuredContent`
+- **You decide what an assistant may do** (Options > AI assistants, or Help > AI assistants…): an **access level** (look only, standard, full), lists of sites
+  it may or may not use, **refusal of private networks, localhost and the cloud metadata address** (on by default, checked as text and again when the
+  connection is made, so redirects and DNS tricks are caught), "their downloads wait until I start them", a limit on downloads an hour, and a **log** of
+  what assistants did (`mcp-audit.log`, shown in the window, with no passwords or keys). `--mcp --read-only` or `--level` limits a single connection
+- **Errors that help**: every failure says its kind (`invalid_argument`, `not_found`, `forbidden`, `disabled`, `rate_limited`, `busy`, `conflict`,
+  `unreachable`), what is wrong and what to do; arguments are checked against the tool's schema (unknown names, wrong types, too long); a bug in one
+  command ends that call and not the session
+- **Security**: the access level and the site rules are enforced by the app, not left to the client; names, descriptions and error texts from remote servers are
+  cleaned (no control or hidden characters, a sensible length) before an assistant reads them; at most 120 changes a minute; a message may be at most
+  1 MiB (a longer line is skipped as it arrives instead of being held in memory); at most 16 requests are answered at once at the control door; the
+  settings an assistant can read hold no proxy, login or key. Settings from older versions get these safe defaults
+
 ### Building for many platforms with Docker (`make cross`)
 - **One Docker image builds the program for 22 platforms**: Linux on Intel/AMD, ARM (32 and 64 bit), RISC-V, POWER, IBM Z and LoongArch, linked against an
   old glibc so it runs on old distributions, and static musl builds for servers; Windows on x64, x86 and ARM; FreeBSD and NetBSD. Zig is the linker

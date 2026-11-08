@@ -316,9 +316,10 @@ USB or hotspot connection. A download is then spread over all of them.
 ## Use it from an AI assistant (MCP)
 
 Swift Download Manager speaks the [Model Context Protocol](https://modelcontextprotocol.io), so an assistant such as Claude
-can look at your downloads and manage them for you ("download this video", "pause everything", "what is still running?").
+can look at your downloads and manage them for you ("download this video", "pause everything", "what is still running?",
+"is this link what it says it is?").
 
-<img src="docs/images/ai-assistants.png" alt="The AI assistants window: a switch, the live state, and copy-ready setup text for Claude Code and Claude Desktop" width="520">
+<img src="docs/images/ai-assistants.png" alt="The AI assistants window: the switch, its state and the setup text for Claude Code and Claude Desktop" width="400"> <img src="docs/images/ai-assistants-controls.png" alt="The same window further down: the lists of sites assistants may and may not use, and a log of what they did, with a refused request in amber" width="400">
 
 **Connect it.** The assistant starts the program itself with `--mcp`. The app shows these commands with the right path
 filled in under **Help → AI assistants…**.
@@ -333,18 +334,44 @@ filled in under **Help → AI assistants…**.
 ```
 
 On Windows use the path of `SwiftDownloadManager.exe`. (`--mcp` talks over standard input and output, which relies on the
-assistant starting the program with pipes, as MCP clients do.)
+assistant starting the program with pipes, as MCP clients do.) To limit **one connection**, add `--read-only` or
+`--level read|standard|full` after `--mcp`, for example `"args": ["--mcp", "--read-only"]`. That can only lower what the
+settings of the app allow, never raise it.
 
-**What it can do.** Ten tools; assistants that support it ask you before each action unless you tell them not to.
+**What it can do.** 21 tools. Assistants that support it ask you before each action unless you tell them not to; the
+**access level** (below) decides what each connection may do at all.
 
-| Tool | What it does |
+| Tool | Level | What it does |
+| --- | --- | --- |
+| `list_downloads`, `get_download` | look | See downloads, their progress, speed and errors |
+| `get_status`, `list_queues`, `get_settings` | look | Overall state; queues and their schedules; the settings that matter (no passwords, proxies or logins) |
+| `probe_link` | look | Check a link without downloading it: does it answer, how big, what type, what name, can it be resumed |
+| `get_audit_log` | look | What assistants did recently |
+| `add_download`, `add_downloads` | standard | Start downloads from `http(s)` links (up to 200 at once); saved in the folder of their category |
+| `pause_download`, `resume_download`, `pause_all`, `resume_all` | standard | Pause or resume one download, or all of them (through the queues) |
+| `start_queue`, `stop_queue`, `move_download` | standard | Run or stop a queue; move a download to another queue |
+| `verify_download` | standard | Check a finished file against a SHA-256, in the background |
+| `remove_download` | standard | Take a download off the list (marked destructive so clients ask first; no file is deleted) |
+| `set_speed_limit`, `list_networks`, `clear_completed` | full | The overall speed limit; the networks of this computer; take every finished download off the list |
+
+It also offers **resources** (`sdm://status`, `sdm://downloads`, `sdm://queues`, `sdm://settings`, and
+`sdm://download/{id}`) and four **prompts** (download these links, what is going on, retry what failed, tidy the list).
+Every tool returns text and structured JSON. When a call fails, the assistant is told the *kind* of problem
+(`invalid_argument`, `not_found`, `forbidden`, `disabled`, `rate_limited`, `busy`, `conflict`, `unreachable`), what is
+wrong and what to do about it, so it can correct itself or come back later instead of guessing. Arguments are checked
+against the tool's schema first: unknown names, wrong types and sizes that are too big are refused with a message.
+
+**You decide what it may do** (Options → AI assistants, or Help → AI assistants…). The app enforces all of this on every
+call; it does not rely on the assistant behaving:
+
+| Setting | What it does |
 | --- | --- |
-| `list_downloads`, `get_download` | See downloads, their progress, speed and errors (read-only) |
-| `get_status`, `list_queues` | Overall state; queues and their schedules (read-only) |
-| `add_download` | Start a download from an `http(s)` link; saved in the folder of its category |
-| `pause_download`, `resume_download` | Pause or resume one download |
-| `start_queue`, `stop_queue` | Run or stop a queue |
-| `remove_download` | Take a download off the list (marked as destructive so clients ask first) |
+| **Access level** | *Look only*, *Standard* (the default: also add, pause, resume, move and remove) or *Full* (also the speed limit, the networks and clearing finished downloads) |
+| **Refuse private networks and this computer** (on) | Links to your router, to `localhost`, to other machines in your network and to the cloud "metadata" address are refused, as text and again when the connection is made (so redirects and names that change their answer are caught) |
+| **Only these sites / never these sites** | A list of sites (and their subdomains) assistants may use, and a list they never may |
+| **Their downloads wait until I start them** | What an assistant adds is queued and does not begin by itself |
+| **Most downloads an hour** (60) | A limit on adding; at most 120 changes a minute are accepted in any case |
+| **Keep a log** (on) | `mcp-audit.log` in the settings folder: when, which tool, on what (links without password or query), how it ended. The newest are shown in the window |
 
 **With or without the window.** If the window is open, the assistant works in it and you see changes live. If it is
 closed, the assistant runs the downloads itself in the background. Opening the window while a download is running pauses it,
@@ -355,10 +382,15 @@ redrawing it, a request can time out after 10 seconds with a message saying so; 
 - It is on by default; switch it off under **Options** or **Help → AI assistants…** and every request is refused.
 - An assistant can never delete files from your disk (not even partly downloaded ones) and cannot choose where a file is
   saved: the folder always comes from the file's category. Only `http` and `https` links are accepted.
+- A web page or a document an assistant reads can try to talk it into things ("prompt injection"). That is why the rules
+  above are enforced here and not left to the assistant, why file names, descriptions and error texts that come from remote
+  servers are cleaned (no control or hidden characters, a sensible length) before an assistant sees them, and why the
+  instructions tell it to treat them as data. If a call is refused, the assistant is told to ask you.
 - The window listens only on your own computer, on a random port, and only answers requests that carry a secret token stored in
-  your settings folder (`mcp-token`, readable only by you). Requests that come from a web page are refused. This is separate
-  from the browser add-on's listener.
-- Passwords and cookies are never shown to the assistant.
+  your settings folder (`mcp-token`, readable only by you). Requests that come from a web page are refused, and only a
+  few are answered at the same time. This is separate from the browser add-on's listener.
+- A message from a client may be at most 1 MiB, and a bug in one command ends that call, not the session.
+- Passwords and cookies are never shown to the assistant, and neither are proxy addresses or saved site logins.
 
 ## Download
 
@@ -524,7 +556,7 @@ Want one of them? [Open an issue](https://github.com/Namitjain07/Swift-Download-
 - [x] Spots videos and sounds that a page plays
 
 **AI assistants (MCP)**
-- [x] MCP server with ten tools to list, add, pause, resume and remove downloads and to run queues
+- [x] MCP server with 21 tools, resources and prompts, an access level, site lists, private-address protection, limits and a log (see above)
 - [x] Works with or without the window, and hands downloads over mid-download
 - [x] Safety rules: an off switch, a secret token, no file deletion, no choosing folders, no passwords shown
 
@@ -594,7 +626,7 @@ bad connection, and offline copies.
 - [ ] **Telegram and Discord bot**: send a link, the server at home downloads it
 - [ ] **Home Assistant**, **n8n** and **Zapier** connectors
 - [ ] **Explorer "Send to"**, and plug-ins for Raycast, Alfred and PowerToys Run
-- [ ] More **MCP tools**: resolve a package name, verify a checksum, set a speed limit, search a feed
+- [ ] More **MCP tools**: resolve a package name to a download link, search a feed
 
 ### Planned: a plugin system
 

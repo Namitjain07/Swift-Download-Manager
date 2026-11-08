@@ -141,7 +141,7 @@ impl App {
             user_agent: item.user_agent.clone(),
             routes,
             net_source,
-            block_private: self.settings.block_private,
+            block_private: self.settings.block_private || item.guard_private,
         };
         engine::start(job, item.live.clone(), item.limiter.clone(), self.ctx.clone());
         self.dirty = true;

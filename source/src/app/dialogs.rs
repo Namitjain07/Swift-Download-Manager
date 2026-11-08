@@ -652,7 +652,7 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
     hint(ui, "Running in the background keeps downloads, queues and the browser add-on going, with an icon in the tray.");
     section_title(ui, "AI assistants");
     card(ui, |g| {
-        g.toggle("Let AI assistants add, pause and remove downloads (MCP)", Some("They cannot delete files or choose folders. Setup: Help > AI assistants…"), &mut s.mcp_enabled);
+        g.toggle("Let AI assistants add, pause and remove downloads (MCP)", Some("They cannot delete files or choose folders. What they may do, limits and setup: Help > AI assistants…"), &mut s.mcp_enabled);
     });
     ui.add_space(10.0);
     disclosure(ui, "opt_categories", "Categories (file types and folders)", |ui| {

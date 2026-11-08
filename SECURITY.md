@@ -44,7 +44,12 @@ Reports about these are especially welcome:
 - the browser add-on's permissions and what it sends to the app
 - the MCP control door used by AI assistants (`--mcp`): it listens only on `127.0.0.1` on a random port, needs the
   secret token from `mcp-token` in the settings folder, and must refuse web pages (an `Origin` header, a foreign
-  `Host`) and oversized requests; assistants must never be able to delete files, choose a folder or read passwords
+  `Host`) and oversized requests; assistants must never be able to delete files, choose a folder or read passwords.
+  Also what an assistant can be talked into by a page or a document it read (prompt injection): the access level and the
+  site lists must hold whatever the client does; links to private networks, `localhost` and the cloud metadata address
+  must be refused, including through redirects and changing DNS answers; the limits on adding and changing; names and
+  errors from remote servers reaching an assistant uncleaned; and anything that makes the audit log (`mcp-audit.log`)
+  hold a password or an access key
 - the web interface (`Options > Web interface`, and `--server` with the Docker image): the sign-in and session cookie,
   the per-person separation of downloads and files (nobody may see, change or fetch somebody else's), the
   `Host`/`Origin`/`X-SDM-Request` checks that keep other web pages out, the page's content security policy and anything that lets a

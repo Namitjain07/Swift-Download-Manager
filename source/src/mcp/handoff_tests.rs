@@ -20,7 +20,8 @@ fn scratch(name: &str) -> PathBuf {
 
 /// Settings that keep the download slow enough to hand over half way.
 fn write_settings(dir: &Path, folder: &Path) {
-    let state = json!({ "settings": { "folder": folder, "limit_on": true, "limit_kbps": 1500 }, "next_id": 1, "items": [] });
+    // The test server is on this computer, which assistants may not reach unless allowed.
+    let state = json!({ "settings": { "folder": folder, "limit_on": true, "limit_kbps": 1500, "mcp_block_private": false }, "next_id": 1, "items": [] });
     std::fs::write(dir.join("downloads.json"), state.to_string()).unwrap();
 }
 

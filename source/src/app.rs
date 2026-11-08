@@ -221,6 +221,19 @@ pub struct Settings {
     pub launch_at_login: bool,
     /// Let AI assistants look at and control downloads through MCP (Options > AI assistants).
     pub mcp_enabled: bool,
+    /// What assistants may do: look only, the usual (add, pause, resume, move, remove), or also the speed limit and networks.
+    pub mcp_level: crate::mcp::policy::Level,
+    /// Sites assistants may download from, with their subdomains (empty: any public site), and sites they never may.
+    pub mcp_allow_hosts: Vec<String>,
+    pub mcp_block_hosts: Vec<String>,
+    /// Refuse links to private networks and to this computer for assistants (a page an assistant read could try to aim it there).
+    pub mcp_block_private: bool,
+    /// What an assistant adds waits in its queue until the person starts it.
+    pub mcp_hold: bool,
+    /// The most downloads an assistant may add in an hour; 0 means no limit.
+    pub mcp_adds_per_hour: u32,
+    /// Keep a log of what assistants did (mcp-audit.log in the settings folder).
+    pub mcp_audit: bool,
     /// Download over several networks at once (Options > Networks).
     pub multi_network: bool,
     /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
@@ -263,6 +276,13 @@ impl Default for Settings {
             background: closing::BackgroundMode::Ask,
             launch_at_login: false,
             mcp_enabled: true,
+            mcp_level: crate::mcp::policy::Level::Standard,
+            mcp_allow_hosts: Vec::new(),
+            mcp_block_hosts: Vec::new(),
+            mcp_block_private: true,
+            mcp_hold: false,
+            mcp_adds_per_hour: 60,
+            mcp_audit: true,
             multi_network: false,
             networks: Vec::new(),
             networks_auto: false,
@@ -318,6 +338,8 @@ struct SavedItem {
     handoff_resume: bool,
     #[serde(default)]
     owner: String,
+    #[serde(default)]
+    guard_private: bool,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -361,6 +383,8 @@ pub struct Item {
     handoff_resume: bool,
     /// On a shared server: whose download this is (empty on a personal computer).
     owner: String,
+    /// Added by an AI assistant with private addresses refused: the connection (and every redirect) is checked too.
+    guard_private: bool,
     speed: f64,
     last_bytes: u64,
     last_status: Status,
@@ -396,6 +420,7 @@ impl Item {
             limiter: Arc::new(Limiter::chained(overall.clone())),
             handoff_resume: false,
             owner: String::new(),
+            guard_private: false,
             speed: 0.0,
             last_bytes,
             last_status,
@@ -592,6 +617,13 @@ pub struct App {
     handoff_queues: Vec<String>,
     /// When an AI assistant last used this app (for the status bar).
     last_ai_call: Option<Instant>,
+    /// When assistants added downloads, and when they changed anything (for the limits on how often they may).
+    ai_adds: crate::mcp::policy::Window,
+    ai_changes: crate::mcp::policy::Window,
+    /// What assistants did recently (the AI assistants window and the get_audit_log tool).
+    ai_log: crate::mcp::audit::Log,
+    /// The site lists as they are being typed in the AI assistants window (they are cleaned up when typing stops).
+    ai_sites_text: Option<(String, String)>,
     ai_open: bool,
     /// The window is really closing (not going to the background or asking).
     quitting: bool,
@@ -673,6 +705,10 @@ impl App {
             state_lock: None,
             handoff_queues: Vec::new(),
             last_ai_call: None,
+            ai_adds: Default::default(),
+            ai_changes: Default::default(),
+            ai_log: Default::default(),
+            ai_sites_text: None,
             ai_open: false,
             ctx,
         };
@@ -778,6 +814,7 @@ impl App {
     }
 
     fn load(&mut self) {
+        self.ai_log = crate::mcp::audit::Log::load(&self.config_dir);
         let Ok(text) = std::fs::read_to_string(self.state_file()) else { return };
         let Ok(state) = serde_json::from_str::<SavedState>(&text) else { return };
         self.settings = state.settings;
@@ -804,6 +841,7 @@ impl App {
             item.set_limit(s.limit_kbps);
             item.handoff_resume = s.handoff_resume;
             item.owner = s.owner;
+            item.guard_private = s.guard_private;
             self.items.push(item);
         }
         self.fix_settings();
@@ -870,6 +908,7 @@ impl App {
                 limit_kbps: i.limit_kbps,
                 handoff_resume: i.handoff_resume,
                 owner: i.owner.clone(),
+                guard_private: i.guard_private,
             })
             .collect();
         let state = SavedState { settings: self.settings.clone(), next_id: self.next_id, items, handoff_queues: self.handoff_queues.clone() };
@@ -888,6 +927,16 @@ impl App {
     /// Sample rows for `--demo` / `--screenshot`, so the window shows its whole layout.
     /// Nothing is downloaded or saved in this mode.
     fn load_demo(&mut self) {
+        // Sample activity of an assistant, for the AI assistants window.
+        for (at, tool, detail, error) in [
+            ("2026-11-08 09:41:07", "add_download", "https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso", None),
+            ("2026-11-08 09:41:09", "probe_link", "https://example.com/conference-talk.webm", None),
+            ("2026-11-08 09:42:31", "add_download", "http://192.168.0.1/admin/backup.bin", Some("forbidden")),
+            ("2026-11-08 09:44:02", "pause_download", "download 5", None),
+            ("2026-11-08 09:47:45", "move_download", "download 6 -> Night", None),
+        ] {
+            self.ai_log.push(crate::mcp::audit::Entry { at: at.into(), tool: tool.into(), detail: detail.into(), ok: error.is_none(), error: error.map(str::to_string) });
+        }
         let rows: [(&str, u64, f64, Status, Option<f64>, &str); 9] = [
             ("ubuntu-24.04-desktop-amd64.iso", 6_114_656_256, 0.4123, Status::Downloading, Some(4_620_000.0), "Sample: OS image"),
             ("project-report-final.pdf", 2_457_600, 1.0, Status::Complete, None, "SHA-256 matches"),

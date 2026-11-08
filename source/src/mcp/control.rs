@@ -5,6 +5,7 @@
 //! token from `mcp-token`, and anything that looks like it came from a web page is refused.
 
 use super::command::Command;
+use super::error::ToolError;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -18,11 +19,13 @@ use std::time::Duration;
 const MAX_BODY: usize = 64 * 1024;
 const MAX_LINE: usize = 8 * 1024;
 const MAX_HEADERS: usize = 64;
+/// How many requests are answered at the same time; more are told to come back (a local program cannot flood the door with threads).
+const MAX_CONNECTIONS: usize = 16;
 
 /// A command on its way to the app, with a place to send the answer.
 pub struct Request {
     pub cmd: Command,
-    pub reply: Sender<Result<Value, String>>,
+    pub reply: Sender<Result<Value, ToolError>>,
     /// Set for the web interface; `None` for an AI assistant (MCP).
     pub who: Option<super::command::Who>,
 }
@@ -41,7 +44,7 @@ pub enum CallError {
     /// Nothing is listening: no window (or engine) is open.
     NoApp,
     /// The app answered, and the command itself failed (unknown id, MCP turned off, ...).
-    Tool(String),
+    Tool(ToolError),
     /// The app could not be reached properly.
     Other(String),
 }
@@ -126,11 +129,19 @@ pub fn start(dir: &Path, tx: Sender<Request>, ctx: egui::Context, mode: &str) ->
     let port = listener.local_addr()?.port();
     let info = ControlInfo { port, pid: std::process::id(), mode: mode.to_string() };
     write_info(dir, &info)?;
+    let busy = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
-            let (tx, ctx, token) = (tx.clone(), ctx.clone(), token.clone());
+            // Only so many at once: past that, the caller is told to come back instead of getting a thread of its own.
+            if busy.fetch_add(1, std::sync::atomic::Ordering::SeqCst) >= MAX_CONNECTIONS {
+                busy.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                let _ = respond(&stream, "503 Service Unavailable", &json!({ "error": "too many requests at once", "kind": "busy" }));
+                continue;
+            }
+            let (tx, ctx, token, busy) = (tx.clone(), ctx.clone(), token.clone(), busy.clone());
             std::thread::spawn(move || {
                 let _ = handle(stream, port, &token, &tx, &ctx);
+                busy.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
             });
         }
     });
@@ -203,7 +214,7 @@ fn handle(stream: TcpStream, port: u16, token: &str, tx: &Sender<Request>, ctx: 
             ctx.request_repaint();
             match answer.recv_timeout(Duration::from_secs(10)) {
                 Ok(Ok(v)) => respond(&stream, "200 OK", &json!({ "ok": v })),
-                Ok(Err(m)) => respond(&stream, "200 OK", &json!({ "error": m })),
+                Ok(Err(e)) => respond(&stream, "200 OK", &json!({ "error": e.message, "kind": e.kind, "hint": e.hint })),
                 Err(_) => respond(&stream, "504 Gateway Timeout", &json!({ "error": "the app did not answer in time (is its window hidden?)" })),
             }
         }
@@ -240,9 +251,19 @@ pub fn call_with_timeout(dir: &Path, cmd: &Command, timeout: Duration) -> Result
     match code {
         "200" => match (payload.get("ok"), payload.get("error").and_then(Value::as_str)) {
             (Some(v), _) => Ok(v.clone()),
-            (None, Some(m)) => Err(CallError::Tool(m.to_string())),
+            (None, Some(m)) => {
+                // The kind and the hint travel with the message; an older app sends only the message.
+                let kind = payload.get("kind").and_then(Value::as_str).and_then(super::error::ErrorKind::parse);
+                let mut e = ToolError::from(m.to_string());
+                if let Some(kind) = kind {
+                    e.kind = kind;
+                }
+                e.hint = payload.get("hint").and_then(Value::as_str).map(str::to_string);
+                Err(CallError::Tool(e))
+            }
             _ => Err(CallError::Other("the app sent an answer that could not be understood".into())),
         },
+        "503" => Err(CallError::Tool(ToolError::new(super::error::ErrorKind::Busy, "The app is answering too many requests at once. Try again in a moment."))),
         "401" | "403" => Err(CallError::Other("the app refused the request (token or address mismatch)".into())),
         _ => Err(CallError::Other(payload.get("error").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("the app answered HTTP {code}")))),
     }
@@ -264,7 +285,7 @@ mod tests {
     }
 
     /// A listener whose requests are answered by `answer`.
-    fn serve(name: &str, answer: fn(&Command) -> Result<Value, String>) -> (std::path::PathBuf, ControlInfo) {
+    fn serve(name: &str, answer: fn(&Command) -> Result<Value, ToolError>) -> (std::path::PathBuf, ControlInfo) {
         let dir = scratch(name);
         let (tx, rx) = mpsc::channel::<Request>();
         let info = start(&dir, tx, eframe::egui::Context::default(), "window").unwrap();
@@ -277,7 +298,7 @@ mod tests {
         (dir, info)
     }
 
-    fn echo(cmd: &Command) -> Result<Value, String> {
+    fn echo(cmd: &Command) -> Result<Value, ToolError> {
         Ok(json!({ "got": format!("{cmd:?}") }))
     }
 

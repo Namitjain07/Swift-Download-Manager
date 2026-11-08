@@ -14,7 +14,7 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 /// A stand-in for the app: records who asked what, and answers from `answer`.
-fn fake_app(answer: impl Fn(&Command) -> Result<Value, String> + Send + 'static) -> (Sender<Request>, Log) {
+fn fake_app(answer: impl Fn(&Command) -> Result<Value, crate::mcp::error::ToolError> + Send + 'static) -> (Sender<Request>, Log) {
     let (tx, rx) = mpsc::channel::<Request>();
     let log: Log = Arc::default();
     let seen = log.clone();
@@ -27,7 +27,7 @@ fn fake_app(answer: impl Fn(&Command) -> Result<Value, String> + Send + 'static)
     (tx, log)
 }
 
-fn ok_everything(_: &Command) -> Result<Value, String> {
+fn ok_everything(_: &Command) -> Result<Value, crate::mcp::error::ToolError> {
     Ok(json!({ "fine": true }))
 }
 
@@ -37,7 +37,7 @@ struct Site {
     dir: PathBuf,
 }
 
-fn site_with(name: &str, mode: Mode, users: &[(&str, &str, bool)], answer: impl Fn(&Command) -> Result<Value, String> + Send + 'static) -> Site {
+fn site_with(name: &str, mode: Mode, users: &[(&str, &str, bool)], answer: impl Fn(&Command) -> Result<Value, crate::mcp::error::ToolError> + Send + 'static) -> Site {
     let dir = scratch(name);
     let mut store = Users::load(&dir);
     for (n, p, a) in users {
@@ -306,7 +306,7 @@ fn a_personal_page_has_no_login() {
 
 // ---------------------------------------------------------------- files
 
-fn file_answer(path: &Path, name: &'static str) -> impl Fn(&Command) -> Result<Value, String> + Send + 'static {
+fn file_answer(path: &Path, name: &'static str) -> impl Fn(&Command) -> Result<Value, crate::mcp::error::ToolError> + Send + 'static {
     let path = path.display().to_string();
     move |c| match c {
         Command::Locate { id: 1 } => Ok(json!({ "path": path, "name": name, "size": 26 })),
