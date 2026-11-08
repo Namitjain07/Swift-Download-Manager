@@ -473,6 +473,9 @@ impl App {
                 self.check_updates(true);
             }
         }
+        if menu_item(ui, "Report a bug…", "", true).clicked() {
+            open_path(std::path::Path::new(&updates::report_bug_url()));
+        }
         if menu_item(ui, "About", "", true).clicked() {
             self.about_open = true;
         }

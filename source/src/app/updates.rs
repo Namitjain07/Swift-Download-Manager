@@ -446,3 +446,59 @@ impl App {
         self.updates.open = true;
     }
 }
+
+/// The system, as the bug report form on the website names it (its options are fixed there).
+fn system_name() -> &'static str {
+    if cfg!(windows) {
+        // `ver` says "Microsoft Windows [Version 10.0.22631.4460]": build 22000 and later is Windows 11.
+        let build = std::process::Command::new("cmd").args(["/C", "ver"]).output().ok().and_then(|o| String::from_utf8_lossy(&o.stdout).split('.').nth(2).and_then(|b| b.trim().parse::<u32>().ok())).unwrap_or(0);
+        if build >= 22000 { "Windows 11" } else { "Windows 10" }
+    } else if cfg!(target_os = "macos") {
+        "macOS"
+    } else if cfg!(target_os = "linux") {
+        let release = std::fs::read_to_string("/etc/os-release").unwrap_or_default().to_ascii_lowercase();
+        if release.contains("debian") || release.contains("ubuntu") || release.contains("mint") { "Ubuntu / Debian / Mint" } else { "Other Linux" }
+    } else {
+        "Other"
+    }
+}
+
+/// How this copy was installed, in the words of the bug report form.
+fn install_name() -> &'static str {
+    match Install::detect() {
+        Install::WindowsInstalled => "Windows installer (setup .exe)",
+        Install::WindowsPortable => "SwiftDownloadManager.exe (Windows)",
+        Install::LinuxDeb => "Linux .deb",
+        Install::LinuxArch => "Arch package",
+        Install::Other => "Other",
+    }
+}
+
+/// The address of the website's bug report page with the version and the system already filled in.
+pub fn report_bug_url() -> String {
+    format!(
+        "https://namitjain07.github.io/Swift-Download-Manager/report-bug/?version={}&system={}&install={}",
+        crate::bridge::url_encode(env!("CARGO_PKG_VERSION")),
+        crate::bridge::url_encode(system_name()),
+        crate::bridge::url_encode(install_name())
+    )
+}
+
+#[cfg(test)]
+mod report_tests {
+    use super::*;
+
+    #[test]
+    fn the_bug_report_link_carries_the_version_and_the_system() {
+        let url = report_bug_url();
+        assert!(url.starts_with("https://namitjain07.github.io/Swift-Download-Manager/report-bug/?version="), "{url}");
+        assert!(url.contains(&format!("version={}", env!("CARGO_PKG_VERSION"))));
+        let parsed = url::Url::parse(&url).unwrap();
+        let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+        // The values are among the options of the form (site/report-bug/index.html), spelled the same.
+        let systems = ["Windows 11", "Windows 10", "Ubuntu / Debian / Mint", "Other Linux", "macOS", "Other"];
+        assert!(systems.contains(&pairs["system"].as_str()), "{pairs:?}");
+        let installs = ["Windows installer (setup .exe)", "SwiftDownloadManager.exe (Windows)", "Windows .zip", "Linux .deb", "Arch package", "Docker image", "Built from the source myself", "Other"];
+        assert!(installs.contains(&pairs["install"].as_str()), "{pairs:?}");
+    }
+}
