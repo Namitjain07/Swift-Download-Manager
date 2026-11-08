@@ -16,6 +16,10 @@ use crate::netroute::{Lease, Route, Router};
 /// Parts smaller than twice this are not split again.
 const MIN_SPLIT: u64 = 512 * 1024;
 
+/// How long a connection may be silent (no byte arrives) before it counts as broken. This is a limit on
+/// silence, not on the whole transfer: a connection that keeps delivering may run for hours.
+const STALL: Duration = Duration::from_secs(if cfg!(test) { 3 } else { 30 });
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Status {
     Queued,
@@ -116,6 +120,29 @@ pub struct Live {
     pub note: Mutex<Option<String>>,
     /// The networks this download is spread over, while it runs with more than one chosen.
     pub router: Mutex<Option<Arc<Router>>>,
+    /// Which run of the download is the current one. Every `start` begins a new one, so connections of an
+    /// earlier run that are still winding down (a pause, then a resume) never touch the new run's numbers.
+    epoch: AtomicU64,
+    /// How many connections are waiting to try again right now (`note` only says so while there are some).
+    waiting: AtomicU64,
+}
+
+/// A connection waiting to try again. While at least one waits, the note says why; when the last one
+/// goes on (or gives up) the note goes away, so a download that has recovered stops saying "retry 1".
+struct Wait<'a>(&'a Live);
+
+impl Drop for Wait<'_> {
+    fn drop(&mut self) {
+        if self.0.waiting.fetch_sub(1, Ordering::SeqCst) == 1 {
+            *lock(&self.0.note) = None;
+        }
+    }
+}
+
+/// A lock that still works after another thread panicked while holding it (a download must stay
+/// removable and its numbers readable even then).
+pub fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 impl Live {
@@ -132,16 +159,74 @@ impl Live {
             connections: AtomicU64::new(0),
             note: Mutex::new(None),
             router: Mutex::new(None),
+            epoch: AtomicU64::new(0),
+            waiting: AtomicU64::new(0),
         })
     }
     pub fn status(&self) -> Status {
-        *self.status.lock().unwrap()
+        *lock(&self.status)
     }
     fn set_status(&self, s: Status) {
-        *self.status.lock().unwrap() = s;
+        *lock(&self.status) = s;
     }
+    /// What to say next to the status while something unusual is going on (a retry, a busy server).
+    pub fn note(&self) -> Option<String> {
+        if self.waiting.load(Ordering::Relaxed) == 0 { None } else { lock(&self.note).clone() }
+    }
+    /// Say why a connection is waiting; the note lasts as long as the returned guard.
+    fn wait(&self, text: String) -> Wait<'_> {
+        *lock(&self.note) = Some(text);
+        self.waiting.fetch_add(1, Ordering::SeqCst);
+        Wait(self)
+    }
+    /// Ask the current run to stop (it winds down by itself) and show the download as paused at once.
+    pub fn pause_now(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if self.status().is_active() {
+            self.set_status(Status::Paused);
+        }
+    }
+}
+
+/// One run of a download: the shared state plus which run it is. Everything a run does to the download
+/// goes through it, so a run that was replaced by a newer one can no longer change anything.
+#[derive(Clone)]
+pub struct Run {
+    live: Arc<Live>,
+    epoch: u64,
+    ctx: eframe::egui::Context,
+}
+
+impl std::ops::Deref for Run {
+    type Target = Live;
+    fn deref(&self) -> &Live {
+        &self.live
+    }
+}
+
+impl Run {
+    /// Still the newest run of this download.
+    fn current(&self) -> bool {
+        self.live.epoch.load(Ordering::SeqCst) == self.epoch
+    }
+    /// Told to stop, or replaced by a newer run.
     fn stopped(&self) -> bool {
-        self.stop.load(Ordering::SeqCst)
+        self.live.stop.load(Ordering::SeqCst) || !self.current()
+    }
+    /// A state while running (connecting, downloading): not once the run was told to stop, because the
+    /// person already sees "paused".
+    fn set_status(&self, s: Status) {
+        if !self.stopped() {
+            self.live.set_status(s);
+            self.ctx.request_repaint();
+        }
+    }
+    /// The state the run ends in. Only the newest run may say it.
+    fn end_with(&self, s: Status) {
+        if self.current() {
+            self.live.set_status(s);
+        }
+        self.ctx.request_repaint();
     }
 }
 
@@ -186,7 +271,8 @@ fn agent(job: &Job, route: Option<&Route>) -> Result<ureq::Agent, String> {
         .http_status_as_error(false)
         .proxy(proxy)
         .timeout_connect(Some(Duration::from_secs(20)))
-        .timeout_recv_body(Some(Duration::from_secs(60)))
+        .timeout_recv_response(Some(STALL))
+        .timeout_per_read(Some(STALL))
         .user_agent("SwiftDownloadManager/1.0")
         .build();
     Ok(if route.is_some() || job.block_private { crate::netroute::agent(config, route, job.block_private) } else { config.into() })
@@ -267,21 +353,31 @@ fn take_route(router: &Arc<Router>) -> Result<Option<Lease>, String> {
     router.acquire().map(Some).ok_or_else(|| "None of the chosen networks is working right now".to_string())
 }
 
-/// Sleep for the retry delay, waking early when the download is paused.
-fn retry_pause(live: &Live, attempt: u32) {
-    *live.note.lock().unwrap() = Some(format!("Connection problem, retry {attempt}…"));
-    for _ in 0..20 {
+/// How long to wait before retry number `attempt` (1, 2, 3 ...): half a second, then twice as long each
+/// time, never more than 15 seconds. A connection that simply timed out after running for a long time
+/// is back after half a second; a server that is really down is not hammered.
+fn backoff(attempt: u32) -> Duration {
+    Duration::from_millis((500u64 << attempt.saturating_sub(1).min(5)).min(15_000))
+}
+
+/// Sleep for the retry delay, waking early when the download is paused. While it waits the status says so.
+fn retry_pause(live: &Run, attempt: u32) {
+    let _waiting = live.wait(format!("Connection problem, retry {attempt}…"));
+    live.ctx.request_repaint();
+    let mut left = backoff(attempt);
+    while left > Duration::ZERO {
         if live.stopped() {
             return;
         }
-        thread::sleep(Duration::from_millis(100));
+        let step = left.min(Duration::from_millis(100));
+        thread::sleep(step);
+        left -= step;
     }
 }
 
 /// Wait before trying again, except when another network can take over right away.
-fn retry_after_failure(live: &Live, attempt: u32, router: &Router) {
+fn retry_after_failure(live: &Run, attempt: u32, router: &Router) {
     if router.usable() > 0 && router.len() > 1 {
-        *live.note.lock().unwrap() = Some("A network is not working, using the others…".into());
         return;
     }
     retry_pause(live, attempt);
@@ -292,26 +388,33 @@ type Reuse = (Box<dyn Read + Send>, Option<Lease>);
 
 /// Start (or resume) a download on a background thread.
 pub fn start(job: Job, live: Arc<Live>, limiter: Arc<Limiter>, ctx: eframe::egui::Context) {
+    // A new run: connections of an earlier one that are still winding down are now strangers to it.
+    let epoch = live.epoch.fetch_add(1, Ordering::SeqCst) + 1;
     live.stop.store(false, Ordering::SeqCst);
-    *live.error.lock().unwrap() = None;
-    *live.note.lock().unwrap() = None;
+    live.waiting.store(0, Ordering::SeqCst);
+    *lock(&live.error) = None;
+    *lock(&live.note) = None;
     live.set_status(Status::Connecting);
+    ctx.request_repaint();
+    let me = Run { live, epoch, ctx };
     thread::spawn(move || {
         let job = Arc::new(job);
-        let result = run(&job, &live, &limiter);
-        live.connections.store(0, Ordering::SeqCst);
-        *live.router.lock().unwrap() = None;
-        *live.note.lock().unwrap() = None;
+        let result = run(&job, &me, &limiter);
+        if me.current() {
+            *lock(&me.router) = None;
+            *lock(&me.note) = None;
+        }
         match result {
-            Ok(true) => live.set_status(Status::Complete),
-            Ok(false) => live.set_status(Status::Paused),
-            Err(_) if live.stopped() => live.set_status(Status::Paused),
+            Ok(true) => me.end_with(Status::Complete),
+            Ok(false) => me.end_with(Status::Paused),
+            Err(_) if me.stopped() => me.end_with(Status::Paused),
             Err(e) => {
-                *live.error.lock().unwrap() = Some(e);
-                live.set_status(Status::Error);
+                if me.current() {
+                    *lock(&me.error) = Some(e);
+                }
+                me.end_with(Status::Error);
             }
         }
-        ctx.request_repaint();
     });
 }
 
@@ -376,11 +479,11 @@ fn header(resp: &ureq::http::Response<ureq::Body>, name: &str) -> Option<String>
 }
 
 /// Returns Ok(true) when finished, Ok(false) when paused.
-fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool, String> {
-    let have_segments = !live.segments.lock().unwrap().is_empty();
+fn run(job: &Arc<Job>, live: &Run, limiter: &Arc<Limiter>) -> Result<bool, String> {
+    let have_segments = !lock(&live.segments).is_empty();
     let router = Router::new(job.routes.clone());
     if router.len() > 0 || job.net_source.is_some() {
-        *live.router.lock().unwrap() = Some(router.clone());
+        *lock(&live.router) = Some(router.clone());
     }
     // A network that comes up while the download is still being set up is taken into use too.
     let mut last_look = Instant::now() - NET_LOOK;
@@ -420,7 +523,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
             }
         }
     };
-    *live.note.lock().unwrap() = None;
+    *lock(&live.note) = None;
     let mut job = (**job).clone();
     if job.accept_server_name {
         if let Some(n) = header(&resp, "content-disposition").and_then(|v| name_from_disposition(&v)) {
@@ -432,7 +535,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
                     candidate = dir.join(numbered(&n, k));
                     k += 1;
                 }
-                *live.file_name.lock().unwrap() = candidate.file_name().map(|s| s.to_string_lossy().into_owned());
+                *lock(&live.file_name) = candidate.file_name().map(|s| s.to_string_lossy().into_owned());
                 job.target = candidate;
             }
         }
@@ -461,7 +564,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
         let segs = (0..n)
             .map(|i| Segment { start: i * size, end: if i == n - 1 { total - 1 } else { (i + 1) * size - 1 }, done: 0 })
             .collect();
-        *live.segments.lock().unwrap() = segs;
+        *lock(&live.segments) = segs;
         live.downloaded.store(0, Ordering::SeqCst);
         let f = File::create(&tmp).map_err(|e| format!("Cannot create file: {e}"))?;
         f.set_len(total).map_err(|e| format!("Cannot reserve space: {e}"))?;
@@ -472,7 +575,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
     }
 
     // Plain single stream (server cannot resume): on a broken connection start over.
-    live.segments.lock().unwrap().clear();
+    lock(&live.segments).clear();
     let mut reader: Box<dyn Read + Send> = Box::new(resp.into_body().into_reader());
     let mut attempt = 0;
     loop {
@@ -505,7 +608,7 @@ fn run(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>) -> Result<bool,
     Ok(true)
 }
 
-fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Live, limiter: &Limiter, lease: Option<&Lease>) -> Result<bool, String> {
+fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Run, limiter: &Limiter, lease: Option<&Lease>) -> Result<bool, String> {
     let mut f = File::create(tmp).map_err(|e| format!("Cannot create file: {e}"))?;
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -515,6 +618,9 @@ fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Live, lim
         let n = reader.read(&mut buf).map_err(|e| format!("Connection lost: {e}"))?;
         if n == 0 {
             return Ok(true);
+        }
+        if live.stopped() {
+            return Ok(false);
         }
         limiter.take(n);
         f.write_all(&buf[..n]).map_err(|e| format!("Write failed: {e}"))?;
@@ -527,7 +633,7 @@ fn single_stream(reader: &mut Box<dyn Read + Send>, tmp: &Path, live: &Live, lim
 
 /// Split the part with the most bytes left in two; returns the new part's index.
 fn split_largest(live: &Live) -> Option<usize> {
-    let mut segs = live.segments.lock().unwrap();
+    let mut segs = lock(&live.segments);
     let (idx, rem) = segs.iter().enumerate().map(|(i, s)| (i, s.remaining())).max_by_key(|(_, r)| *r)?;
     if rem < MIN_SPLIT * 2 {
         return None;
@@ -548,7 +654,7 @@ enum End {
     Failed(String),
 }
 
-fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, router: &Arc<Router>, mut first: Option<Reuse>) -> Result<bool, String> {
+fn run_segments(job: &Arc<Job>, live: &Run, limiter: &Arc<Limiter>, router: &Arc<Router>, mut first: Option<Reuse>) -> Result<bool, String> {
     let tmp = temp_path(&job.target);
     let (tx, rx) = mpsc::channel::<(usize, End)>();
     // Lowered when the server says it has too many connections from us.
@@ -565,13 +671,13 @@ fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, router
         });
     };
     let next_unstarted = |running: &Vec<usize>| {
-        let segs = live.segments.lock().unwrap();
+        let segs = lock(&live.segments);
         (0..segs.len()).find(|i| !segs[*i].finished() && !running.contains(i))
     };
 
     while running.len() < max {
         let Some(idx) = next_unstarted(&running) else { break };
-        let seg_fresh = live.segments.lock().unwrap()[idx].done == 0;
+        let seg_fresh = lock(&live.segments)[idx].done == 0;
         let reuse = if idx == 0 && seg_fresh { first.take() } else { None };
         spawn(idx, reuse);
         running.push(idx);
@@ -638,7 +744,7 @@ fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, router
         live.stop.store(false, Ordering::SeqCst);
         return Err(e);
     }
-    let all_done = live.segments.lock().unwrap().iter().all(|s| s.finished());
+    let all_done = lock(&live.segments).iter().all(|s| s.finished());
     if !all_done {
         return Ok(false);
     }
@@ -647,8 +753,9 @@ fn run_segments(job: &Arc<Job>, live: &Arc<Live>, limiter: &Arc<Limiter>, router
 }
 
 /// Wait while the server is busy, waking early when the download is paused.
-fn busy_pause(live: &Live, secs: u64) {
-    *live.note.lock().unwrap() = Some(format!("Server is busy, trying again in {secs} s…"));
+fn busy_pause(live: &Run, secs: u64) {
+    let _waiting = live.wait(format!("Server is busy, trying again in {secs} s…"));
+    live.ctx.request_repaint();
     for _ in 0..secs * 10 {
         if live.stopped() {
             return;
@@ -657,7 +764,7 @@ fn busy_pause(live: &Live, secs: u64) {
     }
 }
 
-fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: &Arc<Limiter>, router: &Arc<Router>, mut reuse: Option<Reuse>) -> End {
+fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Run, limiter: &Arc<Limiter>, router: &Arc<Router>, mut reuse: Option<Reuse>) -> End {
     let mut f = match OpenOptions::new().write(true).open(tmp) {
         Ok(f) => f,
         Err(e) => return End::Failed(format!("Cannot open file: {e}")),
@@ -668,7 +775,7 @@ fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: 
             return End::Done;
         }
         let (pos, end) = {
-            let s = &live.segments.lock().unwrap()[idx];
+            let s = &lock(&live.segments)[idx];
             if s.finished() {
                 return End::Done;
             }
@@ -746,14 +853,14 @@ fn segment_worker(idx: usize, job: &Job, tmp: &Path, live: &Arc<Live>, limiter: 
 
 /// Copy bytes for one part until it is complete. Progress resets the retry counter.
 #[allow(clippy::too_many_arguments)]
-fn pump(idx: usize, r: &mut Box<dyn Read + Send>, f: &mut File, pos: u64, live: &Live, limiter: &Limiter, attempt: &mut u32, lease: Option<&Lease>) -> Result<(), String> {
+fn pump(idx: usize, r: &mut Box<dyn Read + Send>, f: &mut File, pos: u64, live: &Run, limiter: &Limiter, attempt: &mut u32, lease: Option<&Lease>) -> Result<(), String> {
     f.seek(SeekFrom::Start(pos)).map_err(|e| e.to_string())?;
     let mut buf = vec![0u8; 64 * 1024];
     loop {
         if live.stopped() {
             return Ok(());
         }
-        let remaining = live.segments.lock().unwrap()[idx].remaining();
+        let remaining = lock(&live.segments)[idx].remaining();
         if remaining == 0 {
             return Ok(());
         }
@@ -762,9 +869,13 @@ fn pump(idx: usize, r: &mut Box<dyn Read + Send>, f: &mut File, pos: u64, live: 
         if n == 0 {
             return Err("connection closed early".into());
         }
+        // A run that was stopped (or replaced) while this read was blocked must not write or count what arrived.
+        if live.stopped() {
+            return Ok(());
+        }
         limiter.take(n);
         f.write_all(&buf[..n]).map_err(|e| format!("write failed: {e}"))?;
-        live.segments.lock().unwrap()[idx].done += n as u64;
+        lock(&live.segments)[idx].done += n as u64;
         live.downloaded.fetch_add(n as u64, Ordering::SeqCst);
         if let Some(l) = lease {
             l.add_bytes(n as u64);

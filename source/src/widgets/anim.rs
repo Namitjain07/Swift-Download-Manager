@@ -64,6 +64,52 @@ pub fn glide(ctx: &egui::Context, id: Id, target: f32, secs: f32) -> f32 {
     cur
 }
 
+
+/// Whether the window is on screen and in use: a hidden or minimized window needs no animation frames, and one in
+/// the background only a few.
+pub fn window_state(ctx: &egui::Context) -> (bool, bool) {
+    ctx.input(|i| {
+        let vp = i.viewport();
+        (vp.minimized != Some(true), vp.focused != Some(false))
+    })
+}
+
+/// Ask for the next frame of an animation that follows live data: about 30 times a second while the window is
+/// in use, 4 times a second when it is behind other windows, not at all when it is minimized. (`request_repaint`
+/// would draw every card again as fast as the machine can, which is what made many downloads at once stutter.)
+pub fn repaint_soon(ctx: &egui::Context) {
+    let (visible, focused) = window_state(ctx);
+    if visible {
+        ctx.request_repaint_after(std::time::Duration::from_millis(if focused { 33 } else { 250 }));
+    }
+}
+
+/// One step of an exponential approach: `cur` moves towards `target` by the share of the way that `dt` seconds
+/// make out of the time constant `tau`. The same result however often it is called, so the motion does not speed
+/// up or slow down with the frame rate (`dt` is capped so that a long pause does not become one big jump).
+pub fn approach(cur: f32, target: f32, dt: f64, tau: f32) -> f32 {
+    let dt = dt.clamp(0.0, 0.25) as f32;
+    cur + (target - cur) * (1.0 - (-dt / tau.max(0.001)).exp())
+}
+
+/// A number that follows `target` smoothly, for values that change all the time (progress, speed). Unlike `glide`
+/// it does not start a new tween whenever the target moves, and it asks for frames at 30 a second, not all of them.
+/// The first call jumps straight to `target`.
+pub fn smooth(ctx: &egui::Context, id: Id, target: f32, tau: f32) -> f32 {
+    let now = ctx.input(|i| i.time);
+    let Some((cur, at)) = ctx.data(|d| d.get_temp::<(f32, f64)>(id)) else {
+        ctx.data_mut(|d| d.insert_temp(id, (target, now)));
+        return target;
+    };
+    // The same frame asked twice (two passes) changes nothing.
+    let next = if now > at { approach(cur, target, now - at, tau) } else { cur };
+    ctx.data_mut(|d| d.insert_temp(id, (next, now.max(at))));
+    if (next - target).abs() > 0.0005 {
+        repaint_soon(ctx);
+    }
+    next
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,6 +170,42 @@ mod tests {
         // Closed for a frame, then opened again.
         frame(&ctx, 2.0, false);
         assert_eq!(frame(&ctx, 2.1, true), Some(0.0), "a reopened dialog animates in again");
+    }
+
+    #[test]
+    fn approaching_a_target_takes_the_same_path_however_many_frames_it_is_cut_into() {
+        // One 100 ms step, or ten of 10 ms: the same place, so 20 and 120 frames a second look alike.
+        let one = approach(0.0, 1.0, 0.1, 0.2);
+        let ten = (0..10).fold(0.0, |v, _| approach(v, 1.0, 0.01, 0.2));
+        assert!((one - ten).abs() < 0.001, "{one} vs {ten}");
+        assert!(one > 0.3 && one < 0.5, "a tenth of a second on a 0.2 s constant: {one}");
+        // Never overshoots, and a long pause is not one giant leap (capped at a quarter second).
+        assert!(approach(0.0, 1.0, 60.0, 0.2) < 0.75);
+        assert_eq!(approach(0.7, 0.7, 1.0, 0.2), 0.7);
+        assert_eq!(approach(0.0, 1.0, -5.0, 0.2), 0.0, "time never runs backwards");
+    }
+
+    #[test]
+    fn smooth_starts_at_the_target_and_then_trails_it_without_asking_for_every_frame() {
+        let ctx = egui::Context::default();
+        let id = Id::unique("smooth");
+        let at = |time: f64, target: f32| {
+            let mut raw = crate::theme::testing::input(egui::vec2(100.0, 100.0), vec![]);
+            raw.time = Some(time);
+            let mut v = 0.0;
+            let mut out = ctx.run_ui(raw, |ui| v = smooth(ui.ctx(), id, target, 0.2));
+            out.textures_delta.clear();
+            (v, out.viewport_output.values().next().map(|o| o.repaint_delay))
+        };
+        assert_eq!(at(1.0, 0.5).0, 0.5, "the first value is the target itself");
+        let (v, _) = at(1.05, 1.0);
+        assert!(v > 0.5 && v < 1.0, "trailing the target: {v}");
+        // After the pass that lays things out, what it asks for is a frame in about 30 ms, not "now".
+        let (_, delay) = at(1.05, 1.0);
+        let delay = delay.expect("a viewport output");
+        assert!(delay >= std::time::Duration::from_millis(30), "about 30 frames a second, not one per pass: {delay:?}");
+        // Same time again: no change.
+        assert_eq!(at(1.05, 1.0).0, v);
     }
 
     #[test]

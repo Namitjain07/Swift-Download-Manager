@@ -171,6 +171,14 @@ pub fn truncated(p: &egui::Painter, text: &str, font: FontId, color: Color32, ma
     p.layout_job(job)
 }
 
+/// Hover tooltip with the whole text for a line that `truncated` cut short with an ellipsis, so a long file name
+/// can always be read in full. Nothing happens when the whole text fits.
+pub fn elided_tooltip(ui: &Ui, galley: &egui::Galley, at: Pos2, full: &str, id_salt: impl Hash + std::fmt::Debug) {
+    if galley.elided {
+        ui.interact(Rect::from_min_size(at, galley.size()), ui.scope_id().with(("elided_tooltip", id_salt)), Sense::hover()).on_hover_text(full);
+    }
+}
+
 /// The main action of a dialog: solid coral.
 pub fn primary_button(ui: &mut Ui, label: &str) -> Response {
     super::button(ui, ButtonKind::Primary, label)

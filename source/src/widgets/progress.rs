@@ -1,6 +1,6 @@
 //! Capsule progress bars and the per-connection strip.
 
-use super::anim::glide;
+use super::anim::smooth;
 use crate::engine::Segment;
 use crate::theme;
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Id, Rect, Sense, Ui};
@@ -24,7 +24,7 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
     let (rect, _) = ui.allocate_exact_size(egui::vec2(w, height), Sense::hover());
     let ctx = ui.ctx().clone();
     let pal = theme::current(&ctx);
-    let shown = glide(&ctx, id.with("frac"), if frac.is_finite() { frac.clamp(0.0, 1.0) } else { 0.0 }, 0.22);
+    let shown = smooth(&ctx, id.with("frac"), if frac.is_finite() { frac.clamp(0.0, 1.0) } else { 0.0 }, 0.2);
     let p = ui.painter();
     if theme::design(&ctx).is_winui() && text.is_none() {
         // The WinUI 3 ProgressBar: a 3 px accent bar with rounded ends on a 1 px track line, both centred in the row.

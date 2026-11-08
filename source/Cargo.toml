@@ -6,7 +6,9 @@ description = "Swift Download Manager: a fast download manager with split downlo
 license = "MIT"
 
 [dependencies]
-eframe = "0.37"
+# Two ways to draw: OpenGL ("glow", light: about 50 MB of memory, no discrete GPU woken) is used first on Windows and Linux; "wgpu"
+# (Direct3D, Vulkan, Metal) is the first choice on macOS and the fallback where OpenGL cannot start (a remote desktop, some virtual machines).
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "links", "system_fonts", "wayland", "x11", "glow", "wgpu"] }
 egui_extras = "0.37"
 ureq = "3"
 serde = { version = "1", features = ["derive"] }

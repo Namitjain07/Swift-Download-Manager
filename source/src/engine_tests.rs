@@ -109,6 +109,8 @@ fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usi
         }
     }
     let total = data.len() as u64;
+    // "/crawl" is slower than "/slow": a transfer that takes longer than the silence limit, with bytes arriving all the time.
+    let delay = Duration::from_millis(if path.starts_with("/crawl") { 40 } else { 15 });
     let send = |s: &mut TcpStream, head: String, body: &[u8], slow: bool, cut: Option<usize>| {
         let _ = s.write_all(head.as_bytes());
         let body = match cut {
@@ -121,7 +123,7 @@ fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usi
             }
             *net.sent.lock().unwrap().entry(peer).or_default() += chunk.len() as u64;
             if slow {
-                thread::sleep(Duration::from_millis(15));
+                thread::sleep(delay);
             }
         }
     };
@@ -143,7 +145,7 @@ fn handle(mut s: TcpStream, data: &[u8], requests: &AtomicUsize, active_now: usi
         return;
     }
     // "/pernet": the network that comes from 127.0.0.2 is slow, the others are fast.
-    let slow = path.starts_with("/slow") || path.starts_with("/limited") || (path.starts_with("/pernet") && peer == "127.0.0.2".parse::<IpAddr>().unwrap());
+    let slow = path.starts_with("/slow") || path.starts_with("/crawl") || path.starts_with("/limited") || (path.starts_with("/pernet") && peer == "127.0.0.2".parse::<IpAddr>().unwrap());
     // Flaky: the first 6 requests break after 100 KB.
     let cut = if path.starts_with("/flaky") && n_req < 6 { Some(100 * 1024) } else { None };
     let extra = if path.starts_with("/named") {
@@ -555,4 +557,62 @@ fn a_download_that_starts_with_no_network_chosen_still_uses_one_that_appears_bef
     assert_eq!(wait(&live, 30), Status::Complete, "{:?}", live.error.lock().unwrap());
     assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
     assert!(srv.peers().iter().all(|p| *p == "127.0.0.2".parse::<IpAddr>().unwrap()), "{:?}", srv.peers());
+}
+
+#[test]
+fn a_transfer_that_keeps_delivering_is_never_cut_off_for_taking_long() {
+    // 5 MB at about 0.8 MB/s on one connection: a few seconds, more than the 2-3 s a connection may be silent.
+    // Bytes arrive all the time, so it must run on one connection from start to finish: no reconnects, no retries.
+    let srv = server();
+    let out = dir("crawl").join("file.bin");
+    let live = fresh();
+    let mut j = job(srv.url("/crawl/file.bin"), out.clone());
+    j.connections = 1;
+    let t = Instant::now();
+    go(j, &live, &Arc::new(Limiter::new()));
+    assert_eq!(wait(&live, 60), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert!(t.elapsed() > STALL, "the test is only worth something when the transfer outlasts the silence limit: {:?}", t.elapsed());
+    assert_eq!(srv.requests.load(Ordering::SeqCst), 1, "one connection, never reopened");
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
+}
+
+#[test]
+fn the_retry_note_lasts_only_while_a_connection_is_waiting() {
+    let live = fresh();
+    assert_eq!(live.note(), None);
+    let a = live.wait("Connection problem, retry 1…".into());
+    assert_eq!(live.note().as_deref(), Some("Connection problem, retry 1…"));
+    let b = live.wait("Server is busy, trying again in 2 s…".into());
+    drop(a);
+    assert!(live.note().is_some(), "one connection is still waiting");
+    drop(b);
+    assert_eq!(live.note(), None, "everybody went on: the download no longer claims a problem");
+}
+
+#[test]
+fn the_wait_before_a_retry_grows_and_stops_growing() {
+    let ms: Vec<u128> = (1..=8).map(|a| backoff(a).as_millis()).collect();
+    assert_eq!(ms, vec![500, 1000, 2000, 4000, 8000, 15000, 15000, 15000]);
+    assert_eq!(backoff(0).as_millis(), 500, "no attempt yet counts as the first");
+}
+
+#[test]
+fn a_paused_download_shows_paused_at_once_and_an_old_run_cannot_spoil_a_new_one() {
+    let srv = server();
+    let out = dir("resume-fast").join("file.bin");
+    let live = fresh();
+    let limiter = Arc::new(Limiter::new());
+    let j = job(srv.url("/slow/file.bin"), out.clone());
+    go(j.clone(), &live, &limiter);
+    let t = Instant::now();
+    while live.downloaded.load(Ordering::SeqCst) < 400 * 1024 && t.elapsed().as_secs() < 20 {
+        thread::sleep(Duration::from_millis(10));
+    }
+    live.pause_now();
+    assert_eq!(live.status(), Status::Paused, "the person sees it at once, not when the last connection notices");
+    // Resume straight away, while the connections of the first run are still winding down.
+    go(j, &live, &limiter);
+    assert_eq!(wait(&live, 60), Status::Complete, "{:?}", live.error.lock().unwrap());
+    assert_eq!(live.downloaded.load(Ordering::SeqCst), SIZE as u64, "nothing counted twice or lost");
+    assert_eq!(std::fs::read(&out).unwrap(), *srv.data);
 }

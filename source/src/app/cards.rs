@@ -6,7 +6,7 @@ use super::*;
 use crate::icons::{self, Icon};
 use crate::theme::Elevation;
 use crate::widgets::components::Art;
-use crate::widgets::{anim, capsule_bar, empty_state, icon_button_at, indeterminate_bar, paint_state_chip, stat_tile, truncated, Hue};
+use crate::widgets::{anim, capsule_bar, elided_tooltip, empty_state, icon_button_at, indeterminate_bar, paint_state_chip, stat_tile, truncated, Hue};
 use eframe::egui::{CornerRadius, FontId, Rect, Sense, Stroke, StrokeKind, Vec2};
 
 /// Height of one download card.
@@ -57,7 +57,7 @@ impl App {
         let active: Vec<&Item> = self.items.iter().filter(|i| i.status().is_active()).collect();
         let speed: f64 = active.iter().map(|i| i.speed()).sum();
         // The number glides to each new speed instead of jumping, so the tile stays calm.
-        let speed = anim::glide(ui.ctx(), egui::Id::unique("stat_speed"), speed as f32, 0.45).max(0.0) as f64;
+        let speed = anim::smooth(ui.ctx(), egui::Id::unique("stat_speed"), speed as f32, 0.35).max(0.0) as f64;
         let count = |s: Status| self.items.iter().filter(|i| i.status() == s).count();
         let (speed_text, unit) = split_speed(speed);
         let w = card_width(ui.available_width(), 4);
@@ -100,7 +100,15 @@ impl App {
             ui.spacing_mut().item_spacing = Vec2::splat(CARD_GAP);
             // Room for the shadows at the top and the bottom.
             ui.add_space(2.0);
+            // Only the rows in view are drawn; the others just take their room, so a list of hundreds of downloads
+            // costs no more to draw (and to animate) than the few cards that can be seen.
+            let view = ui.clip_rect();
             for chunk in rows.chunks(columns) {
+                let top = ui.cursor().top();
+                if top + CARD_H < view.top() - CARD_H || top > view.bottom() + CARD_H {
+                    ui.allocate_space(Vec2::new(ui.available_width(), CARD_H));
+                    continue;
+                }
                 ui.horizontal(|ui| {
                     for &idx in chunk {
                         self.download_card(ui, idx, width, modifiers, &queue_names, &mut ev);
@@ -162,6 +170,7 @@ impl App {
         let chip_w = paint_state_chip(&p, egui::pos2(right, rect.top() + PAD - 2.0), &pal, &d, hue, status_word);
 
         let name = truncated(&p, &item.name, FontId::new(15.0, theme::semibold()), pal.label, (right - left - chip_w - 10.0).max(40.0));
+        elided_tooltip(ui, &name, egui::pos2(left, rect.top() + PAD), &item.name, ("card_name", id));
         p.galley(egui::pos2(left, rect.top() + PAD), name, pal.label);
         let mut meta = if item.total() > 0 { human_size(item.total()) } else { "Size unknown".to_string() };
         meta.push_str(&format!(" · {}", item.category));
@@ -200,8 +209,11 @@ impl App {
         let line_cy = line_center_y(rect);
         let button_row = 3.0 * BUTTON + 2.0 * BUTTON_GAP;
         let line_x = rect.left() + PAD;
+        let line_text = line.clone();
         let line = truncated(&p, &line, FontId::proportional(d.caption + 0.5), line_color, (right - line_x - button_row - 8.0).max(60.0));
-        p.galley(egui::pos2(line_x, line_cy - line.size().y / 2.0), line, line_color);
+        let line_pos = egui::pos2(line_x, line_cy - line.size().y / 2.0);
+        elided_tooltip(ui, &line, line_pos, &line_text, ("card_line", id));
+        p.galley(line_pos, line, line_color);
 
         // Actions.
         let primary = match st {

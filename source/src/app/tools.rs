@@ -418,6 +418,7 @@ impl App {
                             let w = ui.available_width();
                             let g = truncated(ui.painter(), &item.name, FontId::new(16.0, theme::semibold()), pal.label, w);
                             let (rect, _) = ui.allocate_exact_size(g.size(), Sense::hover());
+                            crate::widgets::elided_tooltip(ui, &g, rect.min, &item.name, ("done_name", id));
                             ui.painter().galley(rect.min, g, pal.label);
                             ui.add(egui::Label::new(RichText::new(format!("{}  ·  {}", human_size(item.total()), item.folder.display())).size(12.5).color(pal.tertiary)).truncate());
                         });

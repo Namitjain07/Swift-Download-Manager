@@ -14,7 +14,7 @@ use egui_extras::{Column, TableBuilder};
 
 impl eframe::App for App {
     /// Closing the window keeps everything: an MCP client that is still attached takes over.
-    fn on_exit(&mut self) {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.save();
         self.close_control();
         // Let go of the download list so an MCP engine can pick it up at once.
@@ -832,6 +832,7 @@ impl App {
                         let cat = truncated(p, &item.category, egui::FontId::proportional(d.caption), pal.tertiary, max_w);
                         let top = rect.center().y - (name.size().y + cat.size().y) / 2.0;
                         let below = top + name.size().y;
+                        crate::widgets::elided_tooltip(ui, &name, egui::pos2(x, top), &item.name, ("row_name", item.id));
                         p.galley(egui::pos2(x, top), name, pal.label);
                         p.galley(egui::pos2(x, below), cat, pal.tertiary);
                     });

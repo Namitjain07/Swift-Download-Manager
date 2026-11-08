@@ -4,11 +4,10 @@
 //! up from the bottom. When it is finished the curves fade out and the file turns green with a tick.
 //! Flat colours only, everything is drawn with the painter, so it follows the theme.
 
-use super::anim::{fade, glide};
+use super::anim::{approach, fade, repaint_soon, smooth};
 use crate::icons::{self, Icon};
 use crate::theme;
 use eframe::egui::{self, vec2, CornerRadius, Id, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui};
-use std::time::Duration;
 
 /// More channels than this are drawn as an even sample: the picture stays readable.
 pub const MAX_CHANNELS: usize = 8;
@@ -102,10 +101,37 @@ pub fn node_radius(spacing: f32) -> f32 {
     (spacing / 2.0 - 1.5).clamp(2.5, 4.5)
 }
 
-/// How far along its curve packet `k` of a channel is at `time` seconds: 0 to 1, then round again.
-/// `phase` keeps the channels from moving in step; `speed` is laps per second.
-pub fn lap(time: f64, phase: f32, speed: f32, k: usize) -> f32 {
-    ((time as f32 * speed + phase + k as f32 / PACKETS as f32).rem_euclid(1.0)).clamp(0.0, 1.0)
+/// How far along its curve packet `k` of a channel is: 0 to 1, then round again. `phase` is how many laps the
+/// channel's packets have made so far (see `Motion`); the packets of one channel are a third of a lap apart.
+pub fn lap(phase: f32, k: usize) -> f32 {
+    (phase + k as f32 / PACKETS as f32).rem_euclid(1.0)
+}
+
+/// Where the packets of every channel are, kept from one frame to the next. A position is the sum of what each frame
+/// moved it, at the pace the channel has just then. (Working it out afresh from the clock, as `time * speed`, makes
+/// every packet jump whenever a speed changes, and the later in the session, the bigger the jump.)
+#[derive(Clone, Debug)]
+struct Motion {
+    at: f64,
+    phase: [f32; MAX_CHANNELS],
+    pace: [f32; MAX_CHANNELS],
+}
+
+impl Motion {
+    fn new(time: f64) -> Self {
+        Motion { at: time, phase: std::array::from_fn(|i| (i as f32 * 0.381_966).fract()), pace: [0.0; MAX_CHANNELS] }
+    }
+
+    /// Move on to `time`. `targets` is the pace (laps per second) each channel is heading for; the pace eases
+    /// there over about half a second. A long pause (a hidden window) counts as one short step, not a lot of laps.
+    fn step(&mut self, time: f64, targets: &[f32]) {
+        let dt = (time - self.at).clamp(0.0, 0.1);
+        self.at = time;
+        for (i, target) in targets.iter().take(MAX_CHANNELS).enumerate() {
+            self.pace[i] = approach(self.pace[i], *target, dt, 0.5);
+            self.phase[i] = (self.phase[i] + dt as f32 * self.pace[i]).rem_euclid(1.0);
+        }
+    }
 }
 
 fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
@@ -126,10 +152,20 @@ pub fn flow(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug, channe
     let id = Id::unique(("flow", id_salt));
     let time = ctx.input(|i| i.time);
     let progress = if progress.is_finite() { progress.clamp(0.0, 1.0) } else { 0.0 };
-    let shown = glide(&ctx, id.with("fill"), if state == State::Complete { 1.0 } else { progress }, 0.35);
+    let shown = smooth(&ctx, id.with("fill"), if state == State::Complete { 1.0 } else { progress }, 0.3);
     let done_k = fade(&ctx, id.with("done"), state == State::Complete, 0.4);
     let failed_k = fade(&ctx, id.with("failed"), state == State::Failed, 0.25);
     let channels = pick(channels);
+    // Where the packets are: moved on from where they were, never worked out afresh (see `Motion`).
+    let motion_key = id.with("motion");
+    let mut motion = ctx.data(|d| d.get_temp::<Motion>(motion_key)).unwrap_or_else(|| Motion::new(time));
+    if state == State::Running {
+        let targets: Vec<f32> = channels.iter().map(|c| if c.done { 0.0 } else { 0.3 + 0.9 * c.rate.clamp(0.0, 1.0) }).collect();
+        motion.step(time, &targets);
+    } else {
+        motion.at = time; // a pause is not a lap
+    }
+    ctx.data_mut(|d| d.insert_temp(motion_key, motion.clone()));
     let p = ui.painter().with_clip_rect(rect);
 
     // The file on the right, and the spot where all the curves meet.
@@ -149,10 +185,9 @@ pub fn flow(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug, channe
         let points: Vec<Pos2> = (0..=STEPS).map(|s| bezier(path, s as f32 / STEPS as f32)).collect();
         p.add(Shape::line(points, Stroke::new(1.5, line)));
         if live {
-            let speed = 0.3 + 0.9 * ch.rate.clamp(0.0, 1.0);
-            let phase = (i as f32 * 0.381_966).fract();
+            let phase = motion.phase[i.min(MAX_CHANNELS - 1)];
             for k in 0..PACKETS {
-                let t = lap(time, phase, speed, k);
+                let t = lap(phase, k);
                 let a = packet_alpha(t);
                 if a > 0.01 {
                     let r = (2.2 + 1.0 * ch.rate.clamp(0.0, 1.0)) * (1.0 - 0.4 * smoothstep(0.78, 1.0, t));
@@ -197,7 +232,7 @@ pub fn flow(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug, channe
     icons::draw_weight(&p, Rect::from_center_size(tile.center() + vec2(0.0, bob), vec2(side * 0.46, side * 0.46)), glyph, tint, true, matches!(state, State::Complete | State::Failed));
 
     if state == State::Running {
-        ctx.request_repaint_after(Duration::from_millis(16));
+        repaint_soon(&ctx);
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Image, true, "Data flowing into the file"));
     resp
@@ -307,23 +342,53 @@ mod tests {
     }
 
     #[test]
-    fn packets_travel_forward_and_are_spread_along_the_curve() {
-        for time in [0.0, 0.37, 5.0, 123.456] {
+    fn packets_are_spread_along_the_curve_and_always_inside_it() {
+        for phase in [0.0, 0.2, 0.37, 0.999] {
             for k in 0..PACKETS {
-                let t = lap(time, 0.2, 1.0, k);
-                assert!((0.0..=1.0).contains(&t), "{t}");
+                let t = lap(phase, k);
+                assert!((0.0..1.0).contains(&t), "{t}");
             }
         }
-        // Later in time, further along (until it wraps round).
-        assert!(lap(0.1, 0.0, 1.0, 0) < lap(0.2, 0.0, 1.0, 0));
         // The three packets of one channel are a third of a lap apart.
-        let a: Vec<f32> = (0..PACKETS).map(|k| lap(1.0, 0.0, 0.5, k)).collect();
+        let a: Vec<f32> = (0..PACKETS).map(|k| lap(0.0, k)).collect();
         let mut sorted = a.clone();
         sorted.sort_by(f32::total_cmp);
         assert!((sorted[1] - sorted[0] - 1.0 / 3.0).abs() < 0.001 && (sorted[2] - sorted[1] - 1.0 / 3.0).abs() < 0.001, "{a:?}");
-        // A faster channel gets further in the same time.
-        assert!(lap(0.2, 0.0, 1.2, 0) > lap(0.2, 0.0, 0.3, 0));
     }
+
+    #[test]
+    fn packets_move_on_from_where_they_were_and_never_jump_when_a_speed_changes() {
+        // The old way (position = time x speed) put the packets somewhere else whenever a speed changed: by
+        // time x change, so after ten minutes a 1 % change moved them six laps. Now each frame adds a small step.
+        let mut m = Motion::new(600.0);
+        let slow = [0.3, 0.3, 0.3];
+        let fast = [1.2, 0.3, 0.9];
+        let mut time = 600.0;
+        let mut worst = 0.0_f32;
+        for frame in 0..400 {
+            time += 0.016;
+            let before = m.phase;
+            m.step(time, if frame < 100 { &slow } else if frame < 250 { &fast } else { &slow });
+            for i in 0..3 {
+                let moved = (m.phase[i] - before[i]).rem_euclid(1.0);
+                worst = worst.max(moved.min(1.0 - moved));
+            }
+        }
+        assert!(worst < 1.2 * 0.016 + 0.002, "no frame moved a packet more than its pace allows: {worst}");
+        // A faster channel gets further in the same time.
+        let (mut a, mut b) = (Motion::new(0.0), Motion::new(0.0));
+        let (start_a, start_b) = (a.phase[0], b.phase[0]);
+        for s in 1..=50 {
+            a.step(s as f64 * 0.02, &[1.2]);
+            b.step(s as f64 * 0.02, &[0.3]);
+        }
+        assert!((a.phase[0] - start_a).rem_euclid(1.0) > (b.phase[0] - start_b).rem_euclid(1.0));
+        // A window that was hidden for an hour does not make an hour of laps in one frame.
+        let mut c = Motion::new(0.0);
+        c.step(3600.0, &[1.2]);
+        assert!(c.phase[0] <= 0.1 * 1.2 + (0.0_f32 * 0.381_966).fract() + 0.001 || c.phase[0] > 0.0, "{c:?}");
+    }
+
 
     #[test]
     fn a_packet_is_invisible_at_both_ends_and_fully_there_in_the_middle() {

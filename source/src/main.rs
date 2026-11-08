@@ -132,23 +132,39 @@ fn main() -> eframe::Result<()> {
         }
     }
 
-    let options = eframe::NativeOptions {
-        viewport: widgets::titlebar::viewport(
-            eframe::egui::ViewportBuilder::default()
-                .with_title(app::APP_NAME)
-                .with_inner_size(size)
-                .with_min_inner_size([420.0, 420.0])
-                .with_app_id("swift-download-manager")
-                .with_icon(appicon::egui_icon()),
-            widgets::titlebar::mode(),
-        ),
-        ..Default::default()
-    };
-    eframe::run_native(
-        app::APP_NAME,
-        options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, color_theme, show, ..Default::default() })))),
-    )
+    // OpenGL first (it needs about a tenth of the memory and does not wake a discrete graphics card); if the window
+    // cannot be made that way (a remote desktop, a virtual machine without graphics drivers), the other renderer.
+    let order = if cfg!(target_os = "macos") { [eframe::Renderer::Wgpu, eframe::Renderer::Glow] } else { [eframe::Renderer::Glow, eframe::Renderer::Wgpu] };
+    let mut result = Ok(());
+    for renderer in order {
+        let options = eframe::NativeOptions {
+            viewport: widgets::titlebar::viewport(
+                eframe::egui::ViewportBuilder::default()
+                    .with_title(app::APP_NAME)
+                    .with_inner_size(size)
+                    .with_min_inner_size([420.0, 420.0])
+                    .with_app_id("swift-download-manager")
+                    .with_icon(appicon::egui_icon()),
+                widgets::titlebar::mode(),
+            ),
+            renderer,
+            ..Default::default()
+        };
+        let (screenshot, start_url, show) = (screenshot.clone(), start_url.clone(), show.clone());
+        result = eframe::run_native(
+            app::APP_NAME,
+            options,
+            Box::new(move |cc| Ok(Box::new(app::App::new(cc, app::Launch { screenshot, demo, start_url, theme, color_theme, show, ..Default::default() })))),
+        );
+        match &result {
+            // The window never opened with this renderer: try the next one. (An error after the app has run is not retried.)
+            Err(eframe::Error::OpenGL(_)) | Err(eframe::Error::Glutin(_)) | Err(eframe::Error::NoGlutinConfigs(..)) | Err(eframe::Error::Wgpu(_)) => {
+                eprintln!("swift-download-manager: {renderer:?} could not start ({}); trying another way to draw", result.as_ref().unwrap_err());
+            }
+            _ => break,
+        }
+    }
+    result
 }
 
 /// Test helper: download one link without the window, printing progress.

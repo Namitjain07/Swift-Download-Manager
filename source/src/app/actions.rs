@@ -151,7 +151,7 @@ impl App {
         if let Some(item) = self.items.iter_mut().find(|i| i.id == id) {
             let st = item.status();
             if st.is_active() {
-                item.live.stop.store(true, Ordering::SeqCst);
+                item.live.pause_now();
                 if self.demo {
                     *item.live.status.lock().unwrap() = Status::Paused;
                     item.demo_speed = None;
@@ -512,7 +512,11 @@ impl App {
             self.save();
         }
         if any_active || !self.running.is_empty() || self.toast.is_some() || self.items.iter().any(|i| i.is_checking) || self.last_ai_call.is_some_and(|t| t.elapsed().as_secs() < 6) {
-            self.ctx.request_repaint_after(std::time::Duration::from_millis(250));
+            // The numbers (percent, speed, time left) four times a second while the window is in use; the bars move
+            // on their own (see `anim::smooth`). Behind other windows or minimized, far less often.
+            let (visible, focused) = crate::widgets::anim::window_state(&self.ctx);
+            let ms = if visible && focused { 250 } else if visible { 500 } else { 1000 };
+            self.ctx.request_repaint_after(std::time::Duration::from_millis(ms));
         }
         // The scheduler needs a look at the clock now and then even when idle.
         self.ctx.request_repaint_after(std::time::Duration::from_secs(15));
@@ -718,5 +722,72 @@ mod tests {
 
         let text = "[InternetShortcut]\nURL=https://x.org/a.zip\n<a href=\"https://x.org/b.pdf\">b</a> https://x.org/a.zip, ftp://no";
         assert_eq!(links_in_text(text), vec!["https://x.org/a.zip", "https://x.org/b.pdf"]);
+    }
+}
+
+#[cfg(test)]
+mod cancel_tests {
+    use super::*;
+    use crate::engine::tests::{server, SIZE};
+
+    fn started(name: &str) -> (App, u64, PathBuf, crate::engine::tests::Server) {
+        let srv = server();
+        let dir = std::env::temp_dir().join(format!("sdm-cancel-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("cfg")).unwrap();
+        let mut app = App::build(egui::Context::default(), Launch { headless: true, config_dir: Some(dir.join("cfg")), ..Default::default() });
+        let d = AddDialog { url: srv.url("/slow/file.bin"), name: "file.bin".into(), folder: dir.join("files").display().to_string(), category: "General".into(), queue: MAIN_QUEUE.into(), ..Default::default() };
+        let id = app.add_download(&d, true).unwrap();
+        let t = Instant::now();
+        while app.items.iter().find(|i| i.id == id).unwrap().done() < 300 * 1024 && t.elapsed().as_secs() < 20 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        (app, id, dir, srv)
+    }
+
+    #[test]
+    fn a_download_cancelled_midway_shows_paused_at_once_and_can_be_resumed_or_removed() {
+        let (mut app, id, dir, _srv) = started("midway");
+        app.stop_item(id);
+        let st = |app: &App| app.items.iter().find(|i| i.id == id).unwrap().status();
+        assert_eq!(st(&app), Status::Paused, "paused the moment the button was pressed");
+        // It can be resumed straight away and finishes with every byte, counted once.
+        app.start_item(id);
+        let t = Instant::now();
+        while st(&app).is_active() && t.elapsed().as_secs() < 60 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(st(&app), Status::Complete);
+        assert_eq!(app.items.iter().find(|i| i.id == id).unwrap().done(), SIZE as u64);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_download_cancelled_midway_can_be_removed_and_its_partial_file_goes_with_it() {
+        let (mut app, id, dir, _srv) = started("remove");
+        let temp = engine::temp_path(&app.items.iter().find(|i| i.id == id).unwrap().path());
+        assert!(temp.exists(), "there is a partial file to remove");
+        app.stop_item(id);
+        // What the Delete key, the toolbar, the menu and the card's cross all do: ask, then remove.
+        app.selected.insert(id);
+        app.ask_delete(app.selected_ids());
+        assert!(app.delete.is_some(), "asking to delete a paused download works");
+        let ids = app.delete.take().unwrap().ids;
+        app.remove_items(&ids, false);
+        assert!(app.items.iter().all(|i| i.id != id), "gone from the list");
+        // Connections that were still winding down must not bring the file back.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        assert!(!temp.exists(), "the partial file is gone");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn removing_a_download_that_is_still_running_works_too() {
+        let (mut app, id, dir, _srv) = started("running");
+        app.remove_items(&[id], false);
+        assert!(app.items.iter().all(|i| i.id != id));
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        assert!(!engine::temp_path(&dir.join("files").join("file.bin")).exists());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

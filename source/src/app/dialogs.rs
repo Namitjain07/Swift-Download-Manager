@@ -191,7 +191,7 @@ impl App {
                         kv(ui, "Status", |ui| {
                             let text = match st {
                                 Status::Error => item.live.error.lock().unwrap().clone().unwrap_or_else(|| "Error".into()),
-                                s => item.live.note.lock().unwrap().clone().unwrap_or_else(|| s.label().to_string()),
+                                s => item.live.note().unwrap_or_else(|| s.label().to_string()),
                             };
                             let col = if st == Status::Error { pal.red_ink } else { pal.label };
                             ui.add(egui::Label::new(RichText::new(text).family(theme::semibold()).color(col)).truncate());
