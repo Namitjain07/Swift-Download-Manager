@@ -508,3 +508,12 @@ footer { border-top: 1px solid var(--line); padding: 56px 0 44px; background: va
   .marquee .track { animation: none; }
   .lane .bar i { width: 100%; }
 }
+
+/* ------------------------------------------------------------------ updates and the first minute */
+.upd-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 56px; align-items: center; }
+.upd-pics { position: relative; min-height: 460px; }
+.upd-pics img, .upd-pics picture img { border-radius: 14px; border: 1px solid var(--line-2); box-shadow: var(--shadow-l); width: 100%; height: auto; }
+.upd-pics .p1 { width: 78%; position: relative; z-index: 2; }
+.upd-pics .p2 { width: 70%; position: absolute; right: 0; top: 46%; z-index: 3; }
+.upd-pics .p3 { display: block; width: 66%; position: absolute; left: 0; bottom: -34px; z-index: 1; }
+@media (max-width: 1020px) { .upd-grid { grid-template-columns: 1fr; } .upd-pics { min-height: 0; display: grid; gap: 18px; } .upd-pics .p1, .upd-pics .p2, .upd-pics .p3 { position: static; width: 100%; } }
