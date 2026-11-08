@@ -555,6 +555,15 @@ impl App {
         }
     }
 
+    /// Add everything that arrived from outside and has not been looked at yet. Used when the downloads are about to move
+    /// to another process: the add-on has already taken these downloads away from the browser, so none may be dropped.
+    pub(super) fn flush_incoming(&mut self) {
+        let all: Vec<Incoming> = std::mem::take(&mut *self.inbox.lock().unwrap());
+        for inc in all.into_iter().filter(|i| i.source != Source::Clipboard) {
+            self.add_incoming_now(inc);
+        }
+    }
+
     /// Add a link that arrived from outside and start it at once.
     fn add_incoming_now(&mut self, inc: Incoming) {
         let mut d = AddDialog::default();

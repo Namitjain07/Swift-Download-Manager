@@ -66,7 +66,9 @@ impl App {
         if self.demo || self.headless {
             return;
         }
-        // Pause what runs (it is flagged to resume), save, and let go of the download list.
+        // Close the door of the browser add-on, add what came through it, pause what runs (it is flagged to resume), save,
+        // and let go of the download list. The background process opens its own door as soon as it starts; the add-on
+        // tries again for a few seconds, so what the browser sends in between still reaches it.
         self.prepare_handoff();
         self.close_control();
         self.state_lock = None;
@@ -77,6 +79,7 @@ impl App {
                 self.take_state_lock();
                 self.resume_handed_over();
                 self.start_control();
+                self.enable_browser_bridge();
                 self.toast(format!("Could not keep running in the background: {e}"));
             }
         }
@@ -283,7 +286,7 @@ impl App {
     /// Per frame: keep the snapshot fresh (half a second old at most) and do what the add-on asked.
     pub(super) fn bridge_tick(&mut self, ctx: &egui::Context) {
         use crate::bridge::Command;
-        if self.listener.is_err() {
+        if !self.listener.is_on() {
             return;
         }
         if self.bridge_shown.elapsed().as_millis() >= 500 {
@@ -305,11 +308,17 @@ impl App {
         }
     }
 
-    /// Accept links from the browser add-on without a window: they start straight away.
+    /// Open the door of the browser add-on (when the settings allow it). When another copy still has the port (the window
+    /// that is closing, the background process that is handing over) the door waits for it and opens by itself.
     pub fn enable_browser_bridge(&mut self) {
-        if self.settings.browser_listen && self.listener.is_err() {
-            self.listener = bridge::start_listener_with(bridge::PORT, self.inbox.clone(), self.bridge_link.clone(), self.ctx.clone());
+        if self.settings.browser_listen && !self.listener.is_on() {
+            self.listener = bridge::Listener::start(self.bridge_port, self.inbox.clone(), self.bridge_link.clone(), self.ctx.clone());
         }
+    }
+
+    /// Close the door and give the port back, so the next owner of the downloads can open its own.
+    pub fn stop_browser_listener(&mut self) {
+        self.listener.stop();
     }
 }
 
@@ -327,6 +336,51 @@ mod tests {
         assert_eq!(close_action(M::Keep, false), A::Background, "Keep means always");
         assert_eq!(close_action(M::Quit, true), A::Quit);
         assert_eq!(close_action(M::Quit, false), A::Quit);
+    }
+
+    fn free_port() -> u16 {
+        std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port()
+    }
+
+    /// A windowless app with a private folder, whose add-on door is on `port` (never the real one).
+    fn app_with_door(name: &str, port: u16) -> App {
+        let dir = std::env::temp_dir().join(format!("sdm-door-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut app = App::headless_in(dir.clone());
+        app.configure_server(dir.join("files"), false);
+        app.bridge_port = port;
+        app
+    }
+
+    #[test]
+    fn the_background_process_gets_the_add_on_door_when_the_window_hands_over() {
+        use crate::bridge::{send_to_running, ListenerStatus};
+        let port = free_port();
+        let mut window = app_with_door("window", port);
+        window.enable_browser_bridge();
+        assert!(window.listener.is_listening());
+
+        // The background process starts while the window still has the port: it waits instead of giving up for good.
+        let mut background = app_with_door("background", port);
+        background.enable_browser_bridge();
+        assert!(matches!(background.listener.status(), ListenerStatus::Waiting(_)), "{:?}", background.listener.status());
+
+        // The browser sends a link that the window has not looked at yet, and then the window is closed to the background.
+        assert!(send_to_running(port, "http://127.0.0.1:1/in-flight.bin"));
+        window.prepare_handoff();
+        assert_eq!(window.items.len(), 1, "the add-on took that download from the browser: it is added, not lost");
+        assert!(!window.listener.is_on(), "the window has given the port back");
+
+        // The background process takes the port by itself and answers the browser from then on.
+        let until = Instant::now() + std::time::Duration::from_secs(5);
+        while !background.listener.is_listening() && Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(background.listener.is_listening(), "the background process never got the port: {:?}", background.listener.status());
+        assert!(send_to_running(port, "http://127.0.0.1:1/after.bin"));
+        background.pump();
+        assert_eq!(background.items.len(), 1, "a link sent to the background process starts at once, with no window to ask in");
     }
 
     #[test]

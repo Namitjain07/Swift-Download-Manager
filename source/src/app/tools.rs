@@ -473,10 +473,11 @@ impl App {
         let mut close = false;
         let out = sheet("browser", "Browser integration").width(560.0).backdrop_closes().show(ctx, |s| {
             s.body(|ui| {
-                let (icon, tint, ink, text) = match (&self.listener, self.settings.browser_listen) {
-                    (Ok(()), _) => (Icon::CheckCircle, pal.green_tint, pal.green_ink, format!("Ready: the app accepts downloads from the browser (port {}).", bridge::PORT)),
-                    (Err(_), false) => (Icon::Info, pal.surface2, pal.secondary, "Turned off in Options.".to_string()),
-                    (Err(e), true) => (Icon::WarningCircle, pal.red_tint, pal.red_ink, format!("Not available: {e}. Another copy of the app may be open.")),
+                let (icon, tint, ink, text) = match (self.listener.status(), self.settings.browser_listen) {
+                    (bridge::ListenerStatus::Listening, _) => (Icon::CheckCircle, pal.green_tint, pal.green_ink, format!("Ready: the app accepts downloads from the browser (port {}).", self.bridge_port)),
+                    (bridge::ListenerStatus::Waiting(e), _) => (Icon::WarningCircle, pal.orange_tint, pal.orange_ink, format!("Waiting for port {}: {e}. Another copy of the app, or another program, has it. This opens by itself as soon as it is free.", self.bridge_port)),
+                    (bridge::ListenerStatus::Off, false) => (Icon::Info, pal.surface2, pal.secondary, "Turned off in Options.".to_string()),
+                    (bridge::ListenerStatus::Off, true) => (Icon::Info, pal.surface2, pal.secondary, "Not running yet. Restart the app to turn it on.".to_string()),
                 };
                 crate::widgets::notice(ui, icon, &text, tint, ink);
                 ui.add_space(12.0);

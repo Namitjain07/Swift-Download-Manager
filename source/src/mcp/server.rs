@@ -141,11 +141,14 @@ pub struct Engine {
     yielded: Option<Instant>,
     /// A shared server: the web interface is configured here, and no window may take the downloads.
     server: Option<crate::web::server::Config>,
+    /// Keep the door of the browser add-on open while this engine owns the downloads (the background process does; an
+    /// MCP client's engine does not).
+    pub(crate) browser_bridge: bool,
 }
 
 impl Engine {
     pub fn new(dir: PathBuf) -> Self {
-        Engine { dir, local: None, busy_wait: BUSY_WAIT, yield_grace: YIELD_GRACE, yielded: None, server: None }
+        Engine { dir, local: None, busy_wait: BUSY_WAIT, yield_grace: YIELD_GRACE, yielded: None, server: None, browser_bridge: false }
     }
 
     /// An engine for a shared server (`--server`): it serves the web interface to several people and never
@@ -191,7 +194,12 @@ impl Engine {
 
     fn start_local(&mut self, lock: StateLock) -> Result<(), String> {
         eprintln!("swift-download-manager: no window is open, running the downloads without one");
-        let app = App::headless_in(self.dir.clone());
+        let mut app = App::headless_in(self.dir.clone());
+        // The add-on's door before anything else: a browser that was sending its downloads to the window that just closed
+        // is waiting for it, and the control door and the web interface below can take a moment.
+        if self.browser_bridge {
+            app.enable_browser_bridge();
+        }
         let (tx, rx) = mpsc::channel();
         let ctx = eframe::egui::Context::default();
         control::start(&self.dir, tx.clone(), ctx.clone(), "headless").map_err(|e| format!("could not open the control door: {e}"))?;
