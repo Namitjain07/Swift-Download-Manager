@@ -3,6 +3,16 @@
 All notable changes to Swift Download Manager are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Building for many platforms with Docker (`make cross`)
+- **One Docker image builds the program for 22 platforms**: Linux on Intel/AMD, ARM (32 and 64 bit), RISC-V, POWER, IBM Z and LoongArch, linked against an
+  old glibc so it runs on old distributions, and static musl builds for servers; Windows on x64, x86 and ARM; FreeBSD and NetBSD. Zig is the linker
+  (through cargo-zigbuild), the build checks every program (right CPU, static where it must be, nothing newer than the planned glibc, Windows icon and version
+  information) and puts an archive per platform in `out/`. `bash packaging/cross/cross.sh test` starts the Linux programs on their own CPU (QEMU). See
+  [`source/packaging/cross`](source/packaging/cross/README.md)
+- The tray icon is now built for the BSDs as well (it was limited to Linux, Windows and macOS)
+
 ## [1.9.0] - 2026-11-07
 
 **Installers for Windows (Intel/AMD and ARM), Debian packages and Arch packages for Intel/AMD and ARM, a Makefile, and signing with new keys**, together with the improvements to downloading over several networks and to the web interface that were made since 1.8.0. The Docker image is published as `:latest` and `:1.9.0`.
