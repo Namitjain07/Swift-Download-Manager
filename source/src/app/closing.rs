@@ -199,7 +199,10 @@ impl App {
         if self.tray.is_none() && !self.tray_tried {
             self.tray_tried = true;
             match crate::background::Tray::new(&self.tray_state()) {
-                Ok(t) => self.tray = Some(t),
+                Ok(t) => {
+                    crate::background::tray::forward_events(ctx.clone());
+                    self.tray = Some(t);
+                }
                 Err(e) => eprintln!("swift-download-manager: no tray icon: {e}"),
             }
         }
@@ -231,8 +234,8 @@ impl App {
                 t.update(&state);
             }
         }
-        // The tray's clicks arrive while the window may be hidden: look a few times a second even then.
-        ctx.request_repaint_after(std::time::Duration::from_millis(if self.tray.is_some() { 400 } else { 15_000 }));
+        // The tray wakes the window itself (see `forward_events`); this is only a safety net.
+        ctx.request_repaint_after(std::time::Duration::from_secs(if self.tray.is_some() { 5 } else { 15 }));
     }
 
     /// Bring the window back, whatever state it is in (hidden, minimized, behind others).

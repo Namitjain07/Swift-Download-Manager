@@ -48,6 +48,33 @@ pub fn row_text(percent: u32, name: &str) -> String {
     format!("{percent}%  {name}")
 }
 
+
+/// Events handed over by the handlers of `forward_events` (the window's process): the menu picks and the clicks that
+/// arrived since the last `poll`.
+static FORWARDED: std::sync::Mutex<Vec<Forwarded>> = std::sync::Mutex::new(Vec::new());
+
+enum Forwarded {
+    Menu(MenuId),
+    Click,
+}
+
+/// Wake the window the moment the tray is used, even while it is minimized or has nothing else to do, instead of
+/// looking at the tray a few times a second. (Setting a handler takes the events away from the channels, so `poll`
+/// reads these instead.)
+pub fn forward_events(ctx: eframe::egui::Context) {
+    let menu_ctx = ctx.clone();
+    MenuEvent::set_event_handler(Some(move |e: MenuEvent| {
+        FORWARDED.lock().unwrap_or_else(|p| p.into_inner()).push(Forwarded::Menu(e.id));
+        menu_ctx.request_repaint();
+    }));
+    TrayIconEvent::set_event_handler(Some(move |e: TrayIconEvent| {
+        if matches!(e, TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } | TrayIconEvent::DoubleClick { button: MouseButton::Left, .. }) {
+            FORWARDED.lock().unwrap_or_else(|p| p.into_inner()).push(Forwarded::Click);
+            ctx.request_repaint();
+        }
+    }));
+}
+
 struct Items {
     open: MenuItem,
     status: MenuItem,
@@ -127,23 +154,28 @@ impl Tray {
         let it = &self.items;
         let is = |id: &MenuId, other: &MenuId| id == other;
         let mut out = Vec::new();
-        for e in MenuEvent::receiver().try_iter() {
-            if is(&e.id, it.open.id()) || it.rows.iter().any(|r| is(&e.id, r.id())) {
+        let forwarded: Vec<Forwarded> = std::mem::take(&mut *FORWARDED.lock().unwrap_or_else(|p| p.into_inner()));
+        let clicks = forwarded.iter().filter(|f| matches!(f, Forwarded::Click)).count();
+        let mut picked: Vec<MenuId> = forwarded.into_iter().filter_map(|f| if let Forwarded::Menu(id) = f { Some(id) } else { None }).collect();
+        picked.extend(MenuEvent::receiver().try_iter().map(|e| e.id));
+        out.extend(std::iter::repeat_n(TrayCmd::Open, clicks));
+        for id in picked {
+            if is(&id, it.open.id()) || it.rows.iter().any(|r| is(&id, r.id())) {
                 out.push(TrayCmd::Open);
-            } else if is(&e.id, it.pause.id()) {
+            } else if is(&id, it.pause.id()) {
                 out.push(TrayCmd::PauseAll);
-            } else if is(&e.id, it.resume.id()) {
+            } else if is(&id, it.resume.id()) {
                 out.push(TrayCmd::ResumeAll);
-            } else if is(&e.id, it.clipboard.id()) {
+            } else if is(&id, it.clipboard.id()) {
                 out.push(TrayCmd::AddClipboard);
-            } else if is(&e.id, it.folder.id()) {
+            } else if is(&id, it.folder.id()) {
                 out.push(TrayCmd::OpenFolder);
-            } else if is(&e.id, it.updates.id()) {
+            } else if is(&id, it.updates.id()) {
                 out.push(TrayCmd::CheckUpdates);
-            } else if is(&e.id, it.autostart.id()) {
+            } else if is(&id, it.autostart.id()) {
                 // The tick box has already flipped itself: its new state is what was asked for.
                 out.push(TrayCmd::Autostart(it.autostart.is_checked()));
-            } else if is(&e.id, it.quit.id()) {
+            } else if is(&id, it.quit.id()) {
                 out.push(TrayCmd::Quit);
             }
         }
