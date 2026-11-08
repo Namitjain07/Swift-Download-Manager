@@ -22,6 +22,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   1 MiB (a longer line is skipped as it arrives instead of being held in memory); at most 16 requests are answered at once at the control door; the
   settings an assistant can read hold no proxy, login or key. Settings from older versions get these safe defaults
 
+### A WinUI 3 theme (Windows 11)
+- **A new theme, "WinUI 3"**, built from the design tokens of Microsoft's own controls (the light and dark colours of `Common_themeresources_any.xaml` in microsoft-ui-xaml, with their
+  translucency), WinUI's sizes (4 px controls, 8 px cards and dialogs, 32 px buttons and title bar, a 40 × 20 toggle switch, a 3 px progress bar, square caption
+  buttons) and Segoe UI with the Windows type ramp. Buttons, switches, text boxes and check boxes behave as WinUI's do: a fill for rest, hover and pressed, an outline with
+  a stronger bottom edge, a 2 px accent line under the text box being typed in
+- **A material behind the window**: Mica, Mica Alt or Acrylic (Options > Appearance > WinUI 3): the wallpaper, blurred and tinted, shows through the title bar, the list of
+  categories and the status bar and moves with the window. The app paints it itself (Windows lays an OpenGL window over a white sheet instead of over the system's
+  material, so the system's Mica cannot be used), from your wallpaper read with the Windows Imaging Component, with the tints of WinUI's `MicaController`. `--backdrop`
+  and `--wallpaper` choose the material and the picture for a single run
+- **Synced with Windows**: the accent colour with all seven shades (`UISettings`, as WinUI reads it) and live while the app is open, or your own colour (the colours Windows
+  offers, or any `#RRGGBB`); the *transparency effects* switch; a high contrast theme (the window turns solid); the dark title bar and rounded corners (DWM); light and dark
+- Other systems get the same look with solid colours. 15 colour themes now; the Options picker lists WinUI 3 second
+- `Cargo.lock`: the `windows` crate (UI settings, DWM, imaging) is now a direct dependency on Windows
+
 ### Building for many platforms with Docker (`make cross`)
 - **One Docker image builds the program for 22 platforms**: Linux on Intel/AMD, ARM (32 and 64 bit), RISC-V, POWER, IBM Z and LoongArch, linked against an
   old glibc so it runs on old distributions, and static musl builds for servers; Windows on x64, x86 and ARM; FreeBSD and NetBSD. Zig is the linker

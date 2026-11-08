@@ -26,6 +26,18 @@ pub fn capsule_bar(ui: &mut Ui, id: Id, frac: f32, tint: Color32, height: f32, t
     let pal = theme::current(&ctx);
     let shown = glide(&ctx, id.with("frac"), if frac.is_finite() { frac.clamp(0.0, 1.0) } else { 0.0 }, 0.22);
     let p = ui.painter();
+    if theme::design(&ctx).is_winui() && text.is_none() {
+        // The WinUI 3 ProgressBar: a 3 px accent bar with rounded ends on a 1 px track line, both centred in the row.
+        let centre = rect.center().y;
+        let track = Rect::from_min_max(egui::pos2(rect.left(), centre - 0.5), egui::pos2(rect.right(), centre + 0.5));
+        p.rect_filled(track, CornerRadius::same(1), pal.ctl_strong.gamma_multiply(0.6));
+        let fw = capsule_fill_width(shown, rect.width(), 3.0);
+        if fw > 0.0 {
+            let fill = Rect::from_min_size(egui::pos2(rect.left(), centre - 1.5), egui::vec2(fw, 3.0));
+            p.rect_filled(fill, CornerRadius::same(2), tint);
+        }
+        return;
+    }
     p.rect_filled(rect, capsule(rect), pal.track);
     let fw = capsule_fill_width(shown, rect.width(), rect.height());
     if fw > 0.0 {

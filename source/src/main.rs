@@ -12,6 +12,7 @@ mod mcp;
 mod netroute;
 mod serve;
 mod theme;
+mod winui_link;
 mod web;
 mod widgets;
 
@@ -81,6 +82,26 @@ fn main() -> eframe::Result<()> {
                 if color_theme.is_none() {
                     eprintln!("unknown colour theme {:?}; try one of: {}", args[i + 1], theme::ColorTheme::ALL.map(|t| t.id()).join(", "));
                 }
+                i += 1;
+            }
+            // The material behind the window of the WinUI 3 theme for this run: --backdrop mica|alt|acrylic|none
+            "--backdrop" if i + 1 < args.len() => {
+                let b = match args[i + 1].to_ascii_lowercase().as_str() {
+                    "mica" => Some(theme::winui::Backdrop::Mica),
+                    "alt" | "mica-alt" | "mica_alt" | "micaalt" => Some(theme::winui::Backdrop::MicaAlt),
+                    "acrylic" => Some(theme::winui::Backdrop::Acrylic),
+                    "none" | "solid" => Some(theme::winui::Backdrop::None),
+                    other => {
+                        eprintln!("unknown backdrop {other:?}; try one of: mica, alt, acrylic, none");
+                        None
+                    }
+                };
+                winui_link::set_backdrop_override(b);
+                i += 1;
+            }
+            // The picture the WinUI 3 material is made from for this run, instead of the desktop's: --wallpaper picture.png
+            "--wallpaper" if i + 1 < args.len() => {
+                winui_link::set_wallpaper_override(Some(PathBuf::from(&args[i + 1])));
                 i += 1;
             }
             "--write-icon" if i + 1 < args.len() => {

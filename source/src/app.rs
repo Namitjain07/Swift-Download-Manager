@@ -10,6 +10,7 @@ pub(crate) mod layout;
 pub(crate) mod mcp_cmds;
 mod tools;
 mod view;
+mod winui;
 
 use crate::bridge::{self, Inbox, Incoming};
 use crate::engine::{Limiter, Live, Segment, Status};
@@ -234,6 +235,12 @@ pub struct Settings {
     pub mcp_adds_per_hour: u32,
     /// Keep a log of what assistants did (mcp-audit.log in the settings folder).
     pub mcp_audit: bool,
+    /// The WinUI 3 theme: the material behind the window (Mica by default).
+    pub winui_backdrop: theme::winui::Backdrop,
+    /// The WinUI 3 theme: an accent of your own (`0xRRGGBB`); none follows the accent of Windows.
+    pub winui_accent: Option<u32>,
+    /// The WinUI 3 theme: follow the "transparency effects" switch of Windows (when it is off, the window is solid).
+    pub winui_follow_effects: bool,
     /// Download over several networks at once (Options > Networks).
     pub multi_network: bool,
     /// Names of the network cards to use (e.g. "wlan0", "Ethernet"); their addresses are looked up at each start.
@@ -283,6 +290,9 @@ impl Default for Settings {
             mcp_hold: false,
             mcp_adds_per_hour: 60,
             mcp_audit: true,
+            winui_backdrop: theme::winui::Backdrop::Mica,
+            winui_accent: None,
+            winui_follow_effects: true,
             multi_network: false,
             networks: Vec::new(),
             networks_auto: false,
@@ -624,6 +634,14 @@ pub struct App {
     ai_log: crate::mcp::audit::Log,
     /// The site lists as they are being typed in the AI assistants window (they are cleaned up when typing stops).
     ai_sites_text: Option<(String, String)>,
+    /// The link to Windows for the WinUI 3 theme (material behind the window, system accent), and what it found.
+    winui_link: crate::winui_link::Link,
+    winui_material: theme::winui::Backdrop,
+    winui_dark: bool,
+    winui_wallpaper: Option<std::sync::Arc<theme::mica::Wallpaper>>,
+    winui_wallpaper_version: u32,
+    winui_texture: Option<winui::MaterialTexture>,
+    winui_system: theme::winui::SystemLook,
     ai_open: bool,
     /// The window is really closing (not going to the background or asking).
     quitting: bool,
@@ -709,6 +727,13 @@ impl App {
             ai_changes: Default::default(),
             ai_log: Default::default(),
             ai_sites_text: None,
+            winui_link: Default::default(),
+            winui_material: theme::winui::Backdrop::None,
+            winui_dark: false,
+            winui_wallpaper: None,
+            winui_wallpaper_version: 0,
+            winui_texture: None,
+            winui_system: theme::winui::SystemLook::UNKNOWN,
             ai_open: false,
             ctx,
         };
@@ -759,9 +784,12 @@ impl App {
         match name {
             "add" => self.open_add_dialog(None),
             "batch" => self.open_batch(),
-            "options" | "networks" | "appearance" => {
+            "options" | "networks" | "appearance" | "winui" => {
                 if name == "networks" {
                     self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_networks"), true));
+                }
+                if name == "winui" {
+                    self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_winui"), true));
                 }
                 if name == "appearance" {
                     self.ctx.data_mut(|d| d.insert_temp(egui::Id::unique("sdm_scroll_appearance"), true));

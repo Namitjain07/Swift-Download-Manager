@@ -31,6 +31,12 @@ tray-icon = { version = "0.26", default-features = false }
 # The same winit that eframe uses; Windows and macOS need an event loop for the tray icon.
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 
+# The Windows look: the system accent and settings (UISettings, the same source WinUI 3 reads), the Mica and Acrylic backdrops and
+# the dark title bar (DWM). Only Windows builds have it; everywhere else the WinUI 3 theme is the look without the system link.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Foundation", "UI_ViewManagement", "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Graphics_Imaging", "Win32_System_Com", "Win32_System_WinRT", "Win32_UI_Accessibility", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging"] }
+raw-window-handle = "0.6"
+
 [build-dependencies]
 winresource = "0.1"
 

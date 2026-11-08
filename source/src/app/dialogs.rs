@@ -592,6 +592,71 @@ fn web_card(ui: &mut egui::Ui, s: &mut Settings, link: Option<&str>) {
     }
 }
 
+/// Options for the WinUI 3 theme: the material behind the window, the accent and the transparency switch of Windows.
+fn winui_card(ui: &mut egui::Ui, s: &mut Settings) {
+    use crate::theme::winui::{runtime, Accent, Backdrop};
+    /// The accent colours Windows itself offers (a selection of them).
+    const PRESETS: [u32; 16] = [0xFFB900, 0xF7630C, 0xDA3B01, 0xE81123, 0xEA005E, 0xC239B3, 0x8764B8, 0x0078D4, 0x0063B1, 0x00B7C3, 0x038387, 0x10893E, 0x107C10, 0x7A7574, 0x68768A, 0x767676];
+    section_title(ui, "WinUI 3");
+    let material_w = segmented_width(ui, &["Mica", "Mica Alt", "Acrylic", "None"]);
+    let now = runtime();
+    card(ui, |g| {
+        g.row(
+            "Material behind the window",
+            Some("What the window is made of: the wallpaper, blurred and tinted (Mica), a stronger tint (Mica Alt), or a thinner, more colourful one (Acrylic)."),
+            material_w,
+            |ui| segmented(ui, &[(Backdrop::Mica, "Mica"), (Backdrop::MicaAlt, "Mica Alt"), (Backdrop::Acrylic, "Acrylic"), (Backdrop::None, "None")], &mut s.winui_backdrop),
+        );
+        let mut system = s.winui_accent.is_none();
+        g.toggle("Use the accent colour of Windows", Some("Follows Settings > Personalization > Colors, also while the app is open."), &mut system);
+        if system != s.winui_accent.is_none() {
+            s.winui_accent = if system { None } else { Some(u32::from_be_bytes([0, now.accent.base.r(), now.accent.base.g(), now.accent.base.b()])) };
+        }
+        if let Some(chosen) = s.winui_accent {
+            g.free(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
+                    for preset in PRESETS {
+                        let colour = egui::Color32::from_rgb((preset >> 16) as u8, (preset >> 8) as u8, preset as u8);
+                        let (rect, resp) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+                        let r = egui::CornerRadius::same(theme::design(ui.ctx()).radius_sm);
+                        ui.painter().rect_filled(rect, r, colour);
+                        if chosen == preset {
+                            ui.painter().rect_stroke(rect.expand(2.0), r, egui::Stroke::new(2.0, theme::current(ui.ctx()).label), egui::StrokeKind::Outside);
+                        }
+                        if resp.on_hover_text(format!("#{preset:06X}")).clicked() {
+                            s.winui_accent = Some(preset);
+                        }
+                    }
+                });
+                ui.add_space(8.0);
+                // Any other colour, as #RRGGBB.
+                let id = egui::Id::unique("winui_accent_hex");
+                let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| format!("#{chosen:06X}"));
+                let shown = format!("#{chosen:06X}");
+                if !ui.memory(|m| m.has_focus(id.with("edit"))) && !text.eq_ignore_ascii_case(&shown) && Accent::parse_hex(&text).is_none_or(|v| v != chosen) {
+                    text = shown;
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Other colour");
+                    let edited = ui.add(field(&mut text).id(id.with("edit")).desired_width(110.0).hint_text("#0078D4")).changed();
+                    if edited && let Some(v) = Accent::parse_hex(&text) {
+                        s.winui_accent = Some(v);
+                    }
+                });
+                ui.data_mut(|d| d.insert_temp(id, text));
+            });
+        }
+        g.toggle("Follow the transparency effects setting of Windows", Some("When Windows turns transparency effects off, the window is solid."), &mut s.winui_follow_effects);
+    });
+    let in_use = match now.material {
+        Backdrop::None if s.winui_backdrop != Backdrop::None => "No material is showing now: Windows has transparency effects off, a high contrast theme is on, or this is not Windows. The colours are solid.".to_string(),
+        Backdrop::None => "The window is solid.".to_string(),
+        m => format!("{} is showing now.", m.name()),
+    };
+    hint(ui, &in_use);
+}
+
 fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
     let pal = theme::current(ui.ctx());
     section_title(ui, "Downloads");
@@ -641,6 +706,13 @@ fn options_body(ui: &mut egui::Ui, s: &mut Settings, web_link: Option<&str>) {
             crate::widgets::theme_picker(ui, &mut s.color_theme);
         });
     });
+    if s.color_theme == crate::theme::ColorTheme::WinUi {
+        // Screenshots (--show winui) start with this card in view.
+        if ui.data(|d| d.get_temp::<bool>(egui::Id::unique("sdm_scroll_winui"))).unwrap_or(false) {
+            ui.scroll_to_cursor(Some(egui::Align::TOP));
+        }
+        winui_card(ui, s);
+    }
     networks_card(ui, s);
     web_card(ui, s, web_link);
     section_title(ui, "Background");

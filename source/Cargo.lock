@@ -3520,6 +3520,7 @@ dependencies = [
  "getrandom 0.4.3",
  "if-addrs",
  "image",
+ "raw-window-handle",
  "rfd",
  "serde",
  "serde_json",
@@ -3528,6 +3529,7 @@ dependencies = [
  "tray-icon",
  "ureq",
  "url",
+ "windows",
  "winit",
  "winresource",
 ]

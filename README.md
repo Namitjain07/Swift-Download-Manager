@@ -62,7 +62,7 @@ Browsers download each file over a single connection, so a fast line often sits 
 - **In a web browser and for a whole team**: a page on a localhost address, and a Docker image that serves several people from one machine
 - **Several networks at once**: tick Wi-Fi, Ethernet, a phone's hotspot and more under **Options → Networks** and every download uses all of them together, so the speeds add up
 - One consistent design, inspired by Airbnb and drawn with iOS-style controls: white surfaces on a soft grey page, one coral accent, 16 px rounded cards with soft shadows, capsule buttons, an iOS switch, stepper and segmented control, and line icons from [Phosphor](https://phosphoricons.com). Text is set in [Inter](https://rsms.me/inter/). Flat colours only, no gradients. Light and dark, following your system (or choose under **View → Appearance**)
-- **14 colour themes** to choose from in **Options → Appearance**: Coral (the default), **Files** (a Windows 11 look with small corners and a blue accent), **Carbon** (sharp corners), Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha, each in light and dark. Automated tests check that text stays easy to read in every theme, and switching glides from one look to the next
+- **15 colour themes** to choose from in **Options → Appearance**: Coral (the default), **WinUI 3** (a real Windows 11 look: Mica, the system accent, Segoe UI), **Files** (a Windows 11 look with small corners and a blue accent), **Carbon** (sharp corners), Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha, each in light and dark. Automated tests check that text stays easy to read in every theme, and switching glides from one look to the next
 - **A title bar in the theme's colours**: the app draws its own minimise, maximise and close buttons instead of the system's grey bar, so the whole window matches. Drag it to move the window, double-click to maximise, resize from any edge (macOS keeps its traffic lights; `--native-title-bar` brings the system's bar back)
 - **See a download at work**: the parts of a file are drawn as channels that flow along smooth curves into one file, each at its own speed, and the file fills up as data arrives. Waiting is shown with a smooth loader or a sliding bar, never a frozen window
 - Smooth animations: buttons fade and press, the sidebar highlight slides, progress bars and the speed number glide, and dialogs fade and rise into place. The window stays idle when nothing moves
@@ -112,7 +112,7 @@ What is finished and what is still planned (integrations with package managers, 
 </tr>
 <tr>
 <td><img src="docs/images/download-flow.png" alt="The progress window of a download: eight channels, one for each part of the file, flow along curves into one file that fills up, above the size, speed and time left"><br><sub><b>See it at work</b>: each part of the file is a channel that flows into the finished file at its own speed.</sub></td>
-<td><img src="docs/images/appearance-dark.png" alt="Options, Appearance: a grid of fourteen small pictures, one for each colour theme, with Files chosen"><br><sub><b>14 themes</b>: pick one by its picture under Options → Appearance.</sub></td>
+<td><img src="docs/images/winui-appearance-dark.png" alt="Options, Appearance: a grid of fifteen small pictures, one for each colour theme, with WinUI 3 chosen"><br><sub><b>15 themes</b>: pick one by its picture under Options → Appearance.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/theme-files-light.png" alt="The Files theme in light mode: a Windows 11 look with small corners, a blue accent and a title bar that blends into the window"><br><sub><b>Files</b>: small corners and a blue accent, inspired by the Files app for Windows 11.</sub></td>
@@ -122,14 +122,49 @@ What is finished and what is still planned (integrations with package managers, 
 
 ### Colour themes
 
-Fourteen themes, each in light and dark. Click a picture to see it full size.
+Fifteen themes, each in light and dark (the pictures below show the first fourteen; WinUI 3 has its own section after them). Click a picture to see it full size.
 
 <a href="docs/images/themes-dark.png"><img src="docs/images/themes-dark.png" alt="The main window in all fourteen colour themes in dark mode: Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha" width="900"></a>
 
 <a href="docs/images/themes-light.png"><img src="docs/images/themes-light.png" alt="The main window in all fourteen colour themes in light mode" width="900"></a>
 
 Choose one under **Options → Appearance** or **View → Appearance → Theme**. To try one for a single run, start the program with
-`--color-theme files` (or `carbon`, `blue`, `green`, `black`, `purple`, `pink`, `orange`, `teal`, `gold`, `nord`, `dracula`, `mocha`, `coral`).
+`--color-theme files` (or `winui`, `carbon`, `blue`, `green`, `black`, `purple`, `pink`, `orange`, `teal`, `gold`, `nord`, `dracula`, `mocha`, `coral`).
+
+### WinUI 3 (Windows 11)
+
+A theme made from the design tokens of Microsoft's own WinUI 3 controls, not a recolouring of another one: the light and dark colours are those
+of `Common_themeresources_any.xaml` in [microsoft-ui-xaml](https://github.com/microsoft/microsoft-ui-xaml), with their translucency; the sizes are WinUI's
+(4 px controls, 8 px cards and dialogs, 32 px buttons and title bar, a 40 × 20 toggle switch, a 3 px progress bar, a 3 px accent mark on the chosen
+list row, square caption buttons) and the type is Segoe UI with the Windows type ramp (Body 14, Caption 12, Subtitle 20, Title 28).
+
+<table>
+<tr>
+<td><a href="docs/images/winui-light.png"><img src="docs/images/winui-light.png" alt="The main window in the WinUI 3 theme, light: a Mica material tinted by a blue and violet wallpaper behind the title bar and the list of categories, translucent cards and a blue accent" width="440"></a></td>
+<td><a href="docs/images/winui-dark.png"><img src="docs/images/winui-dark.png" alt="The same window in dark mode: dark Mica, a light blue accent and black text on the accent button" width="440"></a></td>
+</tr>
+</table>
+
+- **A material behind the window**: *Mica* (the wallpaper, blurred and tinted, which shows through the title bar, the list of categories and the status bar, and changes
+  as you move the window over it), *Mica Alt* (a stronger tint) or *Acrylic* (thinner and more colourful), or none. Under **Options → Appearance → WinUI 3**.
+  Windows draws Mica for WinUI apps; this app draws with OpenGL, whose surface Windows lays over a plain white sheet instead of the material, so the app paints
+  the same picture itself from your wallpaper (read with the Windows Imaging Component, tinted with the colours of `MicaController`). The window stays opaque and
+  works the same on every graphics card.
+- **The accent of Windows**, read through `UISettings` (the source WinUI uses, with all seven shades), and followed while the app is open. Or choose
+  your own from the colours Windows offers, or any `#RRGGBB`. Light themes use the dark shades and dark themes the light ones, as the XAML says.
+- **Follows the system**: light or dark, the *transparency effects* switch (off gives a solid window), a high contrast theme (solid), the dark title bar and the rounded corners
+  of Windows 11, and Segoe UI from your Windows fonts. Other systems get the same look with solid colours and the app's own typeface.
+- Buttons, switches, text boxes and check boxes behave as WinUI's do: a fill for rest, hover and pressed (the accent at 100, 90 and 80 %), an outline whose bottom
+  edge is a little stronger, a 2 px accent line under the text box you are typing in, no shrinking while pressed.
+
+<table>
+<tr>
+<td><a href="docs/images/winui-options.png"><img src="docs/images/winui-options.png" alt="Options, WinUI 3: the material (Mica, Mica Alt, Acrylic, None), use the accent of Windows, follow the transparency effects setting" width="440"></a></td>
+<td><a href="docs/images/winui-appearance.png"><img src="docs/images/winui-appearance.png" alt="Options, Appearance: the 15 colour themes with WinUI 3 chosen" width="440"></a></td>
+</tr>
+</table>
+
+To try it for a single run: `--color-theme winui` (and `--backdrop mica|alt|acrylic|none`; `--wallpaper picture.png` to make the material from another picture).
 
 ## Frequently asked questions
 
@@ -170,7 +205,7 @@ If you pick the cards by hand, that is a decision and it is respected: those car
 You can send links to a server from any script with an access token (see [Manage the downloads of a whole server from the page](#manage-the-downloads-of-a-whole-server-from-the-page)). Pointing the browser add-on at a server is on the [ideas list](docs/IDEAS.md).
 
 **Can I change how it looks?**
-Yes. Under **Options → Appearance** you choose light, dark or automatic, and one of 14 colour themes (Coral, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha). The choice is saved and applies at once, with a short glide from the old look to the new one. See [Colour themes](#colour-themes).
+Yes. Under **Options → Appearance** you choose light, dark or automatic, and one of 15 colour themes (Coral, WinUI 3, Files, Carbon, Blue, Green, Black, Purple, Pink, Orange, Teal, Gold, Nord, Dracula and Mocha). The choice is saved and applies at once, with a short glide from the old look to the new one. See [Colour themes](#colour-themes).
 
 **Why does the window have its own title bar? Can I get the system's back?**
 The app draws its own minimise, maximise and close buttons so that the title bar has the colours and corners of the theme you picked. Dragging, double-click to maximise and resizing from the edges work as usual. If you prefer the system's bar (or your desktop handles frameless windows badly), start the program with `--native-title-bar`.
@@ -480,7 +515,7 @@ cd source
 cargo run --release -- --screenshot ../docs/images/screenshot.png --theme light
 cargo run --release -- --screenshot ../docs/images/screenshot-dark.png --theme dark
 # a window other than the main one: --show add|batch|options|networks|appearance|scheduler|queues|properties|progress|delete|about|browser|ai|grabber|close|table|drawer|menus|empty
-# a colour theme: --color-theme files|carbon|blue|green|black|purple|pink|orange|teal|gold|nord|dracula|mocha|coral
+# a colour theme: --color-theme winui|files|carbon|blue|green|black|purple|pink|orange|teal|gold|nord|dracula|mocha|coral
 # a narrower window: --size 900x640   (or 600x760)
 cargo run --release -- --screenshot /tmp/scheduler.png --theme dark --show scheduler
 ```

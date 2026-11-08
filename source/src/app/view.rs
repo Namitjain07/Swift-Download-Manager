@@ -21,7 +21,8 @@ impl eframe::App for App {
         self.state_lock = None;
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        self.winui_sync(&ui.ctx().clone(), frame);
         self.draw(ui);
     }
 }
@@ -32,6 +33,8 @@ impl App {
         self.frame += 1;
         let ctx = ui.ctx().clone();
         theme::apply(&ctx, self.theme_override.unwrap_or(self.settings.theme), self.color_theme_override.unwrap_or(self.settings.color_theme));
+        // The Mica of the WinUI 3 theme is the bottom layer of the window (nothing when another theme is in use).
+        self.paint_material(&ctx);
         if !self.demo && !self.quitting && ctx.input(|i| i.viewport().close_requested()) {
             self.on_close_requested(&ctx);
         }

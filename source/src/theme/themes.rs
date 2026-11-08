@@ -18,6 +18,8 @@ pub enum Shape {
     Pill,
     /// Small 4 px controls and 8 px cards, an accent mark on the chosen sidebar row: the Files look.
     Fluent,
+    /// WinUI 3: 4 px controls, 8 px cards and dialogs, 32 px tall, Segoe UI, a material behind the window.
+    WinUi,
     /// Nearly square corners and a 40 px control height: the Carbon look.
     Sharp,
 }
@@ -39,11 +41,15 @@ pub enum ColorTheme {
     Nord,
     Dracula,
     Mocha,
+    /// WinUI 3 / Windows 11: the design tokens of Microsoft's own controls, the system accent and a Mica or Acrylic material
+    /// (see `winui.rs`). Its colours are not derived here but come from there.
+    WinUi,
 }
 
 impl ColorTheme {
-    pub const ALL: [ColorTheme; 14] = [
+    pub const ALL: [ColorTheme; 15] = [
         ColorTheme::Airbnb,
+        ColorTheme::WinUi,
         ColorTheme::Files,
         ColorTheme::Carbon,
         ColorTheme::Blue,
@@ -76,6 +82,7 @@ impl ColorTheme {
             ColorTheme::Nord => "Nord",
             ColorTheme::Dracula => "Dracula",
             ColorTheme::Mocha => "Mocha",
+            ColorTheme::WinUi => "WinUI 3",
         }
     }
 
@@ -96,18 +103,25 @@ impl ColorTheme {
             ColorTheme::Nord => "nord",
             ColorTheme::Dracula => "dracula",
             ColorTheme::Mocha => "mocha",
+            ColorTheme::WinUi => "winui",
         }
     }
 
     /// Finds a theme by its id or its name, ignoring case ("coral", "Blue", "files").
     pub fn from_id(s: &str) -> Option<ColorTheme> {
         let s = s.trim();
-        ColorTheme::ALL.into_iter().find(|t| t.id().eq_ignore_ascii_case(s) || t.name().eq_ignore_ascii_case(s) || (*t == ColorTheme::Airbnb && s.eq_ignore_ascii_case("airbnb")))
+        ColorTheme::ALL.into_iter().find(|t| {
+            t.id().eq_ignore_ascii_case(s)
+                || t.name().eq_ignore_ascii_case(s)
+                || (*t == ColorTheme::Airbnb && s.eq_ignore_ascii_case("airbnb"))
+                || (*t == ColorTheme::WinUi && ["winui3", "windows", "windows 11", "windows11", "win11", "fluent2"].iter().any(|a| s.eq_ignore_ascii_case(a)))
+        })
     }
 
     pub const fn shape(self) -> Shape {
         match self {
             ColorTheme::Files => Shape::Fluent,
+            ColorTheme::WinUi => Shape::WinUi,
             ColorTheme::Carbon => Shape::Sharp,
             _ => Shape::Pill,
         }
@@ -118,6 +132,7 @@ impl ColorTheme {
         match (self, dark) {
             (ColorTheme::Airbnb, false) => Palette::LIGHT,
             (ColorTheme::Airbnb, true) => Palette::DARK,
+            (ColorTheme::WinUi, dark) => super::winui::palette(dark, &super::winui::runtime()),
             _ => build(&ground(self, dark), dark),
         }
     }
@@ -189,7 +204,7 @@ fn ground(theme: ColorTheme, dark: bool) -> Ground {
         (Mocha, false) => g(0xEFF1F5, 0xFFFFFF, 0xFFFFFF, 0xE6E9EF, 0xE6E9EF, 0x4C4F69, 0x8839EF),
         (Mocha, true) => g(0x1E1E2E, 0x313244, 0x363850, 0x181825, 0x181825, 0xCDD6F4, 0xCBA6F7),
         // Airbnb never gets here (it has its own palette); this keeps the match complete.
-        (Airbnb, _) => g(0xF7F7F7, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x222222, 0xFF385C),
+        (Airbnb | WinUi, _) => g(0xF7F7F7, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0x222222, 0xFF385C),
     }
 }
 
@@ -302,6 +317,14 @@ fn build(s: &Ground, dark: bool) -> Palette {
         blue,
         blue_ink,
         blue_tint,
+        ctl: surface2,
+        ctl_hover: surface3,
+        ctl_press: surface3,
+        ctl_stroke: alpha(label, if dark { 46 } else { 36 }),
+        ctl_stroke_bottom: alpha(label, if dark { 46 } else { 36 }),
+        ctl_strong: control_border,
+        accent_hover: accent_press,
+        focus: label,
         shadow: Color32::BLACK,
     }
 }
@@ -315,11 +338,11 @@ mod tests {
     }
 
     #[test]
-    fn there_are_fourteen_themes_with_their_own_names_and_ids() {
-        assert_eq!(ColorTheme::ALL.len(), 14);
+    fn there_are_fifteen_themes_with_their_own_names_and_ids() {
+        assert_eq!(ColorTheme::ALL.len(), 15);
         let names: std::collections::BTreeSet<_> = ColorTheme::ALL.iter().map(|t| t.name()).collect();
         let ids: std::collections::BTreeSet<_> = ColorTheme::ALL.iter().map(|t| t.id()).collect();
-        assert_eq!((names.len(), ids.len()), (14, 14));
+        assert_eq!((names.len(), ids.len()), (15, 15));
         assert_eq!(ColorTheme::default(), ColorTheme::Airbnb);
     }
 
@@ -393,7 +416,8 @@ mod tests {
                 let c = contrast_ratio(on, fill);
                 // The hand-made Coral dark "pressed" fill is the bright brand coral: it holds the 3:1 of
                 // large bold text for the moment a button is held down (see the palette tests).
-                let need = if theme == ColorTheme::Airbnb && dark && what == "accent pressed" { 3.0 } else { 4.5 };
+                // WinUI itself draws a pressed accent button at 80 % opacity, which is below 4.5:1 for white text.
+                let need = if (theme == ColorTheme::Airbnb && dark && what == "accent pressed") || (theme == ColorTheme::WinUi && what == "accent pressed") { 3.0 } else { 4.5 };
                 assert!(c >= need, "text on the {what} button in {name} is only {c:.2}:1");
             }
         }

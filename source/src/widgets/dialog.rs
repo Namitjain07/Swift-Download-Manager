@@ -203,10 +203,12 @@ pub fn check_row(ui: &mut Ui, on: &mut bool, label: &str) -> Response {
     p.rect_filled(rect, CornerRadius::same(d.radius_sm), pal.hover.gamma_multiply(hover));
     // A round tick in the capsule shape, a rounded square in Files and Carbon.
     let c = Pos2::new(rect.left() + 8.0 + 11.0, rect.center().y);
-    let boxr = Rect::from_center_size(c, vec2(22.0, 22.0));
-    let corner = CornerRadius::same(d.round(22.0).min(11));
+    // WinUI 3: a 20 px box with 4 px corners and a 1 px outline.
+    let side = if d.is_winui() { 20.0 } else { 22.0 };
+    let boxr = Rect::from_center_size(c, vec2(side, side));
+    let corner = CornerRadius::same(d.round(side).min(11));
     p.rect_filled(boxr, corner, pal.accent_solid.gamma_multiply(k));
-    p.rect_stroke(boxr.shrink(0.75), corner, Stroke::new(1.5, pal.control_border.gamma_multiply(1.0 - k)), egui::StrokeKind::Inside);
+    p.rect_stroke(boxr.shrink(0.75), corner, Stroke::new(if d.is_winui() { 1.0 } else { 1.5 }, pal.control_border.gamma_multiply(1.0 - k)), egui::StrokeKind::Inside);
     if k > 0.01 {
         crate::icons::draw_weight(p, Rect::from_center_size(c, vec2(14.0, 14.0)), Icon::Check, pal.on_accent.gamma_multiply(k), true, false);
     }

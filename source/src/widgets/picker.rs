@@ -139,16 +139,16 @@ mod tests {
             value.set(v);
         };
         run(&ctx, vec2(572.0, 900.0), vec![], &mut add);
-        // The second swatch of the first row is the Files theme.
+        // The second swatch of the first row is the WinUI 3 theme.
         let (top, room) = place.get();
         let cols = columns(room);
         let w = (room - GAP * (cols - 1) as f32) / cols as f32;
         let at = top + vec2(w + GAP + 20.0, 20.0);
         click(&ctx, vec2(572.0, 900.0), at, &mut add);
-        assert_eq!(value.get(), ColorTheme::Files);
+        assert_eq!(value.get(), ColorTheme::WinUi);
         // Clicking the chosen one again changes nothing.
         click(&ctx, vec2(572.0, 900.0), at, &mut add);
-        assert_eq!(value.get(), ColorTheme::Files);
+        assert_eq!(value.get(), ColorTheme::WinUi);
     }
 
     #[test]
